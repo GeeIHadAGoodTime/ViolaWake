@@ -1,0 +1,154 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "violawake"
+version = "0.1.0"
+description = "Open-source wake word detection SDK with training pipeline — privacy-first, on-device, Python-native"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "ViolaWake Contributors" },
+]
+keywords = [
+    "wake-word",
+    "voice-assistant",
+    "speech-recognition",
+    "on-device",
+    "onnx",
+    "tts",
+    "stt",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+
+# Core dependencies (wake word + VAD only)
+dependencies = [
+    "onnxruntime>=1.17",
+    "numpy>=1.24",
+    "pyaudio>=0.2.14",
+    "scipy>=1.11",
+    "requests>=2.31",
+    "tqdm>=4.66",
+]
+
+[project.optional-dependencies]
+# TTS: Kokoro-82M on-device TTS
+tts = [
+    "kokoro-onnx>=0.4",
+]
+
+# STT: faster-whisper transcription
+stt = [
+    "faster-whisper>=1.0",
+]
+
+# VAD: preferred VAD backends
+vad = [
+    "webrtcvad>=2.0.10",
+]
+
+# Training: model training pipeline
+training = [
+    "torch>=2.1",
+    "torchaudio>=2.1",
+    "librosa>=0.10",
+    "scikit-learn>=1.3",
+    "matplotlib>=3.8",
+    "pandas>=2.1",
+]
+
+# Full install
+all = [
+    "violawake[tts,stt,vad,training]",
+]
+
+# Dev / CI
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "pytest-benchmark>=4.0",
+    "ruff>=0.3",
+    "mypy>=1.8",
+    "pre-commit>=3.6",
+    "types-requests>=2.31",
+]
+
+[project.scripts]
+violawake-train = "violawake_sdk.tools.train:main"
+violawake-eval = "violawake_sdk.tools.evaluate:main"
+violawake-collect = "violawake_sdk.tools.collect_samples:main"
+violawake-download = "violawake_sdk.tools.download_model:main"
+
+[project.urls]
+Homepage = "https://github.com/youorg/violawake"
+Documentation = "https://violawake.readthedocs.io"
+Repository = "https://github.com/youorg/violawake"
+"Bug Tracker" = "https://github.com/youorg/violawake/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/violawake_sdk"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=violawake_sdk --cov-report=term-missing"
+markers = [
+    "integration: requires model files (deselect with -m 'not integration')",
+    "benchmark: performance benchmark tests",
+    "hardware: requires microphone hardware",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "G",   # flake8-logging-format (no f-strings in logging)
+    "T20", # flake8-print (no print in production code)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "T201", # print() allowed in scripts/tools
+]
+per-file-ignores = { "tools/**" = ["T201"], "src/violawake_sdk/tools/**" = ["T201"] }
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.coverage.run]
+source = ["src/violawake_sdk"]
+omit = ["*/tests/*", "*/tools/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

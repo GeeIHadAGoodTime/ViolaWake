@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write  # for GitHub Release creation
+  id-token: write  # for PyPI trusted publishing (OIDC)
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Job 1: Validate the release
+  # ──────────────────────────────────────────────
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: extract-version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${TAG}"
+
+      - name: Verify version matches pyproject.toml
+        run: |
+          PYPROJECT_VERSION=$(python -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); print(d['project']['version'])")
+          TAG_VERSION="${{ steps.extract-version.outputs.version }}"
+          if [ "$PYPROJECT_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: pyproject.toml version ($PYPROJECT_VERSION) != tag ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PortAudio
+        run: sudo apt-get install -y portaudio19-dev
+
+      - name: Install and run full test suite
+        run: |
+          pip install -e ".[dev]"
+          pytest tests/unit/ -v --cov=violawake_sdk --cov-fail-under=85
+
+  # ──────────────────────────────────────────────
+  # Job 2: Build distribution artifacts
+  # ──────────────────────────────────────────────
+  build:
+    name: Build wheel + sdist
+    runs-on: ubuntu-22.04
+    needs: validate
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install hatch
+        run: pip install hatch
+
+      - name: Build wheel and sdist
+        run: hatch build
+
+      - name: Verify wheel contents
+        run: |
+          pip install twine
+          twine check dist/*
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist/
+
+  # ──────────────────────────────────────────────
+  # Job 3: Create GitHub Release with model assets
+  # ──────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-22.04
+    needs: [validate, build]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist/
+
+      - name: Fetch model files from model artifact store
+        # Models are stored in a private artifact store (not in git).
+        # This step retrieves the models for the current version and
+        # attaches them to the GitHub Release.
+        env:
+          MODEL_STORE_TOKEN: ${{ secrets.MODEL_STORE_TOKEN }}
+        run: |
+          python tools/fetch_release_models.py \
+            --version ${{ needs.validate.outputs.version }} \
+            --output models/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ViolaWake SDK ${{ needs.validate.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: ${{ contains(needs.validate.outputs.version, 'rc') || contains(needs.validate.outputs.version, 'alpha') || contains(needs.validate.outputs.version, 'beta') }}
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            models/*.onnx
+
+  # ──────────────────────────────────────────────
+  # Job 4: Publish to PyPI (trusted publishing via OIDC)
+  # ──────────────────────────────────────────────
+  pypi-publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-22.04
+    needs: [validate, build, github-release]
+    environment: pypi  # required for OIDC trusted publishing
+
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-artifacts
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses OIDC trusted publishing — no API token needed if configured
+        # in PyPI project settings. See:
+        # https://docs.pypi.org/trusted-publishers/
+
+  # ──────────────────────────────────────────────
+  # Job 5: Update model registry SHA-256s in docs
+  # ──────────────────────────────────────────────
+  update-docs:
+    name: Update model registry
+    runs-on: ubuntu-22.04
+    needs: github-release
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update model SHA-256s in models.py
+        run: |
+          python tools/update_model_registry.py \
+            --version ${{ needs.validate.outputs.version }}
+
+      - name: Commit updated registry
+        run: |
+          git config user.name "ViolaWake Release Bot"
+          git config user.email "bot@violawake.dev"
+          git add src/violawake_sdk/models.py
+          git commit -m "chore: update model registry for v${{ needs.validate.outputs.version }}" || echo "No changes to commit"
+          git push origin main

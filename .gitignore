@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.coverage.*
+nosetests.xml
+test-results/
+junit*.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# Distribution
+*.tar.gz
+*.whl
+CHANGELOG.md.bak
+
+# Models (too large for git — use DVC or release artifacts)
+*.onnx
+*.pt
+*.bin
+models/
+
+# Training data (large — not in git)
+data/
+*.wav
+*.mp3
+*.flac
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets
+.env.local
+.env.*.local
+*.key
+secrets.json
+
+# Benchmarks
+benchmark-results/
+*.benchmark.json
+
+# Logs
+*.log
+logs/
+
+# Ruff
+.ruff_cache/
