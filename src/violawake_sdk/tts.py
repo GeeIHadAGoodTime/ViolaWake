@@ -20,12 +20,11 @@ from __future__ import annotations
 
 import logging
 import threading
-from pathlib import Path
-from typing import Generator
+from collections.abc import Generator
 
 import numpy as np
 
-from violawake_sdk._exceptions import ModelNotFoundError, ModelLoadError
+from violawake_sdk._exceptions import ModelLoadError, ModelNotFoundError
 from violawake_sdk.models import get_model_path
 
 logger = logging.getLogger(__name__)
@@ -222,8 +221,9 @@ class TTSEngine:
     @staticmethod
     def _resample(audio: np.ndarray, src_rate: int, dst_rate: int) -> np.ndarray:
         """Resample audio using scipy."""
-        from scipy.signal import resample_poly
         import math
+
+        from scipy.signal import resample_poly
         gcd = math.gcd(src_rate, dst_rate)
         return resample_poly(audio, dst_rate // gcd, src_rate // gcd).astype(np.float32)
 

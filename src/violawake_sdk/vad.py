@@ -114,23 +114,25 @@ class _RMSHeuristicBackend:
         """Stateless — no-op."""
 
 
-def _create_backend(backend: VADBackend, **kwargs: object) -> _VADBackendProtocol:
+def _create_backend(
+    backend: VADBackend, **kwargs: object
+) -> tuple[VADBackend, _VADBackendProtocol]:
     """Create the specified VAD backend.
 
     For AUTO, tries WebRTC → RMS (Silero requires heavier deps, skip for now).
     """
     if backend == VADBackend.WEBRTC:
-        return _WebRTCVADBackend(**kwargs)  # type: ignore[arg-type]
+        return backend, _WebRTCVADBackend(**kwargs)  # type: ignore[arg-type]
     elif backend == VADBackend.RMS:
-        return _RMSHeuristicBackend(**kwargs)  # type: ignore[arg-type]
+        return backend, _RMSHeuristicBackend(**kwargs)  # type: ignore[arg-type]
     elif backend == VADBackend.AUTO:
         try:
             b = _WebRTCVADBackend()
             logger.info("VAD backend: WebRTC")
-            return b
+            return VADBackend.WEBRTC, b
         except (ImportError, RuntimeError):
             logger.info("WebRTC VAD unavailable, falling back to RMS heuristic")
-            return _RMSHeuristicBackend()
+            return VADBackend.RMS, _RMSHeuristicBackend()
     elif backend == VADBackend.SILERO:
         raise NotImplementedError(
             "Silero VAD backend not yet implemented. Use 'webrtc' or 'rms'."
@@ -168,8 +170,7 @@ class VADEngine:
         if isinstance(backend, str):
             backend = VADBackend(backend)
 
-        self._backend_name = backend
-        self._backend = _create_backend(backend, **backend_kwargs)
+        self._backend_name, self._backend = _create_backend(backend, **backend_kwargs)
 
     @property
     def backend_name(self) -> str:

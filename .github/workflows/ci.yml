@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches: [main, develop]
+    tags:
+      - "v*.*.*"
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 2 * * *"  # 2am UTC nightly
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -179,7 +183,34 @@ jobs:
           name: benchmark-results-${{ github.sha }}
           path: benchmark-results/
 
-# Nightly schedule
-on:
-  schedule:
-    - cron: "0 2 * * *"  # 2am UTC nightly
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Job 5: Publish to PyPI on version tags
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  publish:
+    name: publish
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [lint, test-unit]
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+          cache: pip
+
+      - name: Install hatch
+        run: pip install hatch
+
+      - name: Build wheel and sdist
+        run: hatch build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+

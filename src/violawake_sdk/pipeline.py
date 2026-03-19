@@ -165,7 +165,7 @@ class VoicePipeline:
         try:
             audio = tts.synthesize(text)  # type: ignore[attr-defined]
             tts.play(audio)  # type: ignore[attr-defined]
-        except Exception as e:
+        except Exception:
             logger.exception("TTS playback failed")
 
     def _run_loop(self) -> None:
@@ -237,7 +237,7 @@ class VoicePipeline:
             else:
                 logger.debug("Empty transcription — returning to idle")
 
-        except Exception as e:
+        except Exception:
             logger.exception("Transcription failed")
         finally:
             with self._state_lock:
@@ -254,7 +254,7 @@ class VoicePipeline:
                     response = handler(text)
                     if response and self._enable_tts:
                         self.speak(response)
-                except Exception as e:
+                except Exception:
                     logger.exception("Command handler '%s' failed", handler.__name__)
         finally:
             with self._state_lock:

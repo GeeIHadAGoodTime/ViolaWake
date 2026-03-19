@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -118,7 +117,7 @@ class STTEngine:
             model, device, profile["wer"], profile["vram_mb"],
         )
 
-    def _get_model(self) -> "WhisperModel":
+    def _get_model(self) -> WhisperModel:
         """Lazy-load the Whisper model on first use."""
         if self._model is None:
             try:
