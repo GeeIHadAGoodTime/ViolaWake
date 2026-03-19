@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from violawake_sdk._exceptions import ModelLoadError, ModelNotFoundError, AudioCaptureError
-from violawake_sdk.models import get_model_path
+from violawake_sdk._exceptions import AudioCaptureError, ModelLoadError, ModelNotFoundError
+from violawake_sdk.models import MODEL_REGISTRY, get_model_path
+
+if TYPE_CHECKING:
+    import onnxruntime as ort
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,9 @@ FRAME_MS = 20                 # 20ms frames
 FRAME_SAMPLES = 320           # 16000 * 0.020
 DEFAULT_THRESHOLD = 0.80      # Raised from 0.50 after false-positive flood (see ADR-002)
 DEFAULT_COOLDOWN_S = 2.0      # Minimum seconds between detections
+WAKE_WORD_ALIASES = {
+    "viola": "viola_mlp_oww",
+}
 
 
 class WakeDecisionPolicy:
@@ -139,7 +146,7 @@ class WakeDetector:
             model, threshold,
         )
 
-    def _load_session(self, model: str) -> "ort.InferenceSession":  # type: ignore[name-defined]
+    def _load_session(self, model: str) -> ort.InferenceSession:
         """Load an ONNX model, downloading it if necessary."""
         import onnxruntime as ort  # lazy import — not required at module level
 
@@ -275,3 +282,65 @@ class WakeDetector:
             stream.close()
             pa.terminate()
             logger.info("Microphone capture stopped")
+
+
+class WakewordDetector:
+    """Compatibility wrapper that lazy-loads ``WakeDetector`` on first use.
+
+    This preserves the older ``wake_word=`` API and avoids loading ONNX models
+    during construction, which keeps imports and simple instantiation cheap.
+    """
+
+    def __init__(
+        self,
+        wake_word: str = "viola",
+        threshold: float = DEFAULT_THRESHOLD,
+        cooldown_s: float = DEFAULT_COOLDOWN_S,
+        providers: list[str] | None = None,
+    ) -> None:
+        self.wake_word = wake_word
+        self.threshold = threshold
+        self.cooldown_s = cooldown_s
+        self.providers = providers
+        self._detector: WakeDetector | None = None
+        self._model_name = self._resolve_model_name(wake_word)
+
+    @staticmethod
+    def _resolve_model_name(wake_word: str) -> str:
+        if wake_word in WAKE_WORD_ALIASES:
+            return WAKE_WORD_ALIASES[wake_word]
+        if wake_word in MODEL_REGISTRY:
+            return wake_word
+
+        available = ", ".join(sorted({*WAKE_WORD_ALIASES, *MODEL_REGISTRY}))
+        raise KeyError(f"Unknown wakeword '{wake_word}'. Available: {available}")
+
+    def _get_detector(self) -> WakeDetector:
+        if self._detector is None:
+            self._detector = WakeDetector(
+                model=self._model_name,
+                threshold=self.threshold,
+                cooldown_s=self.cooldown_s,
+                providers=self.providers,
+            )
+        return self._detector
+
+    def process_audio(self, audio_frame: bytes | np.ndarray, is_playing: bool = False) -> bool:
+        """Process a frame and return the compatibility boolean detection result."""
+        return self._get_detector().detect(audio_frame, is_playing=is_playing)
+
+    def process(self, audio_frame: bytes | np.ndarray) -> float:
+        """Return the raw wake score from the underlying detector."""
+        return self._get_detector().process(audio_frame)
+
+    def detect(
+        self,
+        audio_frame: bytes | np.ndarray,
+        is_playing: bool = False,
+    ) -> bool:
+        """Expose the native detection API for callers migrating forward."""
+        return self._get_detector().detect(audio_frame, is_playing=is_playing)
+
+    def stream_mic(self, device_index: int | None = None) -> Generator[bytes, None, None]:
+        """Delegate microphone streaming to the underlying detector."""
+        yield from self._get_detector().stream_mic(device_index=device_index)

@@ -27,15 +27,15 @@ __version__ = "0.1.0"
 __author__ = "ViolaWake Contributors"
 __license__ = "Apache-2.0"
 
-from violawake_sdk.wake_detector import WakeDetector
-from violawake_sdk.vad import VADEngine
-from violawake_sdk.pipeline import VoicePipeline
 from violawake_sdk._exceptions import (
-    ViolaWakeError,
-    ModelNotFoundError,
     AudioCaptureError,
     ModelLoadError,
+    ModelNotFoundError,
+    ViolaWakeError,
 )
+from violawake_sdk.pipeline import VoicePipeline
+from violawake_sdk.vad import VADEngine
+from violawake_sdk.wake_detector import WakeDetector, WakewordDetector
 
 # Conditional imports for optional extras
 try:
@@ -50,6 +50,7 @@ except ImportError:
 
 __all__ = [
     "WakeDetector",
+    "WakewordDetector",
     "VADEngine",
     "TTSEngine",
     "STTEngine",

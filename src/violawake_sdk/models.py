@@ -82,6 +82,7 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         version="0.1.0",
     ),
 }
+MODEL_REGISTRY["viola"] = MODEL_REGISTRY["viola_mlp_oww"]
 
 
 def get_model_dir() -> Path:
@@ -116,7 +117,7 @@ def get_model_path(model_name: str) -> Path:
     spec = MODEL_REGISTRY[model_name]
     # Determine file extension from URL
     ext = Path(spec.url).suffix or ".onnx"
-    model_path = get_model_dir() / f"{model_name}{ext}"
+    model_path = get_model_dir() / f"{spec.name}{ext}"
 
     if not model_path.exists():
         raise FileNotFoundError(
@@ -155,7 +156,7 @@ def download_model(
 
     spec = MODEL_REGISTRY[model_name]
     ext = Path(spec.url).suffix or ".onnx"
-    model_path = get_model_dir() / f"{model_name}{ext}"
+    model_path = get_model_dir() / f"{spec.name}{ext}"
 
     if model_path.exists() and not force:
         logger.info("Model already cached: %s", model_path)
@@ -226,11 +227,13 @@ def list_cached_models() -> list[tuple[str, Path, float]]:
     """
     model_dir = get_model_dir()
     result = []
+    seen_paths: set[Path] = set()
     for model_name in MODEL_REGISTRY:
         spec = MODEL_REGISTRY[model_name]
         ext = Path(spec.url).suffix or ".onnx"
-        path = model_dir / f"{model_name}{ext}"
-        if path.exists():
+        path = model_dir / f"{spec.name}{ext}"
+        if path.exists() and path not in seen_paths:
             size_mb = path.stat().st_size / 1e6
             result.append((model_name, path, size_mb))
+            seen_paths.add(path)
     return result

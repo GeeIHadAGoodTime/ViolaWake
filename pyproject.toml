@@ -99,7 +99,7 @@ Repository = "https://github.com/youorg/violawake"
 "Bug Tracker" = "https://github.com/youorg/violawake/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/violawake_sdk"]
+packages = ["src/violawake_sdk", "src/wakeword"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
