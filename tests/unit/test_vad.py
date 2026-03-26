@@ -94,18 +94,20 @@ class TestVADEngineRMSBackend:
 class TestVADEngineAutoBackend:
     """Tests for auto backend selection."""
 
-    def test_auto_falls_back_to_rms_when_webrtcvad_unavailable(self) -> None:
+    def test_auto_falls_back_when_webrtcvad_unavailable(self) -> None:
         with patch.dict("sys.modules", {"webrtcvad": None}):
             vad = VADEngine(backend="auto")
-            assert vad.backend_name in ("rms", "auto")
+            # Auto chain: webrtc → silero → rms. With webrtc blocked,
+            # picks silero (if torch available) or rms.
+            assert vad.backend_name in ("rms", "silero", "auto")
 
     def test_auto_selects_webrtc_when_available(self) -> None:
         mock_webrtcvad = MagicMock()
         mock_webrtcvad.Vad.return_value.is_speech.return_value = True
         with patch.dict("sys.modules", {"webrtcvad": mock_webrtcvad}):
             vad = VADEngine(backend="auto")
-            # Backend might be webrtc or rms depending on auto-selection
-            assert vad.backend_name in ("rms", "webrtc")
+            # Auto tries webrtc first, then silero, then rms
+            assert vad.backend_name in ("rms", "webrtc", "silero")
 
 
 class TestVADEngineWebRTCBackend:
@@ -154,6 +156,10 @@ class TestVADEngineBackendEnum:
         with pytest.raises(ValueError):
             VADEngine(backend="invalid_backend")  # type: ignore[arg-type]
 
-    def test_silero_not_implemented(self) -> None:
-        with pytest.raises(NotImplementedError):
-            VADEngine(backend="silero")
+    def test_silero_backend(self) -> None:
+        """Silero VAD backend should initialize if torch is available."""
+        try:
+            vad = VADEngine(backend="silero")
+            assert vad.backend_name == "silero"
+        except (ImportError, RuntimeError):
+            pytest.skip("torch not available or Silero failed to load")

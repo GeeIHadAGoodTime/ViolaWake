@@ -142,17 +142,17 @@ All models are declared in `src/violawake_sdk/models.py`:
 MODEL_REGISTRY: dict[str, ModelSpec] = {
     "viola_mlp_oww": ModelSpec(
         name="viola_mlp_oww",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/viola_mlp_oww.onnx",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_mlp_oww.onnx",
         sha256="abc123...",  # pre-computed SHA-256 of the ONNX file
         size_bytes=2_100_000,  # 2.1 MB
-        description="ViolaWake MLP on OWW embeddings — d-prime 15.10 (default, recommended)",
+        description="ViolaWake MLP on OWW embeddings — Cohen's d 15.10 on synthetic negatives (default, recommended; speech-negative d-prime TBD)",
     ),
     "viola_cnn_v4": ModelSpec(
         name="viola_cnn_v4",
         url="...",
         sha256="...",
         size_bytes=1_800_000,
-        description="ViolaWake CNN v4 — d-prime 8.2 (lightweight, no OWW dependency)",
+        description="ViolaWake CNN v4 — Cohen's d 8.2 on synthetic negatives (lightweight, no OWW dependency)",
     ),
     "kokoro_v1_0": ModelSpec(
         name="kokoro_v1_0",

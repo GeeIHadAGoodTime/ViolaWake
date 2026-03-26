@@ -7,7 +7,7 @@ This file provides AI assistants with context, patterns, and rules for the Viola
 **ViolaWake SDK** is a standalone Python SDK for on-device voice processing. It extracts the production-hardened voice components from the Viola assistant application into a clean, pip-installable package.
 
 **Core products:**
-1. **ViolaWake** — Wake word detection (primary differentiator, d-prime 15.10)
+1. **ViolaWake** — Wake word detection (primary differentiator, Cohen's d 15.10 on synthetic negatives)
 2. **Kokoro TTS** — On-device sentence-chunked text-to-speech (Apache 2.0 model)
 3. **Whisper STT** — Batch speech-to-text via faster-whisper
 4. **VAD** — Voice activity detection (WebRTC / Silero / RMS)
@@ -48,7 +48,7 @@ violawake/
 │       ├── audio.py            # Mic capture + audio utilities
 │       └── tools/
 │           ├── train.py        # Training CLI
-│           ├── evaluate.py     # d-prime evaluation CLI
+│           ├── evaluate.py     # Cohen's d / FAR / FRR evaluation CLI
 │           ├── collect_samples.py   # Sample collection tool
 │           └── download_model.py    # Model download CLI
 ├── tests/
@@ -152,7 +152,7 @@ These must match what's in the PRD. If you change them, update both.
 
 | Metric | Value | Source |
 |--------|-------|--------|
-| Wake word d-prime | 15.10 | MLP OWW model, internal test set |
+| Wake word Cohen's d (synthetic negatives) | 15.10 | MLP OWW model, internal synthetic-negative test set |
 | Default threshold | 0.80 | Raised from 0.50 after false-positive flood |
 | Frame size | 20ms | 16kHz mono, 320 samples |
 | Feature extractor | OpenWakeWord (96-dim embeddings) | OWW audio backbone |

@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Node (frontend builds have their own Dockerfile)
+console/frontend/node_modules
+console/frontend/dist
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.coverage
+.benchmarks
+*.egg-info
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Docs and non-runtime files
+docs/
+*.md
+LICENSE
+CLAUDE.md
+
+# Test data (large)
+data/
+models/*.onnx
+
+# OS
+Thumbs.db
+.DS_Store

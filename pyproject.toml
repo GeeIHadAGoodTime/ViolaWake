@@ -34,17 +34,26 @@ classifiers = [
 ]
 requires-python = ">=3.10"
 
-# Core dependencies (wake word + VAD only)
+# Core dependencies (inference-only: wake word + VAD)
+# pyaudio, requests, and tqdm are optional — see [audio] and [download] extras
 dependencies = [
     "onnxruntime>=1.17",
     "numpy>=1.24",
-    "pyaudio>=0.2.14",
     "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+# Audio: microphone capture (pyaudio)
+audio = [
+    "pyaudio>=0.2.14",
+]
+
+# Download: model downloading with progress bars
+download = [
     "requests>=2.31",
     "tqdm>=4.66",
 ]
 
-[project.optional-dependencies]
 # TTS: Kokoro-82M on-device TTS
 tts = [
     "kokoro-onnx>=0.4",
@@ -64,6 +73,7 @@ vad = [
 training = [
     "torch>=2.1",
     "torchaudio>=2.1",
+    "openwakeword>=0.6",
     "librosa>=0.10",
     "scikit-learn>=1.3",
     "matplotlib>=3.8",
@@ -72,7 +82,7 @@ training = [
 
 # Full install
 all = [
-    "violawake[tts,stt,vad,training]",
+    "violawake[audio,download,tts,stt,vad,training]",
 ]
 
 # Dev / CI
@@ -83,6 +93,9 @@ dev = [
     "ruff>=0.3",
     "mypy>=1.8",
     "pre-commit>=3.6",
+    "pyaudio>=0.2.14",
+    "requests>=2.31",
+    "tqdm>=4.66",
     "types-requests>=2.31",
 ]
 
@@ -93,13 +106,13 @@ violawake-collect = "violawake_sdk.tools.collect_samples:main"
 violawake-download = "violawake_sdk.tools.download_model:main"
 
 [project.urls]
-Homepage = "https://github.com/youorg/violawake"
-Documentation = "https://violawake.readthedocs.io"
-Repository = "https://github.com/youorg/violawake"
-"Bug Tracker" = "https://github.com/youorg/violawake/issues"
+Homepage = "https://github.com/GeeIHadAGoodTime/ViolaWake"
+Documentation = "https://docs.violawake.com"
+Repository = "https://github.com/GeeIHadAGoodTime/ViolaWake"
+"Bug Tracker" = "https://github.com/GeeIHadAGoodTime/ViolaWake/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/violawake_sdk", "src/wakeword"]
+packages = ["src/violawake_sdk"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

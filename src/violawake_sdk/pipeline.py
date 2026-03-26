@@ -182,8 +182,7 @@ class VoicePipeline:
 
             if state == _STATE_IDLE:
                 # Listening for wake word
-                is_playing = state == _STATE_RESPONDING
-                if self._wake_detector.detect(frame, is_playing=is_playing):
+                if self._wake_detector.detect(frame, is_playing=False):
                     logger.info("Wake word detected → listening for command")
                     recording_buffer.clear()
                     silence_count = 0

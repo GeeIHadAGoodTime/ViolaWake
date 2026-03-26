@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: console/Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend-data:/app/data
+      - ../src:/sdk/src:ro
+    environment:
+      - VIOLAWAKE_SECRET_KEY=dev-secret-change-in-production
+      - PYTHONPATH=/sdk/src
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend-data:

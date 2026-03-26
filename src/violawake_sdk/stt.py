@@ -178,7 +178,7 @@ class STTEngine:
             word_timestamps=False,
             beam_size=5,
             best_of=5,
-            temperature=0.0,          # Greedy decoding for speed
+            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],  # Progressive fallback
         )
 
         # Consume the generator (transcription happens here)

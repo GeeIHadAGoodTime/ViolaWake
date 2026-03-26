@@ -1,0 +1,27 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system deps for audio processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    portaudio19-dev curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps
+COPY console/backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install ViolaWake SDK
+COPY pyproject.toml /sdk/
+COPY src/ /sdk/src/
+RUN pip install --no-cache-dir -e "/sdk[training]"
+
+# Copy backend code
+COPY console/backend/ .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+EXPOSE 8000
+
+CMD ["python", "run.py"]

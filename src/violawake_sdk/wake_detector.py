@@ -44,6 +44,9 @@ class WakeDecisionPolicy:
         cooldown_s: float = DEFAULT_COOLDOWN_S,
         rms_floor: float = 1.0,
     ) -> None:
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(f"threshold must be in [0.0, 1.0], got {threshold!r}")
+
         self.threshold = threshold
         self.cooldown_s = cooldown_s
         self.rms_floor = rms_floor
@@ -193,9 +196,11 @@ class WakeDetector:
         if isinstance(audio_frame, bytes):
             pcm = np.frombuffer(audio_frame, dtype=np.int16).astype(np.float32) / 32768.0
         else:
-            pcm = np.asarray(audio_frame, dtype=np.float32)
+            pcm = np.asarray(audio_frame)
             if pcm.dtype == np.int16:
                 pcm = pcm.astype(np.float32) / 32768.0
+            else:
+                pcm = pcm.astype(np.float32)
 
         if pcm.shape[0] != FRAME_SAMPLES:
             logger.warning(
@@ -250,7 +255,13 @@ class WakeDetector:
         Raises:
             AudioCaptureError: If the microphone cannot be opened.
         """
-        import pyaudio  # lazy import
+        try:
+            import pyaudio  # lazy import — optional [audio] extra
+        except ImportError:
+            raise ImportError(
+                "pyaudio is required for microphone features. "
+                "Install with: pip install violawake[audio]"
+            ) from None
 
         pa = pyaudio.PyAudio()
         try:

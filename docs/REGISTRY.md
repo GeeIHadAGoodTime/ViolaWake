@@ -20,7 +20,12 @@
 |----------|------|-------|-------------|-------------------|
 | Product Requirements | `docs/PRD.md` | What we build, feature priorities, metrics | 2026-03-17 | New competitive entrant, market shift, major pivot |
 | Test Strategy | `docs/TEST_STRATEGY.md` | Testing philosophy, tiers, coverage requirements | 2026-03-17 | New test tier added, CI pipeline change |
-| This registry | `docs/REGISTRY.md` | Doc routing | 2026-03-17 | New doc added without updating registry |
+| Business Plan | `docs/BUSINESS_PLAN.md` | Revenue model, pricing, growth | 2026-03-26 | Pricing or market strategy change |
+| Competitive Analysis | `docs/COMPETITIVE_ANALYSIS.md` | Feature comparison vs Porcupine, OWW, etc. | 2026-03-26 | New competitor or feature parity shift |
+| Pre-Launch Checklist | `docs/PRE_LAUNCH_CHECKLIST.md` | Launch readiness checklist | 2026-03-26 | All items checked off = launch ready |
+| Show HN Draft | `docs/SHOW_HN_DRAFT.md` | Hacker News launch post draft | 2026-03-26 | Post published or product pivot |
+| Roadmap | `docs/ROADMAP_10_OF_10.md` | Multi-phase product roadmap | 2026-03-26 | Phase completion or priority change |
+| This registry | `docs/REGISTRY.md` | Doc routing | 2026-03-26 | New doc added without updating registry |
 
 ## Architecture Decision Records (ADRs)
 
@@ -46,13 +51,17 @@ ADRs are immutable once accepted. To change an architecture decision, create a n
 
 **"How do we test?"** → `docs/TEST_STRATEGY.md`
 
-**"What's the d-prime number and where does it come from?"** → `docs/PRD.md` → Section 5 (Metrics)
+**"What's the benchmark number and where does it come from?"** → `docs/PRD.md` → Section 5 (Metrics)
 
 **"What's the open-source vs paid split?"** → `docs/adr/ADR-004-open-core.md`
 
 **"How are models distributed?"** → `docs/adr/ADR-005-packaging.md`
 
-**"Competitive analysis?"** → See source-of-truth audit docs in Viola repo (paths in `CLAUDE.md`)
+**"Competitive analysis?"** → `docs/COMPETITIVE_ANALYSIS.md`
+
+**"Are we ready to launch?"** → `docs/PRE_LAUNCH_CHECKLIST.md`
+
+**"What does the HN post say?"** → `docs/SHOW_HN_DRAFT.md`
 
 ---
 

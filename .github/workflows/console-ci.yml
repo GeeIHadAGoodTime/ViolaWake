@@ -1,0 +1,124 @@
+name: Console CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "console/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "console/**"
+
+concurrency:
+  group: console-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_DEFAULT: "3.11"
+  NODE_DEFAULT: "20"
+
+jobs:
+  # --------------------------------------------------------------
+  # Job 1: Backend lint (ruff)
+  # --------------------------------------------------------------
+  backend-lint:
+    name: Backend lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+          cache: pip
+          cache-dependency-path: console/backend/requirements.txt
+
+      - name: Install lint dependencies
+        run: pip install ruff
+
+      - name: Run ruff (lint)
+        run: ruff check console/backend/
+
+      - name: Run ruff (format check)
+        run: ruff format --check console/backend/
+
+  # --------------------------------------------------------------
+  # Job 2: Backend tests
+  # --------------------------------------------------------------
+  backend-test:
+    name: Backend tests
+    runs-on: ubuntu-22.04
+    needs: [backend-lint]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+          cache: pip
+          cache-dependency-path: console/backend/requirements.txt
+
+      - name: Install test dependencies
+        run: pip install -r console/backend/requirements.txt pytest httpx
+
+      - name: Run backend tests
+        run: pytest console/tests/test_backend.py -v
+
+  # --------------------------------------------------------------
+  # Job 3: Frontend build
+  # --------------------------------------------------------------
+  frontend-build:
+    name: Frontend build
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: console/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_DEFAULT }}
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-frontend-dist
+          path: console/frontend/dist/
+
+  # --------------------------------------------------------------
+  # Job 4: Frontend typecheck
+  # --------------------------------------------------------------
+  frontend-typecheck:
+    name: Frontend typecheck
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: console/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_DEFAULT }}
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript typecheck
+        run: npx tsc --noEmit

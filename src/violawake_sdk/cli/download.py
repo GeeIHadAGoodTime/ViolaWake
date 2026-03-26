@@ -1,5 +1,6 @@
 """violawake-download CLI (cli module) — Download ViolaWake models."""
 from __future__ import annotations
+
 import argparse
 from pathlib import Path
 

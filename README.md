@@ -3,7 +3,7 @@
 **The open-source alternative to Porcupine.** A production-tested wake word engine with accessible training, ONNX inference, and a Python-first SDK.
 
 [![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake)
-[![CI](https://github.com/youorg/violawake/actions/workflows/ci.yml/badge.svg)](https://github.com/youorg/violawake/actions/workflows/ci.yml)
+[![CI](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml/badge.svg)](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -14,15 +14,17 @@
 | | ViolaWake | Porcupine (Picovoice) | openWakeWord |
 |---|---|---|---|
 | **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 |
-| **Accuracy (d-prime)** | 15.10 (MLP-OWW model) | Not published | ~5–8 (reported) |
+| **Training code open** | Yes | No (closed) | Yes |
 | **Custom wake words** | Yes (training CLI) | Yes (paid Console) | Yes (fine-tune) |
-| **Training code** | Open source | Closed | Open source |
+| **Evaluation tooling** | `violawake-eval` (Cohen's d, FAR, FRR) | None published | Basic |
 | **On-device** | Yes (ONNX) | Yes (proprietary C lib) | Yes (ONNX) |
 | **Streaming TTS bundle** | Yes (Kokoro-82M) | Orca (proprietary) | No |
 | **Python SDK** | First-class | C wrapper | First-class |
 | **Price at scale** | Free | $6K+/year | Free |
 
-**Our moat:** d-prime 15.10 accuracy, production-hardened training pipeline with data augmentation (SpecAugment, RIR convolution, noise mixing), and a decision policy that eliminates false positives during music playback. This has been running in production — not a demo.
+**Our moat:** Open training code, transparent evaluation (Cohen's d > 15 on our internal test set with synthetic negatives), production-hardened data augmentation (SpecAugment, RIR convolution, noise mixing), and a decision policy that eliminates false positives during music playback. This has been running in production -- not a demo.
+
+> **A note on accuracy claims:** Our Cohen's d of 15.10 was measured against a synthetic noise negative corpus, not adversarial speech. Real-world accuracy depends on your negative corpus and deployment environment. We recommend evaluating with your own test data using `violawake-eval`.
 
 ---
 
@@ -123,14 +125,14 @@ python -m violawake_sdk.tools.train \
   --output models/jarvis_mlp.onnx \
   --epochs 50
 
-# Evaluate (d-prime metric)
+# Evaluate (Cohen's d / separability metric)
 python -m violawake_sdk.tools.evaluate \
   --model models/jarvis_mlp.onnx \
   --test-positives data/jarvis/test/ \
   --report
 ```
 
-**Expected results:** d-prime > 10 with 200+ quality positive samples and the standard negative corpus.
+**Expected results:** Cohen's d > 10 (against the bundled synthetic negative corpus) with 200+ quality positive samples. Your real-world performance will depend on your deployment environment and negative speech corpus.
 
 ---
 
@@ -143,11 +145,13 @@ python -m violawake_sdk.tools.download_model --model viola_mlp_oww  # default, 2
 python -m violawake_sdk.tools.download_model --model kokoro-v1.0    # TTS, 330 MB
 ```
 
-| Model | Type | Size | d-prime | Notes |
-|-------|------|------|---------|-------|
-| `viola_mlp_oww.onnx` | MLP on OWW embeddings | 2.1 MB | 15.10 | Production default |
-| `viola_v4.onnx` | CNN (3-layer) | 1.8 MB | 8.2 | Legacy — kept for comparison |
-| `kokoro-v1.0.onnx` | Kokoro-82M TTS | 330 MB | — | Apache 2.0 |
+| Model | Type | Size | Cohen's d* | Notes |
+|-------|------|------|------------|-------|
+| `viola_mlp_oww.onnx` | MLP on OWW embeddings | 2.1 MB | >15 | Production default |
+| `viola_v4.onnx` | CNN (3-layer) | 1.8 MB | ~8 | Legacy -- kept for comparison |
+| `kokoro-v1.0.onnx` | Kokoro-82M TTS | 330 MB | -- | Apache 2.0 |
+
+*Cohen's d measured against synthetic noise negatives. Evaluate on your own data with `violawake-eval`.
 
 ---
 
@@ -206,9 +210,10 @@ Measured on i7-12700H, Windows 11, RTX 3060 (CPU inference):
 | STT (Whisper base, 3s audio) | 680 ms | 1.2s |
 | TTS first audio (Kokoro, 1 sentence) | 310 ms | 580 ms |
 
-**Wake word accuracy** (d-prime, internal test set):
-- MLP OWW model: d-prime **15.10** (false accept rate: 0.3/hr, false reject rate: <2%)
-- Threshold range: 0.70 (high sensitivity) → 0.85 (low false positives)
+**Wake word accuracy** (internal test set, synthetic noise negatives):
+- MLP OWW model: Cohen's d > 15 on synthetic noise negatives (FAR: 0.3/hr, FRR: <2% at default threshold)
+- Threshold range: 0.70 (high sensitivity) to 0.85 (low false positives)
+- Real-world metrics depend on your negative corpus. Run `violawake-eval` on your own test data.
 
 ---
 
@@ -216,7 +221,7 @@ Measured on i7-12700H, Windows 11, RTX 3060 (CPU inference):
 
 openWakeWord is the closest open-source alternative. ViolaWake differences:
 
-- **Higher d-prime:** ViolaWake MLP 15.10 vs reported ~5–8 for comparable OWW models
+- **Open, reproducible evaluation:** `violawake-eval` produces Cohen's d, FAR, FRR, and ROC curves on any model + test set. We publish our methodology and clearly note when a benchmark uses synthetic-only negatives.
 - **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) eliminates false positives during music playback
 - **Bundled pipeline:** ViolaWake ships integrated VAD + STT + TTS, not just the wake word component
 - **Training infrastructure:** FocalLoss + EMA + SWA + SpecAugment augmentation pipeline vs basic training in openWakeWord
@@ -252,8 +257,8 @@ openWakeWord is the closest open-source alternative. ViolaWake differences:
 ## Contributing
 
 ```bash
-git clone https://github.com/youorg/violawake
-cd violawake
+git clone https://github.com/GeeIHadAGoodTime/ViolaWake
+cd ViolaWake
 pip install -e ".[dev]"
 pre-commit install
 pytest tests/

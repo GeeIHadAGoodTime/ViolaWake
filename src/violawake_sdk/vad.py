@@ -82,6 +82,53 @@ class _WebRTCVADBackend:
         """WebRTC VAD is stateless — no-op."""
 
 
+class _SileroVADBackend:
+    """Silero VAD backend using torch.hub.
+
+    Requires PyTorch (torch). Loaded lazily to avoid hard dependency.
+    Install with: pip install torch
+
+    Note: torch is NOT a hard dependency of violawake. It is only required
+    when explicitly selecting the "silero" backend or when "auto" falls
+    through WebRTC to Silero.
+    """
+
+    def __init__(self) -> None:
+        try:
+            import torch  # type: ignore[import]
+        except ImportError as e:
+            raise ImportError(
+                "PyTorch is required for Silero VAD. "
+                "Install with: pip install torch"
+            ) from e
+
+        try:
+            model, _ = torch.hub.load(
+                "snakers4/silero-vad", "silero_vad", trust_repo=True
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to load Silero VAD model: {e}") from e
+
+        self._model = model
+        self._torch = torch
+        self._sample_rate = SAMPLE_RATE
+
+    def process_frame(self, audio_bytes: bytes) -> float:
+        """Returns speech probability from Silero VAD model."""
+        pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        tensor = self._torch.from_numpy(pcm)
+        try:
+            prob = self._model(tensor, self._sample_rate).item()
+        except Exception as e:
+            logger.warning("Silero VAD error: %s", e)
+            return 0.0
+        return float(prob)
+
+    def reset(self) -> None:
+        """Reset Silero model internal states."""
+        self._model.reset_states()
+
+
 class _RMSHeuristicBackend:
     """Simple RMS-based VAD heuristic.
 
@@ -119,24 +166,30 @@ def _create_backend(
 ) -> tuple[VADBackend, _VADBackendProtocol]:
     """Create the specified VAD backend.
 
-    For AUTO, tries WebRTC → RMS (Silero requires heavier deps, skip for now).
+    For AUTO, tries WebRTC → Silero → RMS (best available).
     """
     if backend == VADBackend.WEBRTC:
         return backend, _WebRTCVADBackend(**kwargs)  # type: ignore[arg-type]
+    elif backend == VADBackend.SILERO:
+        return backend, _SileroVADBackend()
     elif backend == VADBackend.RMS:
         return backend, _RMSHeuristicBackend(**kwargs)  # type: ignore[arg-type]
     elif backend == VADBackend.AUTO:
+        # Fallback chain: WebRTC → Silero → RMS
         try:
             b = _WebRTCVADBackend()
             logger.info("VAD backend: WebRTC")
             return VADBackend.WEBRTC, b
         except (ImportError, RuntimeError):
-            logger.info("WebRTC VAD unavailable, falling back to RMS heuristic")
-            return VADBackend.RMS, _RMSHeuristicBackend()
-    elif backend == VADBackend.SILERO:
-        raise NotImplementedError(
-            "Silero VAD backend not yet implemented. Use 'webrtc' or 'rms'."
-        )
+            logger.debug("WebRTC VAD unavailable, trying Silero")
+        try:
+            b = _SileroVADBackend()
+            logger.info("VAD backend: Silero")
+            return VADBackend.SILERO, b
+        except (ImportError, RuntimeError):
+            logger.debug("Silero VAD unavailable, falling back to RMS heuristic")
+        logger.info("VAD backend: RMS heuristic")
+        return VADBackend.RMS, _RMSHeuristicBackend()
     else:
         raise ValueError(f"Unknown VAD backend: {backend}")
 

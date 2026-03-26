@@ -28,7 +28,11 @@ def _record_clip(sample_rate: int = 16_000, duration: float = 1.5) -> bytes | No
     try:
         import pyaudio
     except ImportError:
-        print("ERROR: pyaudio is required. Install with: pip install pyaudio", file=sys.stderr)
+        print(
+            "ERROR: pyaudio is required for microphone features. "
+            "Install with: pip install violawake[audio]",
+            file=sys.stderr,
+        )
         return None
 
     pa = pyaudio.PyAudio()

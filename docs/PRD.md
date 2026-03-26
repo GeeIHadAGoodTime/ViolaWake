@@ -21,7 +21,7 @@ Voice AI tooling for developers is dominated by two unsatisfying options:
 
 **Option A: Picovoice** — High accuracy, production-grade, but proprietary black-box models, expensive at scale ($6K+/year commercial), C-binary-wrapped Python, and no fine-tuning capability. Developers are locked in and can't adapt models to their domain (different accent, noisy environment, custom wake word variant).
 
-**Option B: openWakeWord / open-source alternatives** — Free and inspectable, but lower accuracy (d-prime ~5–8 vs our 15.10), no integrated pipeline (just wake detection, no STT or TTS bundle), and no production-hardened decision policy.
+**Option B: openWakeWord / open-source alternatives** — Free and inspectable, but with lower published/community benchmark numbers, no integrated pipeline (just wake detection, no STT or TTS bundle), and no production-hardened decision policy. Our current internal reference score is Cohen's d 15.10 on synthetic negatives; direct speech-negative comparison is still TBD.
 
 **The gap:** No open-source voice SDK combines (1) genuinely competitive accuracy, (2) an accessible training pipeline that developers can use to fine-tune, and (3) a complete bundled pipeline (Wake→VAD→STT→TTS) that ships with a single `pip install`.
 
@@ -41,7 +41,7 @@ Voice AI tooling for developers is dominated by two unsatisfying options:
 | **STTEngine** | Batch STT via faster-whisper | Extracted from `voice/transcription/whisper.py` |
 | **VoicePipeline** | Bundled pipeline orchestrating all four | New |
 | **Training CLI** | `violawake-train` — train a custom wake word model | Extracted from `violawake/training/trainer.py` |
-| **Evaluation CLI** | `violawake-eval` — d-prime evaluation | Extracted from `violawake/training/evaluate_real.py` |
+| **Evaluation CLI** | `violawake-eval` — Cohen's d / FAR / FRR evaluation | Extracted from `violawake/training/evaluate_real.py` |
 | **Model download** | `violawake-download` — fetch and cache models | New |
 | **PyPI package** | `pip install violawake` | New |
 
@@ -95,7 +95,7 @@ detected = score >= detector.threshold
 ```
 
 **Acceptance criteria:**
-- d-prime ≥ 15.0 on internal test set (MLP OWW model)
+- Cohen's d ≥ 15.0 on the internal synthetic-negative test set (MLP OWW model); add speech-negative benchmarking before making external accuracy claims
 - Inference latency ≤ 15ms per 20ms frame on i7-12700H (CPU)
 - False accept rate ≤ 0.5 events/hour at threshold=0.80
 - False reject rate ≤ 3% at threshold=0.80
@@ -108,7 +108,7 @@ detected = score >= detector.threshold
 4. Listening gate: suppress during active playback (configurable)
 
 **Supported models:**
-- `viola_mlp_oww.onnx` — MLP on OWW 96-dim embeddings (default, d-prime 15.10)
+- `viola_mlp_oww.onnx` — MLP on OWW 96-dim embeddings (default, Cohen's d 15.10 on synthetic negatives; speech-negative d-prime TBD)
 - Custom models trained via `violawake-train` CLI
 
 ### F2: Voice Activity Detection (VAD)
@@ -225,7 +225,7 @@ violawake-train \
 - Checkpoint config embedding (prevents config-drift bug documented 2026-03-02)
 
 **Acceptance criteria:**
-- d-prime ≥ 10.0 with 200+ quality positive samples
+- Cohen's d ≥ 10.0 on the synthetic-negative benchmark with 200+ quality positive samples
 - Training completion in ≤ 30 min on i7-12700H CPU (50 epochs, 200 positives)
 - Produces ONNX model loadable by `WakeDetector`
 - Saves checkpoint config alongside model (prevents config drift)
@@ -233,7 +233,7 @@ violawake-train \
 
 ### F7: Evaluation CLI
 
-**Description:** Evaluate wake word model accuracy using d-prime metric.
+**Description:** Evaluate wake word model accuracy using Cohen's d plus FAR/FRR.
 
 **Command:**
 ```bash
@@ -245,7 +245,7 @@ violawake-eval \
 
 **Output:**
 ```
-d-prime: 15.10
+Cohen's d: 15.10 (synthetic negatives)
 False Accept Rate: 0.28/hr (at threshold=0.80)
 False Reject Rate: 1.8% (at threshold=0.80)
 ROC AUC: 0.998
@@ -259,7 +259,7 @@ ROC AUC: 0.998
 
 | Metric | Target | Measurement Method |
 |--------|--------|--------------------|
-| Wake word d-prime | ≥ 15.0 | `violawake-eval` on internal test set |
+| Wake word Cohen's d (synthetic benchmark) | ≥ 15.0 | `violawake-eval` on internal synthetic-negative test set |
 | Wake inference latency | ≤ 15ms/frame (p99) | `pytest tests/benchmarks/bench_wake.py` |
 | TTS first-audio latency | ≤ 400ms/sentence (p50) | `pytest tests/benchmarks/bench_tts.py` |
 | STT WER (base model) | ≤ 9% | LibriSpeech test-clean |
@@ -280,7 +280,7 @@ ROC AUC: 0.998
 
 | vs Porcupine | Target |
 |---|---|
-| Accuracy (d-prime) | ≥ 15.0 (Picovoice publishes no equivalent metric) |
+| Accuracy transparency | Publish Cohen's d on the synthetic benchmark and add speech-negative benchmarking before cross-vendor claims |
 | Python SDK ergonomics | 5 lines to first detection (vs Porcupine's ~15) |
 | Price at scale | $0 (vs $6K+/yr commercial Picovoice) |
 | Training accessibility | Open CLI (vs Picovoice Console, invitation-only initially) |

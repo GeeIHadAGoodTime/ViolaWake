@@ -43,15 +43,15 @@ class ModelSpec:
 MODEL_REGISTRY: dict[str, ModelSpec] = {
     "viola_mlp_oww": ModelSpec(
         name="viola_mlp_oww",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/viola_mlp_oww.onnx",
-        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_mlp_oww.onnx",
+        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",  # Set by tools/update_model_registry.py at release time
         size_bytes=2_100_000,
-        description="ViolaWake MLP on OWW embeddings — d-prime 15.10 (default, recommended)",
+        description="ViolaWake MLP on OWW embeddings (default, recommended)",
         version="0.1.0",
     ),
     "oww_backbone": ModelSpec(
         name="oww_backbone",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/oww_backbone.onnx",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/oww_backbone.onnx",
         sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
         size_bytes=10_000_000,
         description="OpenWakeWord audio embedding backbone — required for MLP models",
@@ -59,15 +59,15 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
     ),
     "viola_cnn_v4": ModelSpec(
         name="viola_cnn_v4",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/viola_cnn_v4.onnx",
-        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_cnn_v4.onnx",
+        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",  # Set by tools/update_model_registry.py at release time
         size_bytes=1_800_000,
-        description="ViolaWake CNN v4 — d-prime 8.2 (no OWW dependency, lightweight)",
+        description="ViolaWake CNN v4 (no OWW dependency, lightweight)",
         version="0.1.0",
     ),
     "kokoro_v1_0": ModelSpec(
         name="kokoro_v1_0",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/kokoro-v1.0.onnx",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/kokoro-v1.0.onnx",
         sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
         size_bytes=330_000_000,
         description="Kokoro-82M TTS model — Apache 2.0 licensed, 24kHz output",
@@ -75,7 +75,7 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
     ),
     "kokoro_voices_v1_0": ModelSpec(
         name="kokoro_voices_v1_0",
-        url="https://github.com/youorg/violawake/releases/download/v0.1.0/voices-v1.0.bin",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/voices-v1.0.bin",
         sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
         size_bytes=8_000_000,
         description="Kokoro voice embeddings — required for TTS",
@@ -147,8 +147,21 @@ def download_model(
         KeyError: If model_name is not in MODEL_REGISTRY.
         ValueError: If SHA-256 verification fails.
     """
-    import requests  # lazy import
-    from tqdm import tqdm  # lazy import
+    try:
+        import requests  # lazy import — optional [download] extra
+    except ImportError:
+        raise ImportError(
+            "requests is required for model downloading. "
+            "Install with: pip install violawake[download]"
+        ) from None
+
+    try:
+        from tqdm import tqdm  # lazy import — optional [download] extra
+    except ImportError:
+        raise ImportError(
+            "tqdm is required for model downloading. "
+            "Install with: pip install violawake[download]"
+        ) from None
 
     if model_name not in MODEL_REGISTRY:
         available = ", ".join(MODEL_REGISTRY.keys())
@@ -196,8 +209,19 @@ def download_model(
 def _verify_sha256(model_path: Path, expected_sha256: str, model_name: str) -> None:
     """Verify the SHA-256 of a downloaded model file."""
     if expected_sha256.startswith("PLACEHOLDER"):
+        import warnings
+
+        warnings.warn(
+            f"SHA-256 verification skipped for '{model_name}': hash not yet set "
+            f"(pre-release build). Model integrity CANNOT be verified. "
+            f"Do NOT ship to production without real hashes. "
+            f"Run: python tools/update_model_registry.py --model {model_name}",
+            UserWarning,
+            stacklevel=3,
+        )
         logger.warning(
-            "Skipping SHA-256 verification for %s — placeholder hash (dev build)",
+            "SHA-256 verification SKIPPED for '%s' — placeholder hash (pre-release build). "
+            "Run tools/update_model_registry.py to populate hashes before release.",
             model_name,
         )
         return

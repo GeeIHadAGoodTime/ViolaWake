@@ -18,7 +18,7 @@ Quick start::
             print("Wake word detected!")
             break
 
-See README.md or https://violawake.readthedocs.io for full documentation.
+See README.md or https://docs.violawake.com for full documentation.
 """
 
 from __future__ import annotations

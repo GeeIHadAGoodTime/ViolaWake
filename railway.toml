@@ -1,0 +1,20 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "console/Dockerfile.backend"
+
+[deploy]
+# Start command is inherited from console/Dockerfile.backend:
+# CMD ["python", "run.py"]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[service]
+# run.py defaults to VIOLAWAKE_PORT=8000, so Railway should target port 8000.
+internalPort = 8000
+
+# Railway containers use ephemeral filesystems.
+# If you keep SQLite, mount a persistent volume and point VIOLAWAKE_DB_PATH at it.
+# For production, prefer VIOLAWAKE_DB_URL with PostgreSQL instead of container-local SQLite.
+# Required runtime env vars include VIOLAWAKE_ENV=production and VIOLAWAKE_SECRET_KEY.

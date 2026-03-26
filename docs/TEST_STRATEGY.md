@@ -20,7 +20,7 @@ staleness-signals: New test tier added, CI provider change, coverage target chan
 
 **Synthetic audio over real recordings.** Unit tests use programmatically generated audio (noise, tones, silence) from numpy. Real audio samples are used only in integration tests and are not committed to the repository.
 
-**Accuracy claims require evidence.** The d-prime claim (≥ 15.0) must be verifiable via a documented evaluation command, not just asserted. The `tests/benchmarks/bench_accuracy.py` test suite is the canonical evaluation that supports any accuracy claim in the README.
+**Accuracy claims require evidence.** The current Cohen's d claim (≥ 15.0 on the synthetic-negative benchmark) must be verifiable via a documented evaluation command, not just asserted. The `tests/benchmarks/bench_accuracy.py` test suite is the canonical evaluation that supports any accuracy claim in the README.
 
 ---
 
@@ -120,7 +120,7 @@ pytest tests/benchmarks/bench_accuracy.py -v
 
 | Test | Metric | Target | Methodology |
 |------|--------|--------|-------------|
-| `bench_wake_dprime` | d-prime | ≥ 15.0 | Internal test set: 500 positives, 2hr negatives |
+| `bench_wake_dprime` | Cohen's d (historical name) | ≥ 15.0 | Internal synthetic-negative test set: 500 positives, 2hr negatives; not a speech-negative d-prime benchmark |
 | `bench_wake_far` | false accept rate/hr | ≤ 0.5 | 2hr continuous noise+music corpus |
 | `bench_wake_frr` | false reject rate | ≤ 3% | 500 positive samples |
 | `bench_stt_wer` | WER | ≤ 9% (base) | LibriSpeech test-clean subset (100 examples) |
@@ -311,7 +311,7 @@ def test_wake_inference_latency(benchmark, loaded_wake_detector, noise_frame):
 - **ONNX Runtime internals:** We don't test that `ort.InferenceSession` loads a file correctly — that's ONNX Runtime's responsibility
 - **PyAudio device enumeration:** Hardware-dependent, not meaningful in CI
 - **Kokoro model quality:** "Does this TTS sound good?" is subjective and not testable via assertion
-- **Training convergence:** "Does the model reach d-prime 15 after N epochs?" is a validation concern, not a unit test concern
+- **Training convergence:** "Does the model reach Cohen's d 15 on the synthetic benchmark after N epochs?" is a validation concern, not a unit test concern
 - **Network reliability:** Download tests mock the network; we don't test GitHub Releases availability
 
 ---

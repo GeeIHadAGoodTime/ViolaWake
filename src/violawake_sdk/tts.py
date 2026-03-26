@@ -202,7 +202,13 @@ class TTSEngine:
 
     def _play_pyaudio(self, audio: np.ndarray) -> None:
         """Play audio using pyaudio as fallback."""
-        import pyaudio
+        try:
+            import pyaudio
+        except ImportError:
+            raise ImportError(
+                "pyaudio is required for audio playback. "
+                "Install with: pip install violawake[audio]"
+            ) from None
         pcm = (audio * 32767).astype(np.int16)
         pa = pyaudio.PyAudio()
         stream = pa.open(
@@ -229,19 +235,16 @@ class TTSEngine:
 
     @staticmethod
     def _split_sentences(text: str) -> list[str]:
-        """Split text at sentence boundaries for chunked synthesis."""
-        sentences: list[str] = []
-        current: list[str] = []
+        """Split text at sentence boundaries for chunked synthesis.
 
-        for char in text:
-            current.append(char)
-            if char in SENTENCE_BOUNDARIES:
-                sentences.append("".join(current).strip())
-                current = []
+        Uses a regex that splits on sentence-ending punctuation followed by
+        whitespace and an uppercase letter (or end of string). This avoids
+        false splits on abbreviations ("Dr. Smith"), decimals ("3.14"),
+        and URLs.
+        """
+        import re
 
-        if current:
-            remaining = "".join(current).strip()
-            if remaining:
-                sentences.append(remaining)
-
-        return [s for s in sentences if s]
+        # Split on sentence-ending punctuation followed by space+uppercase or end of string
+        pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$'
+        parts = re.split(pattern, text)
+        return [s.strip() for s in parts if s and s.strip()]

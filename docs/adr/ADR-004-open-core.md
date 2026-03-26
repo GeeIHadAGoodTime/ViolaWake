@@ -94,7 +94,7 @@ This is the model used by HashiCorp (Terraform), Elastic (pre-2021), Confluent (
 - VoicePipeline, WakeDetector, TTSEngine, STTEngine, VADEngine
 - All documentation
 - All negative training data and data collection tooling
-- The d-prime evaluation framework
+- The Cohen's d / FAR / FRR evaluation framework
 - All GitHub-hosted tooling
 
 **What's commercial (Phase 2+, SaaS):**

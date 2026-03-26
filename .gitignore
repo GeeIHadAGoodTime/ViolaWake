@@ -86,3 +86,16 @@ logs/
 
 # Ruff
 .ruff_cache/
+
+# Console
+node_modules/
+console/backend/data/
+console/frontend/dist/
+**/screenshots/
+*.db
+*.db-journal
+*.db-wal
+
+# Temp files
+tmp*/
+nul

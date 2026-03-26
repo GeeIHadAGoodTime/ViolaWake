@@ -6,7 +6,7 @@ from pathlib import Path
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="violawake-eval",
-        description="Evaluate a ViolaWake ONNX model using d-prime metric.",
+        description="Evaluate a ViolaWake ONNX model using Cohen's d plus FAR/FRR.",
     )
     parser.add_argument("--model", required=True, metavar="PATH",
                         help="Path to the ONNX model file")
