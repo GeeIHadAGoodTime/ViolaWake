@@ -40,6 +40,7 @@ dependencies = [
     "onnxruntime>=1.17",
     "numpy>=1.24",
     "scipy>=1.11",
+    "openwakeword>=0.6",
 ]
 
 [project.optional-dependencies]
@@ -57,11 +58,17 @@ download = [
 # TTS: Kokoro-82M on-device TTS
 tts = [
     "kokoro-onnx>=0.4",
+    "sounddevice>=0.4",
 ]
 
 # STT: faster-whisper transcription
 stt = [
     "faster-whisper>=1.0",
+]
+
+# TFLite: lightweight inference backend (alternative to onnxruntime)
+tflite = [
+    "tflite-runtime>=2.14.0",
 ]
 
 # VAD: preferred VAD backends
@@ -80,13 +87,19 @@ training = [
     "pandas>=2.1",
 ]
 
+# Documentation: API reference generation
+docs = [
+    "pdoc>=14.0",
+]
+
 # Full install
 all = [
-    "violawake[audio,download,tts,stt,vad,training]",
+    "violawake[audio,download,tts,stt,tflite,vad,training]",
 ]
 
 # Dev / CI
 dev = [
+    "hatchling>=1.21",
     "pytest>=8.0",
     "pytest-cov>=4.1",
     "pytest-benchmark>=4.0",
@@ -104,10 +117,14 @@ violawake-train = "violawake_sdk.tools.train:main"
 violawake-eval = "violawake_sdk.tools.evaluate:main"
 violawake-collect = "violawake_sdk.tools.collect_samples:main"
 violawake-download = "violawake_sdk.tools.download_model:main"
+violawake-expand-corpus = "violawake_sdk.tools.expand_corpus:main"
+violawake-streaming-eval = "violawake_sdk.tools.streaming_eval:main"
+violawake-test-confusables = "violawake_sdk.tools.test_confusables:main"
+violawake-contamination-check = "violawake_sdk.tools.contamination_check:main"
 
 [project.urls]
 Homepage = "https://github.com/GeeIHadAGoodTime/ViolaWake"
-Documentation = "https://docs.violawake.com"
+Documentation = "https://github.com/GeeIHadAGoodTime/ViolaWake#readme"
 Repository = "https://github.com/GeeIHadAGoodTime/ViolaWake"
 "Bug Tracker" = "https://github.com/GeeIHadAGoodTime/ViolaWake/issues"
 

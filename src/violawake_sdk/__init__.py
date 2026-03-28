@@ -81,8 +81,10 @@ def list_models() -> list[dict[str, str]]:
         # Deduplicate aliases (e.g. "viola" -> "temporal_cnn")
         if spec.name in seen:
             continue
-        # Hide deprecated models from user-facing output
+        # Hide deprecated and package-managed models from user-facing output
         if "DEPRECATED" in spec.description:
+            continue
+        if spec.name == "oww_backbone":
             continue
         seen.add(spec.name)
         result.append({
