@@ -12,6 +12,7 @@ Usage::
 
     vad = VADEngine(backend="webrtc")
     prob = vad.process_frame(audio_20ms_bytes)  # float 0.0–1.0
+    prob = vad.process_frame(audio_20ms_ndarray)  # also accepts numpy arrays
     is_speech = prob > 0.5
 """
 
@@ -37,6 +38,37 @@ class VADBackend(str, Enum):
     SILERO = "silero"
     RMS = "rms"
     AUTO = "auto"
+
+
+def _coerce_to_bytes(audio: bytes | np.ndarray) -> bytes:
+    """Convert audio input to int16 PCM bytes.
+
+    Accepts:
+      - bytes/bytearray: returned as-is
+      - np.ndarray float32/float64: assumed normalized to [-1.0, 1.0],
+        scaled by 32768 and clipped to int16 range.  **Do NOT pass
+        float arrays in int16 range** (e.g., values like 5000.0) —
+        they will be multiplied by 32768 and produce clipped garbage.
+        Use int16 dtype for int16-range data.
+      - np.ndarray int16: converted to bytes directly
+
+    Raises:
+        TypeError: If input is not bytes or ndarray.
+        ValueError: If ndarray has an unsupported dtype.
+    """
+    if isinstance(audio, (bytes, bytearray)):
+        return bytes(audio)
+    if isinstance(audio, np.ndarray):
+        if audio.dtype in (np.float32, np.float64):
+            return (audio * 32768).clip(-32768, 32767).astype(np.int16).tobytes()
+        if audio.dtype == np.int16:
+            return audio.tobytes()
+        raise ValueError(
+            f"ndarray dtype must be float32, float64, or int16, got {audio.dtype}"
+        )
+    raise TypeError(
+        f"audio must be bytes or np.ndarray, got {type(audio).__name__}"
+    )
 
 
 class _VADBackendProtocol(Protocol):
@@ -69,8 +101,31 @@ class _WebRTCVADBackend:
         except Exception as e:
             raise RuntimeError(f"Failed to initialize WebRTC VAD: {e}") from e
 
+    # Valid frame sizes for WebRTC VAD: 10ms, 20ms, 30ms at 16kHz (int16 = 2 bytes/sample)
+    _VALID_FRAME_BYTES = frozenset({
+        160 * 2,   # 10ms at 16kHz
+        320 * 2,   # 20ms at 16kHz
+        480 * 2,   # 30ms at 16kHz
+    })
+
     def process_frame(self, audio_bytes: bytes) -> float:
-        """Returns 1.0 if speech detected, 0.0 if not (WebRTC is binary)."""
+        """Returns 1.0 if speech detected, 0.0 if not (WebRTC is binary).
+
+        Raises:
+            TypeError: If audio_bytes is not bytes/bytearray.
+            ValueError: If frame size doesn't match 10/20/30ms at 16kHz.
+        """
+        if not isinstance(audio_bytes, (bytes, bytearray)):
+            raise TypeError(
+                f"audio_bytes must be bytes (int16 PCM), got {type(audio_bytes).__name__}"
+            )
+        if len(audio_bytes) not in self._VALID_FRAME_BYTES:
+            n_bytes = len(audio_bytes)
+            raise ValueError(
+                f"WebRTC VAD requires 10/20/30ms frames at 16kHz "
+                f"(320/640/960 bytes). Got {n_bytes} bytes "
+                f"({n_bytes / 2 / SAMPLE_RATE * 1000:.1f}ms)."
+            )
         try:
             is_speech = self._vad.is_speech(audio_bytes, sample_rate=SAMPLE_RATE)
             return 1.0 if is_speech else 0.0
@@ -103,9 +158,31 @@ class _SileroVADBackend:
             ) from e
 
         try:
+            # SECURITY: trust_repo=True disables the interactive safety prompt
+            # AND bypasses integrity checks on the downloaded repository code.
+            # This is accepted because:
+            #   1. Silero VAD (snakers4/silero-vad) is a well-known, widely-used
+            #      open-source project with 5k+ GitHub stars.
+            #   2. The alternative — bundling the model — would increase SDK
+            #      package size by ~4MB and complicate version updates.
+            #   3. For production deployments that require stricter supply-chain
+            #      security, pin to a known commit hash or vendor the model.
+            logger.warning(
+                "Loading Silero VAD from torch.hub with trust_repo=True — "
+                "the remote repo is not integrity-verified. Pin to a known "
+                "commit hash in production deployments."
+            )
             model, _ = torch.hub.load(
                 "snakers4/silero-vad", "silero_vad", trust_repo=True
             )
+        except (RuntimeError, OSError) as e:
+            raise RuntimeError(
+                f"Failed to load Silero VAD model from torch.hub. "
+                f"This may indicate a network issue, corrupted cache, or "
+                f"incompatible PyTorch version. Try clearing the hub cache "
+                f"with: rm -rf ~/.cache/torch/hub/snakers4_silero-vad_master — "
+                f"Original error: {e}"
+            ) from e
         except Exception as e:
             raise RuntimeError(f"Failed to load Silero VAD model: {e}") from e
 
@@ -115,12 +192,30 @@ class _SileroVADBackend:
 
     def process_frame(self, audio_bytes: bytes) -> float:
         """Returns speech probability from Silero VAD model."""
+        if not isinstance(audio_bytes, (bytes, bytearray)):
+            raise TypeError(
+                f"audio_bytes must be bytes (int16 PCM), got {type(audio_bytes).__name__}"
+            )
+        if len(audio_bytes) % 2 != 0:
+            raise ValueError(
+                f"audio_bytes length must be even (int16 = 2 bytes/sample), got {len(audio_bytes)}"
+            )
         pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+
+        # Silero VAD requires specific window sizes (512, 768, 1024, 1536 at
+        # 16kHz).  The wake detector sends 20ms frames (320 samples) which
+        # Silero rejects.  Zero-pad to 512 so short frames work transparently.
+        n_samples = len(pcm)
+        if n_samples < 512:
+            padded = np.zeros(512, dtype=np.float32)
+            padded[:n_samples] = pcm
+            pcm = padded
+
         tensor = self._torch.from_numpy(pcm)
         try:
             prob = self._model(tensor, self._sample_rate).item()
         except Exception as e:
-            logger.warning("Silero VAD error: %s", e)
+            logger.warning("Silero VAD error (samples=%d): %s", n_samples, e)
             return 0.0
         return float(prob)
 
@@ -146,6 +241,14 @@ class _RMSHeuristicBackend:
 
     def process_frame(self, audio_bytes: bytes) -> float:
         """Returns speech probability based on RMS energy."""
+        if not isinstance(audio_bytes, (bytes, bytearray)):
+            raise TypeError(
+                f"audio_bytes must be bytes (int16 PCM), got {type(audio_bytes).__name__}"
+            )
+        if len(audio_bytes) % 2 != 0:
+            raise ValueError(
+                f"audio_bytes length must be even (int16 = 2 bytes/sample), got {len(audio_bytes)}"
+            )
         pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
         rms = float(np.sqrt(np.mean(pcm ** 2)))
 
@@ -180,14 +283,14 @@ def _create_backend(
             b = _WebRTCVADBackend()
             logger.info("VAD backend: WebRTC")
             return VADBackend.WEBRTC, b
-        except (ImportError, RuntimeError):
-            logger.debug("WebRTC VAD unavailable, trying Silero")
+        except Exception as e:
+            logger.debug("WebRTC VAD unavailable (%s: %s), trying Silero", type(e).__name__, e)
         try:
             b = _SileroVADBackend()
             logger.info("VAD backend: Silero")
             return VADBackend.SILERO, b
-        except (ImportError, RuntimeError):
-            logger.debug("Silero VAD unavailable, falling back to RMS heuristic")
+        except Exception as e:
+            logger.debug("Silero VAD unavailable (%s: %s), falling back to RMS heuristic", type(e).__name__, e)
         logger.info("VAD backend: RMS heuristic")
         return VADBackend.RMS, _RMSHeuristicBackend()
     else:
@@ -230,21 +333,26 @@ class VADEngine:
         """Name of the active backend."""
         return self._backend_name.value
 
-    def process_frame(self, audio_bytes: bytes) -> float:
+    def process_frame(self, audio: bytes | np.ndarray) -> float:
         """Process a 20ms audio frame.
 
         Args:
-            audio_bytes: 320 samples of 16kHz mono 16-bit PCM.
+            audio: 320 samples of 16kHz mono audio. Accepted formats:
+                - bytes/bytearray: int16 PCM (640 bytes for 20ms)
+                - np.ndarray float32/float64: assumed normalized to [-1.0, 1.0],
+                  scaled by 32768 to int16. Use int16 dtype for int16-range data.
+                - np.ndarray int16: converted to bytes directly
 
         Returns:
             Speech probability in [0.0, 1.0].
             1.0 = definitely speech, 0.0 = definitely silence.
         """
+        audio_bytes = _coerce_to_bytes(audio)
         return self._backend.process_frame(audio_bytes)
 
-    def is_speech(self, audio_bytes: bytes, threshold: float = 0.5) -> bool:
+    def is_speech(self, audio: bytes | np.ndarray, threshold: float = 0.5) -> bool:
         """Convenience method: returns True if speech probability exceeds threshold."""
-        return self.process_frame(audio_bytes) >= threshold
+        return self.process_frame(audio) >= threshold
 
     def reset(self) -> None:
         """Reset internal state (useful between utterances)."""

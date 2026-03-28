@@ -22,7 +22,7 @@
 | **Python SDK** | First-class | C wrapper | First-class |
 | **Price at scale** | Free | $6K+/year | Free |
 
-**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing, RIR convolution), and a 4-gate decision policy that eliminates false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
+**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing), and a 4-gate decision policy that eliminates false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
 
 > **A note on accuracy claims:** Our benchmark uses TTS-generated audio with adversarial confusables, not real-speaker recordings. Real-world accuracy depends on your deployment environment. We publish our benchmark scripts so you can reproduce and extend them. Run `violawake-eval` on your own test data.
 
@@ -119,7 +119,7 @@ pipeline.run()  # Blocks — Ctrl+C to stop
 
 | Module | Engine | Size | Latency |
 |--------|--------|------|---------|
-| Wake word | Temporal CNN on OWW embeddings (ONNX) | ~100 KB | ~8ms/frame |
+| Wake word | Temporal CNN on OWW embeddings (ONNX) | ~100 KB head (+OWW backbone via `openwakeword`) | ~8ms/frame |
 | VAD | WebRTC VAD / Silero / RMS heuristic | <1 MB | <1ms/frame |
 | STT | faster-whisper `base` | 145 MB | 0.5–2s |
 | TTS | Kokoro-82M (ONNX) | 326 MB | 0.3–0.8s/sentence |
@@ -197,6 +197,8 @@ python -m violawake_sdk.tools.download_model --model kokoro_v1_0    # TTS, 326 M
 ```bash
 pip install violawake
 ```
+
+> **Note:** The PyPI package is `violawake` but the Python import is `violawake_sdk` (e.g., `from violawake_sdk import WakeDetector`). This follows PEP 423 conventions for SDK packages.
 
 **With microphone input and model downloading:**
 ```bash
@@ -292,7 +294,7 @@ openWakeWord is the closest open-source alternative. ViolaWake differences:
 - **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR, FRR, and ROC curves on any model + test set. Benchmark scripts in `benchmark_v2/` — run them yourself.
 - **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) plus optional multi-window confirmation and speaker verification — eliminates false positives during music playback
 - **Bundled pipeline:** ViolaWake ships integrated VAD + STT + TTS, not just the wake word component
-- **Training infrastructure:** FocalLoss + EMA + SWA + full augmentation pipeline (gain, stretch, pitch, noise, RIR) vs basic training in openWakeWord
+- **Training infrastructure:** FocalLoss + EMA + SWA + augmentation pipeline (gain, stretch, pitch, noise, time shift; RIR and SpecAugment available opt-in) vs basic training in openWakeWord
 
 ---
 
