@@ -197,8 +197,7 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
     requests as hard dependencies — it uses urllib from the standard library.
     For full download features (progress bars, pinning), use ``download_model()``.
 
-    Placeholder hashes are handled gracefully: the download proceeds but
-    a warning is printed that integrity cannot be verified.
+    Models with placeholder hashes are refused (raises RuntimeError).
 
     Args:
         model_name: Name from MODEL_REGISTRY.
@@ -231,16 +230,10 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
     )
 
     if has_placeholder:
-        logger.warning(
-            "Model '%s' has a placeholder SHA-256 hash (pre-release build). "
-            "Integrity cannot be verified. Do NOT use in production.",
-            model_name,
-        )
-        print(
-            f"\n  WARNING: '{model_name}' has a placeholder hash — "
-            "integrity cannot be verified (pre-release build)",
-            file=sys.stderr,
-            flush=True,
+        print(" REFUSED", file=sys.stderr, flush=True)
+        raise RuntimeError(
+            f"Model '{model_name}' has a placeholder SHA-256 hash and cannot be "
+            f"verified. This model was never released. Use 'temporal_cnn' instead."
         )
 
     # Reject non-HTTPS URLs to prevent MITM attacks on model downloads
@@ -295,14 +288,8 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
 
     print(" done.", file=sys.stderr, flush=True)
 
-    # Verify SHA-256 (skips gracefully for placeholder hashes)
-    if not has_placeholder:
-        _verify_sha256(model_path, spec.sha256, model_name)
-    else:
-        logger.warning(
-            "Skipping SHA-256 verification for '%s' — placeholder hash (pre-release build).",
-            model_name,
-        )
+    # Verify SHA-256 (placeholder hashes are blocked above, so this always runs)
+    _verify_sha256(model_path, spec.sha256, model_name)
 
     # Size validation (same logic as download_model)
     actual_size = model_path.stat().st_size

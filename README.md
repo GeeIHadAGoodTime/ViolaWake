@@ -92,9 +92,9 @@ pipeline = VoicePipeline(
 )
 
 @pipeline.on_command
-def handle_command(text: str):
+def handle_command(text: str) -> None:
     print(f"Command: {text}")
-    pipeline.speak(f"You said: {text}")
+    pipeline.speak(f"You said: {text}")  # Or return a string to auto-speak
 
 pipeline.run()  # Blocks — Ctrl+C to stop
 ```

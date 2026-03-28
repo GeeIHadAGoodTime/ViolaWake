@@ -417,33 +417,21 @@ class TestAutoDownloadModel:
         assert path.read_bytes() == content
         assert path.name == "test_model.onnx"
 
-    def test_placeholder_hash_downloads_with_warning(self, tmp_path: Path, capfd) -> None:
-        """Placeholder hash models download but print a warning."""
-        content = b"placeholder-model"
-
+    def test_placeholder_hash_refuses_auto_download(self, tmp_path: Path) -> None:
+        """Placeholder hash models are refused by auto-download (security)."""
         spec = ModelSpec(
             name="placeholder_model",
             url="https://example.com/placeholder_model.onnx",
             sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
-            size_bytes=len(content),
+            size_bytes=100,
             description="test placeholder",
         )
 
-        mock_response = MagicMock()
-        mock_response.read.side_effect = [content, b""]
-        mock_response.__enter__ = MagicMock(return_value=mock_response)
-        mock_response.__exit__ = MagicMock(return_value=False)
-
         with (
             patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
-            patch("urllib.request.urlopen", return_value=mock_response),
+            pytest.raises(RuntimeError, match="placeholder SHA-256"),
         ):
-            path = _auto_download_model("placeholder_model", spec)
-
-        assert path.exists()
-        stderr_output = capfd.readouterr().err
-        assert "WARNING" in stderr_output
-        assert "placeholder" in stderr_output.lower()
+            _auto_download_model("placeholder_model", spec)
 
     def test_network_error_raises_runtime_error(self, tmp_path: Path) -> None:
         """Network failure raises RuntimeError with helpful message."""
