@@ -18,13 +18,14 @@ from violawake_sdk.wake_detector import WakeDetector
 pytestmark = pytest.mark.integration
 
 GITHUB_RELEASE_URL_RE = re.compile(
-    r"^https://github\.com/[^/]+/[^/]+/releases/download/v[^/]+/[^/]+$"
+    r"^https://github\.com/[^/]+/[^/]+/releases/download/[^/]+/[^/]+$"
 )
 
 
 def _make_fake_ort() -> types.SimpleNamespace:
     input_meta = MagicMock()
     input_meta.name = "input"
+    input_meta.shape = [1, 96]
 
     fake_session = MagicMock()
     fake_session.get_inputs.return_value = [input_meta]
@@ -85,22 +86,26 @@ def test_model_registry_entries_are_valid() -> None:
         assert spec.url.strip(), f"{model_name} should have a non-empty url"
         assert spec.sha256.strip(), f"{model_name} should have a non-empty sha256"
         assert spec.description.strip(), f"{model_name} should have a non-empty description"
-        assert GITHUB_RELEASE_URL_RE.match(spec.url), (
-            f"{model_name} URL should use a GitHub Releases download URL: {spec.url}"
-        )
+        # oww_backbone is package-managed (not downloadable) — its URL is a reference
+        if model_name != "oww_backbone":
+            assert GITHUB_RELEASE_URL_RE.match(spec.url), (
+                f"{model_name} URL should use a GitHub Releases download URL: {spec.url}"
+            )
         assert 0 < spec.size_bytes < 1_000_000_000, (
             f"{model_name} size_bytes should be > 0 and < 1GB, got {spec.size_bytes}"
         )
 
 
 def test_wake_detector_invalid_model_path_raises(tmp_path: Path) -> None:
-    (tmp_path / "oww_backbone.onnx").write_bytes(b"fake-backbone")
     fake_ort = _make_fake_ort()
     missing_model = tmp_path / "missing_model.onnx"
 
     with (
         patch.dict("sys.modules", {"onnxruntime": fake_ort}),
-        patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
+        patch(
+            "violawake_sdk.wake_detector.WakeDetector._create_oww_backbone",
+            return_value=MagicMock(),
+        ),
         pytest.raises(ModelNotFoundError, match=re.escape(str(missing_model))),
     ):
         WakeDetector(model=str(missing_model))
@@ -110,6 +115,7 @@ def test_wake_detector_invalid_model_path_raises(tmp_path: Path) -> None:
 def test_wake_detector_invalid_threshold_raises(threshold: float) -> None:
     with (
         patch.object(WakeDetector, "_load_session") as load_session,
+        patch.object(WakeDetector, "_create_oww_backbone"),
         pytest.raises(ValueError, match="threshold"),
     ):
         WakeDetector(threshold=threshold)

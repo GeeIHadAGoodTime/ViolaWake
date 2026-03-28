@@ -56,17 +56,20 @@ class TTSEngine:
     """On-device TTS using Kokoro-82M (Apache 2.0 model).
 
     Thread-safe: multiple threads can call ``synthesize()`` concurrently.
-    Each call creates a temporary synthesis context — no shared mutable state.
+    Calls are serialized via ``_synthesis_lock`` since kokoro-onnx is not
+    guaranteed to be thread-safe. Model initialization is separately guarded
+    by ``_lock`` (lazy load on first use).
 
     Model files required (auto-downloaded on first use):
-        - ``kokoro_v1_0.onnx`` — Kokoro-82M model (~330MB)
-        - ``kokoro_voices_v1_0.bin`` — Voice embeddings (~8MB)
+        - ``kokoro_v1_0.onnx`` — Kokoro-82M model (~326MB)
+        - ``kokoro_voices_v1_0.bin`` — Voice embeddings (~28MB)
 
     Example::
 
         tts = TTSEngine(voice="af_heart")
         audio = tts.synthesize("Hello, world!")  # returns np.ndarray
-        tts.play(audio)  # plays via sounddevice or pyaudio
+        tts.play(audio)  # blocking by default
+        tts.play_async(audio)  # optional non-blocking playback
     """
 
     def __init__(
@@ -89,10 +92,16 @@ class TTSEngine:
                 f"Unknown voice '{voice}'. Available: {', '.join(AVAILABLE_VOICES)}"
             )
 
+        if not (0.1 <= speed <= 3.0):
+            raise ValueError(
+                f"Speed must be between 0.1 and 3.0, got {speed}"
+            )
+
         self.voice = voice
         self.speed = speed
         self.sample_rate = sample_rate
         self._lock = threading.Lock()
+        self._synthesis_lock = threading.Lock()
         self._kokoro: object | None = None
 
         # Lazy initialization — load model on first use
@@ -147,17 +156,20 @@ class TTSEngine:
 
         kokoro = self._get_kokoro()
 
-        try:
-            # kokoro-onnx API: returns (samples, sample_rate)
-            audio, sr = kokoro.create(  # type: ignore[attr-defined]
-                text,
-                voice=self.voice,
-                speed=self.speed,
-                lang="en-us",
-            )
-        except Exception as e:
-            logger.exception("TTS synthesis failed for text: %.50s...", text)
-            raise RuntimeError(f"TTS synthesis failed: {e}") from e
+        # Hold synthesis lock to serialize access to the kokoro model,
+        # which is not guaranteed to be thread-safe by kokoro-onnx.
+        with self._synthesis_lock:
+            try:
+                # kokoro-onnx API: returns (samples, sample_rate)
+                audio, sr = kokoro.create(  # type: ignore[attr-defined]
+                    text,
+                    voice=self.voice,
+                    speed=self.speed,
+                    lang="en-us",
+                )
+            except Exception as e:
+                logger.exception("TTS synthesis failed for text: %.50s...", text)
+                raise RuntimeError(f"TTS synthesis failed: {e}") from e
 
         audio = np.asarray(audio, dtype=np.float32)
 
@@ -187,20 +199,36 @@ class TTSEngine:
                 if audio.size > 0:
                     yield audio
 
-    def play(self, audio: np.ndarray) -> None:
+    def play(self, audio: np.ndarray, *, blocking: bool = True) -> None:
         """Play audio through the default output device.
 
         Args:
             audio: Float32 numpy array of audio samples.
+            blocking: If True, wait for playback to finish. If False, return
+                      immediately after starting playback.
         """
         try:
             import sounddevice as sd  # type: ignore[import]
-            sd.play(audio, samplerate=self.sample_rate, blocking=True)
-        except ImportError:
-            # Fall back to pyaudio
-            self._play_pyaudio(audio)
+        except ImportError as sd_err:
+            logger.debug("sounddevice not available (%s), falling back to pyaudio", sd_err)
+            try:
+                self._play_pyaudio(audio, blocking=blocking)
+            except ImportError as e:
+                raise ImportError(
+                    "No audio playback backend is installed. "
+                    "Install sounddevice with: pip install sounddevice "
+                    "or install violawake[audio] for PyAudio playback."
+                ) from e
+            return
 
-    def _play_pyaudio(self, audio: np.ndarray) -> None:
+        # Copy to prevent mutation of caller's array during async playback
+        sd.play(audio.copy(), samplerate=self.sample_rate, blocking=blocking)
+
+    def play_async(self, audio: np.ndarray) -> None:
+        """Play audio without blocking the calling thread."""
+        self.play(audio, blocking=False)
+
+    def _play_pyaudio(self, audio: np.ndarray, *, blocking: bool = True) -> None:
         """Play audio using pyaudio as fallback."""
         try:
             import pyaudio
@@ -209,7 +237,19 @@ class TTSEngine:
                 "pyaudio is required for audio playback. "
                 "Install with: pip install violawake[audio]"
             ) from None
-        pcm = (audio * 32767).astype(np.int16)
+
+        if not blocking:
+            thread = threading.Thread(
+                target=self._play_pyaudio,
+                args=(audio.copy(),),
+                kwargs={"blocking": True},
+                daemon=True,
+            )
+            thread.start()
+            return
+
+        clipped = np.clip(audio, -1.0, 1.0)
+        pcm = (clipped * 32767).astype(np.int16)
         pa = pyaudio.PyAudio()
         stream = pa.open(
             format=pyaudio.paInt16,
@@ -229,7 +269,13 @@ class TTSEngine:
         """Resample audio using scipy."""
         import math
 
-        from scipy.signal import resample_poly
+        try:
+            from scipy.signal import resample_poly
+        except ImportError as e:
+            raise ImportError(
+                "scipy is required for audio resampling. "
+                "Install with: pip install scipy"
+            ) from e
         gcd = math.gcd(src_rate, dst_rate)
         return resample_poly(audio, dst_rate // gcd, src_rate // gcd).astype(np.float32)
 
