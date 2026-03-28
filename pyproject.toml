@@ -134,15 +134,23 @@ Repository = "https://github.com/GeeIHadAGoodTime/ViolaWake"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
-    "console/",
+    "_training_corpus/",
     "benchmark_v2/",
     "benchmark_oww/",
+    "console/",
     "corpus/",
-    "experiments/",
-    "scripts/",
+    "data/",
+    "dist/",
     "eval_clean/",
+    "experiments/",
+    "logs/",
+    "models/",
+    "scripts/",
+    "tools/",
     ".viola*",
     "*.mp3",
+    "*.wav",
+    "*.onnx",
 ]
 
 [tool.hatch.build.targets.wheel]

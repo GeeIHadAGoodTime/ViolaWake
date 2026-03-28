@@ -22,7 +22,7 @@
 | **Python SDK** | First-class | C wrapper | First-class |
 | **Price at scale** | Free | $6K+/year | Free |
 
-**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (SpecAugment, RIR convolution, noise mixing), and a 4-gate decision policy that eliminates false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
+**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing, RIR convolution), and a 4-gate decision policy that eliminates false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
 
 > **A note on accuracy claims:** Our benchmark uses TTS-generated audio with adversarial confusables, not real-speaker recordings. Real-world accuracy depends on your deployment environment. We publish our benchmark scripts so you can reproduce and extend them. Run `violawake-eval` on your own test data.
 
@@ -292,7 +292,7 @@ openWakeWord is the closest open-source alternative. ViolaWake differences:
 - **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR, FRR, and ROC curves on any model + test set. Benchmark scripts in `benchmark_v2/` — run them yourself.
 - **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) plus optional multi-window confirmation and speaker verification — eliminates false positives during music playback
 - **Bundled pipeline:** ViolaWake ships integrated VAD + STT + TTS, not just the wake word component
-- **Training infrastructure:** FocalLoss + EMA + SWA + SpecAugment augmentation pipeline vs basic training in openWakeWord
+- **Training infrastructure:** FocalLoss + EMA + SWA + full augmentation pipeline (gain, stretch, pitch, noise, RIR) vs basic training in openWakeWord
 
 ---
 
@@ -303,7 +303,7 @@ ViolaWake uses openWakeWord's mel-spectrogram embedding model as a frozen featur
 **Key differences from OWW:**
 - **Decision policy:** ViolaWake adds a multi-gate pipeline (RMS floor, cooldown, playback suppression) on top of raw scores. OWW exposes raw sigmoid scores only.
 - **Temporal models:** ViolaWake supports Temporal CNN and Conv-GRU heads that score across a sliding window of embeddings, not just a single frame. This reduces false positives on speech that partially matches the wake word.
-- **Augmentation pipeline:** ViolaWake's training CLI applies SpecAugment, RIR convolution, and noise mixing before embedding extraction. OWW's default training uses minimal augmentation.
+- **Augmentation pipeline:** ViolaWake's training CLI applies gain, time stretch, pitch shift, noise mixing, and RIR convolution. SpecAugment is available for custom spectrogram-level pipelines via `AugmentationPipeline.augment_spectrogram()`. OWW's default training uses minimal augmentation.
 - **Confidence API:** `detector.get_confidence()` and `detector.last_scores` provide structured confidence tracking that OWW does not offer.
 
 **Using existing OWW training data:**

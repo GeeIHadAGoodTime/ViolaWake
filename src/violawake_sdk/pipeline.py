@@ -23,10 +23,11 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 import numpy as np
 
+from violawake_sdk._constants import DEFAULT_THRESHOLD
 from violawake_sdk._exceptions import PipelineError
 from violawake_sdk.vad import VADEngine
 from violawake_sdk.wake_detector import WakeDetector
@@ -35,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 # Type alias for command handlers
 CommandHandler: TypeAlias = Callable[[str], str | None]
+WakeCallback: TypeAlias = Callable[[], None]
 
 # Recording state machine states
 _STATE_IDLE = "idle"
@@ -47,17 +49,43 @@ SAMPLE_RATE = 16_000
 FRAME_SAMPLES = 320   # 20ms
 MAX_COMMAND_DURATION_S = 10.0  # Max recording length before force-stop
 SILENCE_FRAMES_STOP = 30  # Number of consecutive silence frames to stop recording (~600ms)
+MAX_RECORDING_FRAMES = int(MAX_COMMAND_DURATION_S / (FRAME_SAMPLES / SAMPLE_RATE))  # Pre-computed
 
 
 class VoicePipeline:
     """Orchestrated Wake→VAD→STT→TTS voice pipeline.
 
-    State machine: idle → listening → transcribing → responding → idle
+    State Machine
+    =============
+    Four states with the following transitions::
 
-    Thread model:
-        - Main thread: ``run()`` runs the mic capture loop
-        - Worker thread: STT transcription runs off the mic thread to avoid blocking
-        - Worker thread: TTS playback runs off the worker thread
+        IDLE ──(wake detected)──→ LISTENING
+        LISTENING ──(silence/timeout)──→ TRANSCRIBING
+        TRANSCRIBING ──(text ready)──→ RESPONDING
+        RESPONDING ──(handlers done)──→ IDLE
+
+    Thread ownership of transitions:
+        - **Main thread** (``_run_loop``): IDLE→LISTENING, LISTENING→TRANSCRIBING.
+          Owns the mic capture loop and wake/VAD detection.
+        - **Worker thread** (``_transcribe_and_respond``): TRANSCRIBING→RESPONDING→IDLE.
+          Spawned by ``_start_worker()`` as a daemon thread. Runs STT, dispatches
+          command handlers, and triggers TTS playback. Only one worker thread is
+          active at a time (guarded by ``_worker_lock``).
+
+    Threading Model
+    ===============
+    - The main loop runs in the calling thread via ``run()`` (blocking).
+    - When a command recording ends, ``_start_worker()`` spawns a single daemon
+      thread for STT transcription + handler dispatch + TTS playback.
+    - ``_state_lock`` guards all reads/writes of ``_state``.
+    - ``_worker_lock`` guards ``_worker_thread`` reference management.
+
+    Known Limitation
+    ================
+    There is a brief window between the worker thread completing (setting state
+    back to IDLE) and the next wake detection where the pipeline is technically
+    idle but the worker thread reference may not yet be cleared. During this
+    window, a new wake detection will proceed normally since the state is IDLE.
 
     Usage::
 
@@ -75,10 +103,12 @@ class VoicePipeline:
         wake_word: str = "viola",
         stt_model: str = "base",
         tts_voice: str = "af_heart",
-        threshold: float = 0.80,
+        threshold: float = DEFAULT_THRESHOLD,
         vad_backend: str = "auto",
+        vad_threshold: float = 0.4,
         enable_tts: bool = True,
         device_index: int | None = None,
+        on_wake: WakeCallback | None = None,
     ) -> None:
         """Initialize the voice pipeline.
 
@@ -88,22 +118,31 @@ class VoicePipeline:
             tts_voice: TTS voice name. Default "af_heart".
             threshold: Wake word detection threshold. Default 0.80.
             vad_backend: VAD backend. Default "auto".
+            vad_threshold: VAD speech detection threshold. Default 0.4.
             enable_tts: If True, speak responses via TTS. If False, skip TTS.
             device_index: Microphone device index. None = system default.
+            on_wake: Optional callback fired after wake-word detection and
+                     before command transcription begins.
         """
         self._wake_detector = WakeDetector(model=wake_word, threshold=threshold)
         self._vad = VADEngine(backend=vad_backend)
+        self._vad_threshold = vad_threshold
         self._enable_tts = enable_tts
         self._device_index = device_index
         self._stt_model = stt_model
         self._tts_voice = tts_voice
+        self._on_wake = on_wake
 
-        self._stt: object | None = None  # lazy
-        self._tts: object | None = None  # lazy
+        # Typed as Any because STTEngine/TTSEngine are lazily imported to avoid
+        # hard dependencies on optional extras (violawake[stt], violawake[tts]).
+        self._stt: Any | None = None  # lazy — violawake_sdk.stt.STTEngine
+        self._tts: Any | None = None  # lazy — violawake_sdk.tts.TTSEngine
 
         self._state = _STATE_IDLE
         self._state_lock = threading.Lock()
         self._stop_event = threading.Event()
+        self._worker_lock = threading.Lock()
+        self._worker_thread: threading.Thread | None = None
 
         self._command_handlers: list[CommandHandler] = []
 
@@ -145,16 +184,50 @@ class VoicePipeline:
         except Exception as e:
             raise PipelineError(f"Pipeline error: {e}") from e
         finally:
-            self._state = _STATE_IDLE
+            self.stop()
+            with self._state_lock:
+                self._state = _STATE_IDLE
             logger.info("VoicePipeline stopped.")
 
-    def stop(self) -> None:
-        """Signal the pipeline to stop after the current cycle."""
+    def stop(self, timeout: float = 5.0) -> None:
+        """Signal the pipeline to stop and wait briefly for worker cleanup."""
         self._stop_event.set()
+        worker = self._get_worker_thread()
+        if worker is None or worker is threading.current_thread():
+            return
+
+        worker.join(timeout=timeout)
+        if worker.is_alive():
+            logger.warning("VoicePipeline worker thread did not exit within %.1f s", timeout)
+        else:
+            # Clear reference only after the worker has fully exited
+            with self._worker_lock:
+                if self._worker_thread is worker:
+                    self._worker_thread = None
+
+    def close(self) -> None:
+        """Stop the pipeline and release all engine resources."""
+        self.stop()
+        self._wake_detector.close()
+        self._stt = None
+        self._tts = None
+
+    def __enter__(self) -> VoicePipeline:
+        """Enter sync context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Exit sync context manager. Stops pipeline and releases resources."""
+        self.close()
 
     def speak(self, text: str) -> None:
         """Synthesize and play text via TTS (called from within command handlers)."""
-        if not self._enable_tts:
+        if not self._enable_tts or self._stop_event.is_set():
             return
 
         tts = self._get_tts()
@@ -165,8 +238,8 @@ class VoicePipeline:
         try:
             audio = tts.synthesize(text)  # type: ignore[attr-defined]
             tts.play(audio)  # type: ignore[attr-defined]
-        except Exception:
-            logger.exception("TTS playback failed")
+        except Exception as e:
+            logger.exception("TTS playback failed for text '%.50s': %s", text, e)
 
     def _run_loop(self) -> None:
         """Main mic capture and detection loop."""
@@ -186,13 +259,18 @@ class VoicePipeline:
                     logger.info("Wake word detected → listening for command")
                     recording_buffer.clear()
                     silence_count = 0
+                    if self._on_wake is not None:
+                        try:
+                            self._on_wake()
+                        except Exception:
+                            logger.exception("on_wake callback failed")
                     with self._state_lock:
                         self._state = _STATE_LISTENING
 
             elif state == _STATE_LISTENING:
                 # Recording command
                 recording_buffer.append(frame)
-                is_speech = self._vad.is_speech(frame, threshold=0.4)
+                is_speech = self._vad.is_speech(frame, threshold=self._vad_threshold)
 
                 if not is_speech:
                     silence_count += 1
@@ -201,19 +279,14 @@ class VoicePipeline:
 
                 # Check stop conditions
                 total_frames = len(recording_buffer)
-                max_frames = int(MAX_COMMAND_DURATION_S * 50)  # 50 frames/sec
 
-                if silence_count >= SILENCE_FRAMES_STOP or total_frames >= max_frames:
+                if silence_count >= SILENCE_FRAMES_STOP or total_frames >= MAX_RECORDING_FRAMES:
                     audio_bytes = b"".join(recording_buffer)
                     with self._state_lock:
                         self._state = _STATE_TRANSCRIBING
 
                     # Transcribe in a worker thread to not block the mic loop
-                    threading.Thread(
-                        target=self._transcribe_and_respond,
-                        args=(audio_bytes,),
-                        daemon=True,
-                    ).start()
+                    self._start_worker(audio_bytes)
 
             # _STATE_TRANSCRIBING and _STATE_RESPONDING: keep looping (don't detect wake)
 
@@ -227,8 +300,22 @@ class VoicePipeline:
             return
 
         try:
+            if len(audio_bytes) % 2 != 0:
+                logger.warning(
+                    "Audio buffer length %d is not a multiple of 2 bytes (int16); "
+                    "truncating to even boundary",
+                    len(audio_bytes),
+                )
+                audio_bytes = audio_bytes[:len(audio_bytes) & ~1]
+            if len(audio_bytes) == 0:
+                logger.warning("Empty audio buffer — skipping transcription")
+                return
             pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             text = stt.transcribe(pcm)  # type: ignore[attr-defined]
+
+            if self._stop_event.is_set():
+                logger.debug("Pipeline stopping; dropping transcription result")
+                return
 
             if text.strip():
                 logger.info("Command: '%s'", text)
@@ -239,19 +326,25 @@ class VoicePipeline:
         except Exception:
             logger.exception("Transcription failed")
         finally:
+            self._clear_worker_thread()
             with self._state_lock:
                 self._state = _STATE_IDLE
 
     def _dispatch_command(self, text: str) -> None:
         """Call all registered command handlers."""
+        if self._stop_event.is_set():
+            return
+
         with self._state_lock:
             self._state = _STATE_RESPONDING
 
         try:
             for handler in self._command_handlers:
+                if self._stop_event.is_set():
+                    break
                 try:
                     response = handler(text)
-                    if response and self._enable_tts:
+                    if response and self._enable_tts and not self._stop_event.is_set():
                         self.speak(response)
                 except Exception:
                     logger.exception("Command handler '%s' failed", handler.__name__)
@@ -259,7 +352,41 @@ class VoicePipeline:
             with self._state_lock:
                 self._state = _STATE_IDLE
 
-    def _get_stt(self) -> object | None:
+    def _start_worker(self, audio_bytes: bytes) -> None:
+        """Start the STT/TTS worker thread and retain it for shutdown.
+
+        If a previous worker is still alive, skip spawning to prevent
+        concurrent transcription.
+        """
+        with self._worker_lock:
+            if self._worker_thread is not None and self._worker_thread.is_alive():
+                logger.warning(
+                    "Previous worker thread still alive — skipping new spawn"
+                )
+                with self._state_lock:
+                    self._state = _STATE_IDLE
+                return
+            worker = threading.Thread(
+                target=self._transcribe_and_respond,
+                args=(audio_bytes,),
+                daemon=True,
+            )
+            self._worker_thread = worker
+        worker.start()
+
+    def _get_worker_thread(self) -> threading.Thread | None:
+        """Return the active worker thread, if any."""
+        with self._worker_lock:
+            return self._worker_thread
+
+    def _clear_worker_thread(self) -> None:
+        """Clear the worker reference once the worker exits."""
+        current = threading.current_thread()
+        with self._worker_lock:
+            if self._worker_thread is current:
+                self._worker_thread = None
+
+    def _get_stt(self) -> Any | None:
         """Lazy-load STT engine."""
         if self._stt is None:
             try:
@@ -270,7 +397,7 @@ class VoicePipeline:
                 return None
         return self._stt
 
-    def _get_tts(self) -> object | None:
+    def _get_tts(self) -> Any | None:
         """Lazy-load TTS engine."""
         if self._tts is None and self._enable_tts:
             try:
