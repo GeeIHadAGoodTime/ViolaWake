@@ -189,8 +189,7 @@ jobs:
         run: |
           mkdir -p benchmark-results
           pytest tests/benchmarks/bench_latency.py \
-            --benchmark-json=benchmark-results/latency-${{ github.sha }}.json \
-            --benchmark-histogram=benchmark-results/histogram
+            --benchmark-json=benchmark-results/latency-${{ github.sha }}.json
 
       - name: Check for regressions
         # --threshold 0.10 = fail if any benchmark regresses by more than 10%.
