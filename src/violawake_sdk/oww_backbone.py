@@ -152,11 +152,38 @@ class OpenWakeWordBackbone:
 
     def __init__(self, backend: InferenceBackend) -> None:
         paths = resolve_openwakeword_backbone_paths(backend.name)
+        self._verify_backbone_integrity(paths)
         self._melspec_session = backend.load(paths.melspectrogram)
         self._embedding_session = backend.load(paths.embedding_model)
         self._melspec_input_name = self._melspec_session.get_inputs()[0].name
         self._embedding_input_name = self._embedding_session.get_inputs()[0].name
         self.reset()
+
+    @staticmethod
+    def _verify_backbone_integrity(paths: OpenWakeWordBackbonePaths) -> None:
+        """Verify OWW backbone files against known SHA-256 hashes."""
+        try:
+            from violawake_sdk.models import MODEL_REGISTRY
+
+            spec = MODEL_REGISTRY.get("oww_backbone")
+            if spec is None or spec.sha256.startswith("PLACEHOLDER"):
+                return  # No known hash to verify against
+
+            # Compute combined hash (mel + embedding) matching training-time pinning
+            actual_hashes = get_openwakeword_backbone_hashes()
+            combined = actual_hashes["oww_mel_sha256"] + actual_hashes["oww_emb_sha256"]
+            combined_hash = hashlib.sha256(combined.encode()).hexdigest()
+
+            if combined_hash != spec.sha256:
+                logger.warning(
+                    "OWW backbone hash mismatch: expected %s, got %s. "
+                    "The openwakeword package may have been updated. "
+                    "Re-train your model if detection accuracy degrades.",
+                    spec.sha256[:16],
+                    combined_hash[:16],
+                )
+        except Exception:
+            logger.debug("Skipping backbone integrity check", exc_info=True)
 
     @property
     def last_embedding(self) -> np.ndarray | None:

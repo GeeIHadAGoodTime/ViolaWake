@@ -2,8 +2,7 @@
 
 **The open-source alternative to Porcupine.** A production-tested wake word engine with accessible training, ONNX inference, and a Python-first SDK.
 
-<!-- PyPI badge will activate after first publish -->
-<!-- [![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake) -->
+[![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake)
 [![CI](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml/badge.svg)](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -49,7 +48,7 @@ for audio_chunk in detector.stream_mic():  # 20ms chunks at 16kHz
         break
 ```
 
-> `confirm_count=3` requires 3 consecutive above-threshold frames before firing, reducing false accepts by ~82-87% depending on threshold. Use `confirm_count=1` for lowest latency.
+> `confirm_count=3` requires 3 consecutive above-threshold frames before firing, significantly reducing false accepts. Use `confirm_count=1` for lowest latency.
 
 ### Threshold Tuning
 
@@ -97,9 +96,9 @@ pipeline = VoicePipeline(
 )
 
 @pipeline.on_command
-def handle_command(text: str) -> None:
+def handle_command(text: str) -> str:
     print(f"Command: {text}")
-    pipeline.speak(f"You said: {text}")  # Or return a string to auto-speak
+    return f"You said: {text}"  # Returned string is spoken via TTS
 
 pipeline.run()  # Blocks — Ctrl+C to stop
 ```
@@ -350,7 +349,7 @@ No format conversion is needed -- ViolaWake reads the same 16kHz mono WAV/FLAC f
 - [x] faster-whisper STT integration
 - [x] Full VoicePipeline class
 - [x] Training CLI
-- [ ] PyPI release
+- [x] PyPI release
 - [ ] Documentation site
 
 **v1.1 (Q3 2026) — Streaming + Web:**
