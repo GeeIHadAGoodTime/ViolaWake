@@ -12,7 +12,8 @@ Verifies that:
 from __future__ import annotations
 
 import pytest
-import torch
+
+torch = pytest.importorskip("torch", reason="torch required for weight averaging tests")
 import torch.nn as nn
 
 from violawake_sdk.training.weight_averaging import (

@@ -72,11 +72,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        # openwakeword requires tflite-runtime on Linux, which has no Python 3.12 wheels.
+        # Override: install openwakeword without its tflite dep, then install our package.
+        run: |
+          pip install openwakeword --no-deps
+          pip install onnxruntime numpy tqdm requests
+          pip install -e ".[dev]"
 
       - name: Smoke test install
         run: |
-          pip install .
           python -c "from violawake_sdk import WakeDetector, __version__; print(f'violawake {__version__} OK')"
 
       - name: Run unit tests
