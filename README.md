@@ -155,6 +155,21 @@ The `--test-dir` must contain `positives/` and `negatives/` subdirectories.
 
 **Expected results:** EER < 10% (against the bundled synthetic negative corpus) with 200+ quality positive samples. Your real-world performance will depend on your deployment environment and negative speech corpus.
 
+### Proof: "Operator" Custom Wake Word (89 seconds, EER 7.2%)
+
+To prove the training pipeline generalizes beyond "Viola," we trained a custom "operator" model from scratch — zero manual data collection:
+
+| | ViolaWake "viola" | ViolaWake "operator" | OWW "alexa" (pre-trained) |
+|---|---|---|---|
+| **EER** | **5.49%** | **7.2%** | 8.24% |
+| **ROC AUC** | 0.988 | 0.984 | 0.956 |
+| **Training time** | ~48s | **89s** | N/A (pre-trained) |
+| **Architecture** | Temporal CNN | Temporal CNN | MLP on OWW embeddings |
+
+The training CLI handled TTS sample generation (20 Edge TTS voices), confusable negative generation (16 phonetic variants), 10x augmentation, and Temporal CNN training end-to-end. OWW provides no public training CLI for custom words.
+
+Full methodology, corpus details, and reproducibility instructions: [`benchmark_v2/OPERATOR_BENCHMARK.md`](benchmark_v2/OPERATOR_BENCHMARK.md)
+
 ---
 
 ## Models
