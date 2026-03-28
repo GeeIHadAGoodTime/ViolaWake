@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Wake word detection with 4-gate decision policy (silence guard, threshold, cooldown, playback suppression) plus optional multi-window confirmation
 - 3-of-3 multi-window confirmation reducing FAPH by 87%
-- Production model r3_10x_s42 achieving 0.37 FAPH at 96.9% TP
+- Production default model: temporal_cnn (EER 5.49%, best live recall + lowest FP)
 - VAD engine with 3-backend fallback (WebRTC -> Silero -> RMS)
 - STT integration via faster-whisper (5 model sizes)
 - TTS integration via Kokoro-82M with sentence-chunked streaming

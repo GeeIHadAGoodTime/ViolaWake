@@ -74,10 +74,13 @@ class DetectorConfig:
         # Simple (80% of users):
         det = WakeDetector(model="temporal_cnn", threshold=0.80)
 
-        # Advanced:
+        # Advanced (multi-model ensemble + adaptive threshold):
         det = WakeDetector(
             model="temporal_cnn",
-            config=DetectorConfig(ensemble=True, power_aware=True),
+            config=DetectorConfig(
+                adaptive_threshold=True,
+                confirm_count=3,
+            ),
         )
 
     Attributes:
