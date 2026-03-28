@@ -625,17 +625,21 @@ class WakeDetector:
             raw_audio_frame: Original audio frame passed through to OWW backbone.
         """
         if pcm.shape[0] != FRAME_SAMPLES:
-            if pcm.shape[0] % FRAME_SAMPLES != 0:
-                logger.warning(
-                    "Expected %d samples, got %d -- resampling not supported",
-                    FRAME_SAMPLES, pcm.shape[0],
-                )
+            # Reject pathologically large or empty frames first
             if pcm.shape[0] == 0 or pcm.shape[0] > _MAX_PROCESS_FRAME_SAMPLES:
                 raise ValueError(
                     "Audio frame length is too far from the expected streaming size: "
                     f"expected {FRAME_SAMPLES} samples, got {pcm.shape[0]} "
                     f"(maximum non-pathological size is {_MAX_PROCESS_FRAME_SAMPLES})"
                 )
+            # Non-multiples of 320 indicate wrong sample rate — return 0.0
+            if pcm.shape[0] % FRAME_SAMPLES != 0:
+                logger.warning(
+                    "Audio frame has %d samples (not a multiple of %d). "
+                    "Expected 16kHz, 20ms frames. Returning score 0.0.",
+                    pcm.shape[0], FRAME_SAMPLES,
+                )
+                return 0.0
         with self._backbone_lock:
             produced_embedding, embedding = self._oww_backbone.push_audio(raw_audio_frame)
             if embedding is None:
@@ -994,15 +998,11 @@ class _SourceDetector:
 
 
 class WakewordDetector:
-    """Compatibility wrapper that lazy-loads WakeDetector on first use.
+    """Deprecated compatibility wrapper — use ``WakeDetector`` instead.
 
-    Args:
-        wake_word: Wake word name (e.g. ``"viola"``).
-        threshold: Detection confidence threshold in [0.0, 1.0].
-        cooldown_s: Minimum seconds between consecutive detections.
-        providers: ONNX Runtime execution providers (ignored for TFLite).
-        backend: Inference backend selector.  One of ``"onnx"``,
-            ``"tflite"``, or ``"auto"`` (default).
+    .. deprecated:: 0.1.0
+        Use :class:`WakeDetector` directly. ``WakewordDetector`` will be
+        removed in v1.0.
     """
 
     def __init__(
@@ -1010,6 +1010,12 @@ class WakewordDetector:
         cooldown_s: float = DEFAULT_COOLDOWN_S, providers: list[str] | None = None,
         backend: str = "auto",
     ) -> None:
+        import warnings
+        warnings.warn(
+            "WakewordDetector is deprecated. Use WakeDetector instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.wake_word = wake_word
         self.threshold = threshold
         self.cooldown_s = cooldown_s
@@ -1052,3 +1058,16 @@ class WakewordDetector:
 
     def stream_mic(self, device_index: int | None = None) -> Generator[bytes, None, None]:
         yield from self._get_detector().stream_mic(device_index=device_index)
+
+    def reset(self) -> None:
+        self._get_detector().reset()
+
+    def reset_cooldown(self) -> None:
+        self._get_detector().reset_cooldown()
+
+    def get_confidence(self) -> ConfidenceResult:
+        return self._get_detector().get_confidence()
+
+    @property
+    def last_scores(self) -> tuple[float, ...]:
+        return self._get_detector().last_scores

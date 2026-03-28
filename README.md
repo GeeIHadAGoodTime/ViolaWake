@@ -82,6 +82,8 @@ prob = vad.process_frame(audio_bytes)  # returns 0.0–1.0 speech probability
 
 ### Full Pipeline (Wake → STT → TTS)
 
+> Requires: `pip install "violawake[audio,stt,tts]"`
+
 ```python
 from violawake_sdk import VoicePipeline
 
@@ -107,7 +109,7 @@ pipeline.run()  # Blocks — Ctrl+C to stop
 ┌─────────────────────────────────────────────────────────────┐
 │                    VoicePipeline                            │
 │                                                             │
-│  Mic ──► [VAD] ──► [WakeDetector] ──► [STT] ──► callback  │
+│  Mic ──► [WakeDetector] ──► [VAD] ──► [STT] ──► callback  │
 │                                                             │
 │  text ──► [TTS] ──► Speaker                                │
 └─────────────────────────────────────────────────────────────┘
