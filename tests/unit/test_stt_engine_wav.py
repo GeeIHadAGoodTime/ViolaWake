@@ -145,6 +145,35 @@ def test_transcribe_wav_int16_conversion(silence_wav: Path) -> None:
     assert np.all(audio_arg == 0.0)
 
 
+def test_transcribe_wav_int32_conversion(tmp_path: Path) -> None:
+    """Int32 WAV data must be normalized via np.iinfo(dtype) without str() wrapping."""
+    sample_rate = 16_000
+    # Write a 16-bit WAV, then we'll patch scipy.io.wavfile.read to return int32
+    audio_int32 = np.array([0, 1000, -1000, 2147483647], dtype=np.int32)
+    engine = STTFileEngine(model="base")
+    whisper_model = _mock_whisper_model("int32test")
+    fake_module = _mock_faster_whisper(whisper_model)
+
+    wav_path = tmp_path / "int32.wav"
+    # Write a dummy WAV so the file exists
+    scipy.io.wavfile.write(str(wav_path), sample_rate, np.zeros(4, dtype=np.int16))
+
+    # Patch scipy.io.wavfile.read to return int32 data
+    with (
+        patch.dict("sys.modules", {"faster_whisper": fake_module}),
+        patch("scipy.io.wavfile.read", return_value=(sample_rate, audio_int32)),
+    ):
+        result = engine.transcribe_wav(wav_path)
+
+    assert result == "int32test"
+    # Verify the audio was converted to float32
+    call_args = whisper_model.transcribe.call_args
+    audio_arg = call_args.args[0]
+    assert audio_arg.dtype == np.float32
+    # Max int32 should map to ~1.0
+    assert abs(audio_arg[3] - 1.0) < 0.01
+
+
 def test_transcribe_wav_empty_speech_returns_empty(silence_wav: Path) -> None:
     """If faster-whisper returns no-speech, the result is an empty string."""
     engine = STTFileEngine(model="base")

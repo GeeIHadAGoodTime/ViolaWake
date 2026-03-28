@@ -96,9 +96,16 @@ docs = [
     "pdoc>=14.0",
 ]
 
+# Sample generation: TTS-based sample creation (no torch needed)
+generate = [
+    "edge-tts>=6.1",
+    "pydub>=0.25",
+    "soundfile>=0.12",
+]
+
 # Full install
 all = [
-    "violawake[audio,download,tts,stt,tflite,vad,training]",
+    "violawake[audio,download,tts,stt,tflite,vad,training,generate]",
 ]
 
 # Dev / CI
@@ -125,6 +132,7 @@ violawake-expand-corpus = "violawake_sdk.tools.expand_corpus:main"
 violawake-streaming-eval = "violawake_sdk.tools.streaming_eval:main"
 violawake-test-confusables = "violawake_sdk.tools.test_confusables:main"
 violawake-contamination-check = "violawake_sdk.tools.contamination_check:main"
+violawake-generate = "violawake_sdk.tools.generate_samples:main"
 
 [project.urls]
 Homepage = "https://github.com/GeeIHadAGoodTime/ViolaWake"

@@ -57,7 +57,7 @@ def detect_architecture(model_path: Path, session) -> str:
         session: An onnxruntime InferenceSession for the model.
 
     Returns:
-        "mlp_on_oww" or "cnn"
+        "mlp_on_oww", "temporal_oww", or "cnn"
     """
     # 1. Check for .config.json
     config_path = model_path.with_suffix(".config.json")
@@ -66,9 +66,11 @@ def detect_architecture(model_path: Path, session) -> str:
             with open(config_path) as f:
                 config = json.load(f)
             arch = config.get("architecture", "")
-            if arch == "mlp_on_oww":
-                logger.info("Architecture detected from config: mlp_on_oww")
-                return "mlp_on_oww"
+            if arch in ("mlp_on_oww", "temporal_cnn", "temporal_oww"):
+                # Normalize temporal_cnn → temporal_oww for scorer routing
+                result = "temporal_oww" if arch == "temporal_cnn" else arch
+                logger.info("Architecture detected from config: %s", result)
+                return result
             elif arch == "cnn":
                 logger.info("Architecture detected from config: cnn")
                 return "cnn"
@@ -79,15 +81,14 @@ def detect_architecture(model_path: Path, session) -> str:
     # 2. ONNX input shape heuristic
     input_info = session.get_inputs()[0]
     input_shape = input_info.shape  # e.g. [1, 96] for MLP or [1, 40, N] for CNN
+    input_name = input_info.name
 
     # Filter out dynamic/string dims, keep only integer dims
     numeric_dims = [d for d in input_shape if isinstance(d, int)]
 
     if len(numeric_dims) >= 1:
-        # For MLP-on-OWW: shape is (batch, embedding_dim) where embedding_dim ~ 96
-        # For CNN: shape is (batch, n_mels, time_frames) — 3+ dims with n_mels ~ 32-40
         if len(input_shape) == 2:
-            # 2D input: likely (batch, embedding_dim)
+            # 2D input: (batch, embedding_dim) — MLP-on-OWW
             last_dim = numeric_dims[-1] if numeric_dims else None
             if last_dim and _OWW_EMBEDDING_DIM_RANGE[0] <= last_dim <= _OWW_EMBEDDING_DIM_RANGE[1]:
                 logger.info(
@@ -96,6 +97,22 @@ def detect_architecture(model_path: Path, session) -> str:
                 )
                 return "mlp_on_oww"
         elif len(input_shape) >= 3:
+            # 3D input: could be temporal OWW (batch, seq, 96) or CNN (batch, mels, time)
+            # Temporal OWW: (batch, seq_len=5-15, embedding_dim=96), input named "embeddings"
+            # CNN: (batch, n_mels=32-40, time_steps=50-200+)
+            last_dim = numeric_dims[-1] if numeric_dims else None
+            seq_dim = numeric_dims[0] if len(numeric_dims) >= 2 else None
+            is_temporal_oww = (
+                last_dim == 96
+                and seq_dim is not None
+                and seq_dim <= 20
+            ) or input_name == "embeddings"
+            if is_temporal_oww:
+                logger.info(
+                    "Architecture detected from input shape %s: temporal_oww (dim=%s, seq=%s)",
+                    input_shape, last_dim, seq_dim,
+                )
+                return "temporal_oww"
             logger.info(
                 "Architecture detected from input shape %s: cnn (3D+ input)",
                 input_shape,
@@ -291,12 +308,17 @@ def _dump_scores_csv(
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if len(pos_files) != len(pos_scores):
+        raise ValueError(f"Positive files/scores mismatch: {len(pos_files)} vs {len(pos_scores)}")
+    if len(neg_files) != len(neg_scores):
+        raise ValueError(f"Negative files/scores mismatch: {len(neg_files)} vs {len(neg_scores)}")
+
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["file", "label", "score", "threshold_pass"])
-        for fpath, score in zip(pos_files, pos_scores, strict=False):
+        for fpath, score in zip(pos_files, pos_scores, strict=True):
             writer.writerow([str(fpath), "positive", f"{score:.6f}", score >= threshold])
-        for fpath, score in zip(neg_files, neg_scores, strict=False):
+        for fpath, score in zip(neg_files, neg_scores, strict=True):
             writer.writerow([str(fpath), "negative", f"{score:.6f}", score >= threshold])
 
     logger.info("Score dump written to %s (%d entries)", csv_path, len(pos_scores) + len(neg_scores))
@@ -394,6 +416,85 @@ def _build_cnn_scorer(session, input_name: str):
     return _score_file_cnn
 
 
+def _build_temporal_oww_scorer(session, input_name: str):
+    """
+    Build a scoring function for temporal OWW models (e.g. TemporalCNN).
+
+    These models expect input shape (batch, seq_len, 96) — a sliding window
+    of OWW embeddings.  For each file, extract all embeddings, build all
+    possible windows, score each, and return the max score.
+
+    Args:
+        session: ONNX InferenceSession for the temporal model.
+        input_name: Name of the model's input tensor.
+
+    Returns:
+        Callable that takes a wav Path and returns a float score (or None on failure).
+    """
+    try:
+        from openwakeword.model import Model as OWWModel  # type: ignore[import]
+    except ImportError as e:
+        raise ImportError(
+            "openwakeword required for temporal OWW evaluation. "
+            "pip install openwakeword"
+        ) from e
+
+    from violawake_sdk._constants import CLIP_SAMPLES
+    from violawake_sdk.audio import center_crop, load_audio
+
+    oww = OWWModel()
+    preprocessor = oww.preprocessor
+    if not hasattr(preprocessor, "onnx_execution_provider"):
+        preprocessor.onnx_execution_provider = "CPUExecutionProvider"
+
+    # Read seq_len from model input shape
+    model_shape = session.get_inputs()[0].shape
+    numeric_dims = [d for d in model_shape if isinstance(d, int)]
+    seq_len = numeric_dims[0] if len(numeric_dims) >= 2 else 9  # default 9
+
+    def _score_file_temporal(wav_path: Path) -> float | None:
+        audio = load_audio(wav_path)
+        if audio is None:
+            return None
+        audio = center_crop(audio, CLIP_SAMPLES)
+        audio_int16 = np.clip(audio, -1.0, 1.0)
+        audio_int16 = (audio_int16 * 32767).astype(np.int16)
+        if len(audio_int16) < CLIP_SAMPLES:
+            audio_int16 = np.pad(audio_int16, (0, CLIP_SAMPLES - len(audio_int16)))
+        else:
+            audio_int16 = audio_int16[:CLIP_SAMPLES]
+        try:
+            embeddings = preprocessor.embed_clips(audio_int16.reshape(1, -1), ncpu=1)
+            # embeddings shape: (1, n_frames, 96) or (n_frames, 96)
+            emb = np.squeeze(embeddings)
+            if emb.ndim == 1:
+                emb = emb.reshape(1, -1)
+            n_frames = emb.shape[0]
+
+            if n_frames < seq_len:
+                # Pad with zeros if not enough frames
+                padded = np.zeros((seq_len, emb.shape[1]), dtype=np.float32)
+                padded[:n_frames] = emb
+                window = padded[np.newaxis, :, :].astype(np.float32)
+                score = session.run(None, {input_name: window})[0]
+                return float(np.asarray(score).flatten()[0])
+
+            # Slide window and take max score
+            max_score = -1.0
+            for i in range(n_frames - seq_len + 1):
+                window = emb[i:i + seq_len][np.newaxis, :, :].astype(np.float32)
+                score = session.run(None, {input_name: window})[0]
+                s = float(np.asarray(score).flatten()[0])
+                if s > max_score:
+                    max_score = s
+            return max_score
+        except Exception:
+            logger.warning("Failed to score file (temporal OWW path): %s", wav_path, exc_info=True)
+            return None
+
+    return _score_file_temporal
+
+
 def build_model_scorer(
     model_path: str | Path,
 ) -> tuple[str, Callable[[Path], float | None]]:
@@ -421,6 +522,9 @@ def build_model_scorer(
 
     if architecture == "mlp_on_oww":
         return architecture, _build_oww_scorer(session, input_name)
+
+    if architecture == "temporal_oww":
+        return architecture, _build_temporal_oww_scorer(session, input_name)
 
     return architecture, _build_cnn_scorer(session, input_name)
 

@@ -8,8 +8,6 @@ This test verifies that the SDK training pipeline can:
   4. Export to ONNX
   5. Produce a valid model that loads in onnxruntime
 
-This is the critical path for the Console website.
-
 Requires: pip install 'violawake[training]' (torch, openwakeword)
 
 Run locally:
@@ -95,7 +93,7 @@ class TestTrainingWithMockOWW:
     ) -> None:
         """Training should produce a valid .onnx file."""
         with patch(
-            "violawake_sdk.tools.train.OWWModel",
+            "openwakeword.model.Model",
             return_value=mock_oww,
         ):
             try:
@@ -123,7 +121,7 @@ class TestTrainingWithMockOWW:
     ) -> None:
         """Training should save config.json alongside the model."""
         with patch(
-            "violawake_sdk.tools.train.OWWModel",
+            "openwakeword.model.Model",
             return_value=mock_oww,
         ):
             try:
@@ -155,7 +153,7 @@ class TestTrainingWithMockOWW:
     ) -> None:
         """Trained model should load and run in onnxruntime."""
         with patch(
-            "violawake_sdk.tools.train.OWWModel",
+            "openwakeword.model.Model",
             return_value=mock_oww,
         ):
             try:
@@ -207,23 +205,11 @@ class TestTrainingWithMockOWW:
             callback_calls.append(info)
 
         with patch(
-            "violawake_sdk.tools.train.OWWModel",
+            "openwakeword.model.Model",
             return_value=mock_oww,
         ):
             try:
                 from violawake_sdk.tools.train import _train_mlp_on_oww
-                import inspect
-
-                sig = inspect.signature(_train_mlp_on_oww)
-                # Find the callback parameter name
-                cb_param = None
-                for name in ("progress_callback", "callback", "on_progress"):
-                    if name in sig.parameters:
-                        cb_param = name
-                        break
-
-                if cb_param is None:
-                    pytest.skip("No progress callback parameter found")
 
                 _train_mlp_on_oww(
                     positives_dir=sample_wavs,
@@ -231,7 +217,7 @@ class TestTrainingWithMockOWW:
                     epochs=3,
                     augment=False,
                     verbose=False,
-                    **{cb_param: on_progress},
+                    progress_callback=on_progress,
                 )
             except Exception:
                 pytest.skip("Training function may have changed")

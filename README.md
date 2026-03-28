@@ -2,7 +2,8 @@
 
 **The open-source alternative to Porcupine.** A production-tested wake word engine with accessible training, ONNX inference, and a Python-first SDK.
 
-[![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake)
+<!-- PyPI badge will activate after first publish -->
+<!-- [![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake) -->
 [![CI](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml/badge.svg)](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -16,13 +17,13 @@
 | **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 |
 | **Training code open** | Yes | No (closed) | Yes |
 | **Custom wake words** | Yes (training CLI) | Yes (paid Console) | Yes (fine-tune) |
-| **Evaluation tooling** | `violawake-eval` (EER, FAR/FRR, ROC AUC) | None published | Basic |
+| **Evaluation tooling** | `violawake-eval` (Cohen's d, EER, FAR/FRR, ROC AUC) | None published | Basic |
 | **On-device** | Yes (ONNX) | Yes (proprietary C lib) | Yes (ONNX) |
-| **Streaming TTS bundle** | Yes (Kokoro-82M) | Orca (proprietary) | No |
+| **Integrated TTS** | Yes (Kokoro-82M, optional extra) | No | No |
 | **Python SDK** | First-class | C wrapper | First-class |
 | **Price at scale** | Free | $6K+/year | Free |
 
-**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing), and a 4-gate decision policy that eliminates false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
+**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing), and a 4-gate decision policy that suppresses false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
 
 > **A note on accuracy claims:** Our benchmark uses TTS-generated audio with adversarial confusables, not real-speaker recordings. Real-world accuracy depends on your deployment environment. We publish our benchmark scripts so you can reproduce and extend them. Run `violawake-eval` on your own test data.
 
@@ -40,13 +41,15 @@ violawake-download --model temporal_cnn
 ```python
 from violawake_sdk import WakeDetector
 
-detector = WakeDetector(model="temporal_cnn", threshold=0.80)
+detector = WakeDetector(model="temporal_cnn", threshold=0.80, confirm_count=3)
 
 for audio_chunk in detector.stream_mic():  # 20ms chunks at 16kHz
     if detector.detect(audio_chunk):
         print("Wake word detected!")
         break
 ```
+
+> `confirm_count=3` requires 3 consecutive above-threshold frames before firing, reducing false accepts by ~82-87% depending on threshold. Use `confirm_count=1` for lowest latency.
 
 ### Threshold Tuning
 
@@ -59,7 +62,7 @@ The `threshold` parameter controls the trade-off between sensitivity and false p
 | 0.85 | Conservative -- fewer false positives, may miss some wake words | Living rooms with TV/music |
 | 0.90+ | Very conservative -- lowest false positive rate | Noisy environments, always-on kiosks |
 
-Start at 0.80 and adjust based on your false accept rate. Use `violawake-eval` to measure FAPH (false accepts per hour) on representative audio from your deployment environment.
+Start at 0.80 and adjust based on your false accept rate. Use `violawake-streaming-eval` to measure FAPH (false accepts per hour) on representative audio from your deployment environment, or `violawake-eval` for clip-by-clip EER/FAR/FRR/ROC AUC.
 
 ### Text-to-Speech (Kokoro-82M)
 
@@ -132,7 +135,7 @@ The training CLI lets you train a custom wake word model with ~200 positive samp
 
 ```bash
 # Collect positive samples (read prompts aloud)
-python -m violawake_sdk.tools.collect_samples --word "jarvis" --output data/jarvis/positives/ --count 200
+violawake-collect --word "jarvis" --output data/jarvis/positives/ --count 200
 
 # Train (auto-generates TTS positives, confusable negatives, and speech negatives)
 violawake-train \
@@ -166,7 +169,7 @@ To prove the training pipeline generalizes beyond "Viola," we trained a custom "
 | **Training time** | ~48s | **89s** | N/A (pre-trained) |
 | **Architecture** | Temporal CNN | Temporal CNN | MLP on OWW embeddings |
 
-The training CLI handled TTS sample generation (20 Edge TTS voices), confusable negative generation (16 phonetic variants), 10x augmentation, and Temporal CNN training end-to-end. OWW provides no public training CLI for custom words.
+The training CLI handled TTS sample generation (20 Edge TTS voices), confusable negative generation (16 phonetic variants), 10x augmentation, and Temporal CNN training end-to-end. OWW provides training notebooks but no pip-installable CLI tool.
 
 Full methodology, corpus details, and reproducibility instructions: [`benchmark_v2/OPERATOR_BENCHMARK.md`](benchmark_v2/OPERATOR_BENCHMARK.md)
 
@@ -199,7 +202,7 @@ python -m violawake_sdk.tools.download_model --model kokoro_voices_v1_0  # TTS v
 |----------|-----------|-----|-----|--------|
 | Windows 10/11 (x64) | ✅ | ✅ | ✅ | **Fully tested** |
 | Linux (x64) | ✅ | ✅ | ✅ | CI-tested |
-| macOS (arm64/x64) | ✅ | ✅ | ✅ | Community tested |
+| macOS (arm64/x64) | ✅ | ✅ | ✅ | CI-tested (Intel), community (ARM) |
 | Raspberry Pi 4 (ARM64) | ✅ | ⚠️ slow | ✅ | Supported |
 | Browser/WASM | 🚧 | 🚧 | ❌ | Phase 2 (Q3 2026) |
 | Android | ❌ | ❌ | ❌ | Phase 3 (2027) |
@@ -241,7 +244,7 @@ pip install "violawake[all]"
 - `onnxruntime >= 1.17` (CPU) or `onnxruntime-gpu` for GPU acceleration
 - `pyaudio` for microphone input
 - `numpy`, `scipy`
-- `openwakeword` backbone assets are installed automatically with `violawake`
+- `openwakeword >= 0.6` (installed automatically as a dependency — provides the frozen mel/embedding backbone)
 
 ---
 
@@ -260,7 +263,7 @@ Measured on i7-12700H, Windows 11, RTX 3060 (CPU inference):
 - Temporal CNN model: **EER 5.49%**, ROC AUC 0.9877
 - FAR @ FRR=5%: **5.43%** (vs OWW's 8.86% on its own best word)
 - Live mic tested: 100% recall on direct speech, 0 false positives on podcast/music
-- Real-world metrics depend on your deployment environment. Run `violawake-eval` on your own test data.
+- Real-world metrics depend on your deployment environment. Run `violawake-eval` (clip-by-clip) or `violawake-streaming-eval` (continuous FAPH) on your own test data.
 
 ---
 
@@ -307,8 +310,8 @@ python examples/basic_detection.py
 
 openWakeWord is the closest open-source alternative. ViolaWake differences:
 
-- **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR/FRR, ROC AUC, and FAPH on any model + test set. Benchmark scripts in `benchmark_v2/` — run them yourself.
-- **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) plus optional multi-window confirmation and speaker verification — eliminates false positives during music playback
+- **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR/FRR, ROC AUC on any model + test set. `violawake-streaming-eval` measures FAPH on continuous audio. Benchmark scripts in `benchmark_v2/` — run them yourself.
+- **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) plus optional multi-window confirmation — suppresses false positives during music playback when `is_playing` state is wired up
 - **Bundled pipeline:** ViolaWake ships integrated VAD + STT + TTS, not just the wake word component
 - **Training infrastructure:** FocalLoss + EMA + SWA + augmentation pipeline (gain, stretch, pitch, noise, time shift; RIR and SpecAugment available opt-in) vs basic training in openWakeWord
 

@@ -295,7 +295,7 @@ def run_confusable_tests(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="violawake-confusables",
+        prog="violawake-test-confusables",
         description="Generate phonetic confusables and test false accepts.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,

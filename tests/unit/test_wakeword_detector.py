@@ -27,11 +27,11 @@ class TestWakewordDetector:
             mock_detector.assert_not_called()
 
     def test_wake_detector_accepts_viola_alias(self, tmp_path: Path) -> None:
-        (tmp_path / "oww_backbone.onnx").write_bytes(b"backbone")
-        (tmp_path / "viola_mlp_oww.onnx").write_bytes(b"head")
+        (tmp_path / "temporal_cnn.onnx").write_bytes(b"head")
 
         input_meta = MagicMock()
         input_meta.name = "input"
+        input_meta.shape = [1, 96]
 
         fake_session = MagicMock()
         fake_session.get_inputs.return_value = [input_meta]
@@ -43,10 +43,13 @@ class TestWakewordDetector:
         with (
             patch.dict("sys.modules", {"onnxruntime": fake_ort}),
             patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
+            patch(
+                "violawake_sdk.wake_detector.WakeDetector._create_oww_backbone",
+                return_value=MagicMock(),
+            ),
         ):
             detector = WakeDetector(model="viola")
 
-        assert detector._oww_input_name == "input"
         assert detector._mlp_input_name == "input"
 
     def test_unknown_wakeword_raises_key_error(self) -> None:
@@ -54,7 +57,7 @@ class TestWakewordDetector:
             WakewordDetector(wake_word="unknown")
 
     def test_viola_alias_is_registered(self) -> None:
-        assert WAKE_WORD_ALIASES["viola"] == "viola_mlp_oww"
+        assert WAKE_WORD_ALIASES["viola"] == "temporal_cnn"
 
     def test_process_audio_uses_lazy_underlying_detector(self, noise_frame: bytes) -> None:
         mock_detector = MagicMock()
@@ -65,9 +68,10 @@ class TestWakewordDetector:
 
             assert detector.process_audio(noise_frame) is True
             detector_cls.assert_called_once_with(
-                model="viola_mlp_oww",
+                model="temporal_cnn",
                 threshold=0.91,
                 cooldown_s=2.0,
                 providers=None,
+                backend="auto",
             )
             mock_detector.detect.assert_called_once_with(noise_frame, is_playing=False)

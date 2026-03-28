@@ -17,11 +17,13 @@ Training pipeline:
   - 80/20 group-aware train/validation split with early stopping
   - Post-training quality gate (speech FP check)
 
-Data pipeline:
+Data pipeline (matches production golden path):
   A. Positives: user-provided + auto-TTS (edge-tts, 20 voices x 3 phrases x 3 conditions)
-  B. Confusable negatives: phonetically similar words via TTS (30 words x 10 voices)
-  C. Speech negatives: common phrases via TTS (100+ phrases x 5 voices)
-  D. User-provided negatives via --negatives directory (if any)
+  B. Confusable negatives round 1: 30 phonetically similar words x 10 voices
+  C. Confusable negatives round 2: 16 tighter variants x 10 voices
+  D. Speech negatives: common phrases via TTS (100+ phrases x 5 voices)
+  E. Shared universal corpus: LibriSpeech, MUSAN speech/music/noise (auto-discovered)
+  F. User-provided negatives via --negatives directory (if any)
 
 Usage::
 
@@ -53,10 +55,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
+from random import Random
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -341,9 +345,6 @@ def _generate_tts_positives(
     import numpy as np
 
     from violawake_sdk.training.augment import (
-        AugmentationPipeline,
-        AugmentConfig,
-        apply_additive_noise,
         rir_augment,
     )
 
@@ -510,8 +511,13 @@ def _extract_temporal_embeddings(
 ) -> tuple[list[np.ndarray], list[int], list[str]]:
     """Extract 9-frame temporal OWW embedding windows from audio files.
 
-    For each audio file, pushes audio through the OWW backbone in chunks,
-    collects all 96-dim embeddings, and builds sliding windows of `seq_len`
+    Uses OWW's preprocessor.embed_clips (batch mode) — the same embedding
+    extraction method used to train the production temporal_cnn model.
+    This is critical for pipeline equivalence: streaming push_audio() produces
+    subtly different embeddings due to internal state accumulation.
+
+    For each audio file, center-crops to CLIP_SAMPLES (1.5s), runs embed_clips
+    to get (n_frames, 96) embeddings, and builds sliding windows of `seq_len`
     consecutive embeddings. Each window is a (seq_len, 96) tensor.
 
     Returns:
@@ -521,102 +527,17 @@ def _extract_temporal_embeddings(
     """
     import numpy as np
 
-    from violawake_sdk.audio import load_audio
-    from violawake_sdk.oww_backbone import (
-        EMBEDDING_DIM,
-        OWW_CHUNK_SAMPLES,
-        OpenWakeWordBackbone,
-    )
-
-    # Load OWW backbone
-    try:
-        from violawake_sdk.backends.onnx_backend import OnnxBackend
-        backend = OnnxBackend()
-    except ImportError:
-        # Fallback: use openwakeword directly
-        from openwakeword.model import Model as OWWModel
-        oww = OWWModel()
-        return _extract_temporal_embeddings_oww_fallback(
-            audio_files, tag, oww, verbose, seq_len
-        )
-
-    backbone = OpenWakeWordBackbone(backend)
-
-    all_embeddings: list[np.ndarray] = []
-    all_source_idx: list[int] = []
-    all_tags: list[str] = []
-    failures = 0
-
-    for file_idx, wav_path in enumerate(audio_files):
-        audio = load_audio(wav_path)
-        if audio is None:
-            failures += 1
-            continue
-
-        # Feed audio through backbone in chunks and collect embeddings
-        backbone.reset()
-        frame_embeddings: list[np.ndarray] = []
-
-        # Convert to int16
-        audio_i16 = np.clip(audio, -1.0, 1.0)
-        audio_i16 = (audio_i16 * 32767).astype(np.int16)
-
-        # Push in OWW_CHUNK_SAMPLES-sized chunks
-        for start in range(0, len(audio_i16), OWW_CHUNK_SAMPLES):
-            chunk = audio_i16[start : start + OWW_CHUNK_SAMPLES]
-            if len(chunk) < OWW_CHUNK_SAMPLES:
-                chunk = np.pad(chunk, (0, OWW_CHUNK_SAMPLES - len(chunk)))
-            has_new, embedding = backbone.push_audio(chunk)
-            if has_new and embedding is not None:
-                frame_embeddings.append(embedding.copy())
-
-        # Build sliding windows of seq_len frames
-        if len(frame_embeddings) >= seq_len:
-            for i in range(len(frame_embeddings) - seq_len + 1):
-                window = np.stack(frame_embeddings[i : i + seq_len], axis=0)
-                all_embeddings.append(window)
-                all_source_idx.append(file_idx)
-                all_tags.append(tag)
-        elif len(frame_embeddings) > 0:
-            # Pad shorter clips to seq_len by repeating the last frame
-            padded = list(frame_embeddings)
-            while len(padded) < seq_len:
-                padded.append(padded[-1].copy())
-            window = np.stack(padded[:seq_len], axis=0)
-            all_embeddings.append(window)
-            all_source_idx.append(file_idx)
-            all_tags.append(tag)
-
-        if verbose and (file_idx + 1) % 100 == 0:
-            print(f"    {file_idx + 1}/{len(audio_files)} files -> {len(all_embeddings)} windows")
-
-    if verbose:
-        print(
-            f"  [{tag}] {len(audio_files)} files -> {len(all_embeddings)} temporal windows "
-            f"({failures} failures)"
-        )
-
-    return all_embeddings, all_source_idx, all_tags
-
-
-def _extract_temporal_embeddings_oww_fallback(
-    audio_files: list[Path],
-    tag: str,
-    oww_model: Any,
-    verbose: bool = True,
-    seq_len: int = 9,
-) -> tuple[list[np.ndarray], list[int], list[str]]:
-    """Fallback temporal extraction using openwakeword's embed_clips directly.
-
-    Uses OWW's preprocessor.embed_clips which returns (n_clips, n_frames, 96).
-    We build sliding windows from the frame axis.
-    """
-    import numpy as np
-
     from violawake_sdk._constants import CLIP_SAMPLES
     from violawake_sdk.audio import center_crop, load_audio
 
-    preprocessor = oww_model.preprocessor
+    try:
+        from openwakeword.model import Model as OWWModel
+    except ImportError as e:
+        print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    oww = OWWModel()
+    preprocessor = oww.preprocessor
 
     all_embeddings: list[np.ndarray] = []
     all_source_idx: list[int] = []
@@ -640,6 +561,7 @@ def _extract_temporal_embeddings_oww_fallback(
 
         try:
             # embed_clips returns (n_clips, n_frames, embedding_dim)
+            # This is the PRODUCTION embedding path — batch mode, not streaming.
             frame_embeddings_3d = preprocessor.embed_clips(
                 audio_i16.reshape(1, -1), ncpu=1
             )
@@ -659,7 +581,7 @@ def _extract_temporal_embeddings_oww_fallback(
                     all_source_idx.append(file_idx)
                     all_tags.append(tag)
             elif n_frames > 0:
-                # Pad to seq_len
+                # Pad to seq_len by repeating last frame
                 padded = np.zeros((seq_len, frame_embeddings.shape[1]), dtype=np.float32)
                 padded[:n_frames] = frame_embeddings
                 for j in range(n_frames, seq_len):
@@ -862,14 +784,9 @@ def _train_temporal_cnn(
     training_start = time.monotonic()
 
     # -- Lazy imports --------------------------------------------------------
-    import logging
-
-    logger = logging.getLogger("violawake.train")
-
     try:
         import numpy as np
         import torch
-        import torch.nn as nn
         import torch.optim as optim
         from torch.utils.data import DataLoader, TensorDataset
     except ImportError as e:
@@ -888,6 +805,13 @@ def _train_temporal_cnn(
         auto_select_averaging,
     )
 
+    # -- Deterministic seeding (matches production) --------------------------
+    SEED = 42
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
+
     EMBEDDING_DIM = 96
     torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -899,10 +823,10 @@ def _train_temporal_cnn(
         from violawake_sdk.audio import load_audio
         from violawake_sdk.training.augment import AugmentationPipeline
 
-        pipeline = AugmentationPipeline(seed=42)
+        pipeline = AugmentationPipeline(seed=SEED)
         aug_dir = output_path.parent / "_aug_positives"
         aug_dir.mkdir(parents=True, exist_ok=True)
-        augment_factor = 3  # 3 augmented variants per file
+        augment_factor = 10  # 10x augmentation (matches production golden path)
         n_augmented = 0
 
         for file_idx, f in enumerate(pos_files):
@@ -962,6 +886,16 @@ def _train_temporal_cnn(
             neg_files, "neg", verbose=verbose, seq_len=seq_len
         )
 
+    corpus_tags = {
+        "neg_librispeech",
+        "neg_musan_speech",
+        "neg_musan_music",
+        "neg_musan_noise",
+    }
+    corpus_found = bool(
+        neg_tags and any(tag in corpus_tags and files for tag, files in neg_tags.items())
+    )
+
     if len(all_neg_embs) < 5:
         print(
             f"ERROR: Only {len(all_neg_embs)} negative embeddings extracted. "
@@ -982,6 +916,7 @@ def _train_temporal_cnn(
     if verbose:
         print(f"\nDataset: {n_pos} pos + {n_neg} neg = {n_pos + n_neg} total")
         print(f"  Temporal shape: ({seq_len} frames, {EMBEDDING_DIM}-dim)")
+        print(f"  corpus_found: {corpus_found}")
 
         # Show tag breakdown
         unique_tags = sorted(set(tags.tolist()))
@@ -1011,7 +946,8 @@ def _train_temporal_cnn(
 
     train_dataset = TensorDataset(X_train, y_train)
     val_dataset = TensorDataset(X_val, y_val)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    g = torch.Generator().manual_seed(SEED)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, generator=g)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # -- Build TemporalCNN ---------------------------------------------------
@@ -1146,24 +1082,57 @@ def _train_temporal_cnn(
         print(f"Best validation loss: {best_val_loss:.4f} at epoch {best_epoch}")
         print(f"Training duration: {training_duration:.1f}s")
 
-    # -- Export to ONNX ------------------------------------------------------
-    if verbose:
-        print(f"\nExporting model to ONNX: {output_path}")
+    # -- Post-training quality gate ------------------------------------------
+    from violawake_sdk._constants import DEFAULT_THRESHOLD, get_feature_config
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    export_temporal_onnx(
-        model, str(output_path), seq_len=seq_len, embedding_dim=EMBEDDING_DIM
+    deployment_threshold = float(DEFAULT_THRESHOLD)
+
+    if verbose:
+        print("\nStep 5: Post-training quality gate (speech/confusable/silence)...")
+
+    quality_grade, quality_gate = _run_quality_gate(
+        model,
+        torch_device,
+        seq_len,
+        EMBEDDING_DIM,
+        wake_word=wake_word,
+        deployment_threshold=deployment_threshold,
+        verbose=verbose,
     )
 
-    # -- Post-training quality gate ------------------------------------------
-    if verbose:
-        print("\nStep 5: Post-training quality gate (speech FP check)...")
+    if quality_grade == "F":
+        print(
+            "\n"
+            + "!" * 72
+            + "\nQUALITY GATE FAILED: model is not ready for deployment.\n"
+            f"  Speech FP rate:     {quality_gate['speech_fp_rate'] * 100:.1f}%\n"
+            f"  Confusable FP rate: {quality_gate['confusable_fp_rate'] * 100:.1f}%\n"
+            f"  Silence max score:  {quality_gate['silence_max_score']:.2f}\n"
+            "Recommended fixes:\n"
+            "  - Add more diverse speech negatives via --negatives or keep --auto-corpus enabled.\n"
+            f"  - Expand confusable negatives for '{wake_word}' and retrain.\n"
+            "  - Audit mislabeled positives/negatives and remove noisy clips.\n"
+            "  - Raise the deployment threshold only after checking recall on eval data.\n"
+            + "!" * 72
+        )
 
-    _run_quality_gate(model, torch_device, seq_len, EMBEDDING_DIM, verbose)
+    model_exported = quality_grade != "F"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # -- Export to ONNX ------------------------------------------------------
+    if model_exported:
+        if verbose:
+            print(f"\nExporting model to ONNX: {output_path}")
+
+        export_temporal_onnx(
+            model, str(output_path), seq_len=seq_len, embedding_dim=EMBEDDING_DIM
+        )
+    elif verbose:
+        print("\nSkipping ONNX export because the quality gate failed.")
 
     # -- Evaluate if test set provided ---------------------------------------
     d_prime_result: float | None = None
-    if eval_dir and eval_dir.exists():
+    if model_exported and eval_dir and eval_dir.exists():
         if verbose:
             print(f"\nEvaluating on test set: {eval_dir}")
         try:
@@ -1176,10 +1145,10 @@ def _train_temporal_cnn(
             print(f"Cohen's d: {d_prime_result:.2f}  FAR: {far:.2f}/hr  FRR: {frr:.1f}%")
         except Exception as e:
             print(f"Evaluation failed: {e}")
+    elif quality_grade == "F" and verbose and eval_dir and eval_dir.exists():
+        print("Skipping eval because no ONNX model was exported after the failed quality gate.")
 
     # -- Save config ---------------------------------------------------------
-    from violawake_sdk._constants import get_feature_config
-
     config = get_feature_config()
     config.update({
         "architecture": "temporal_cnn",
@@ -1201,6 +1170,12 @@ def _train_temporal_cnn(
         "patience": patience,
         "training_duration_s": round(training_duration, 2),
         "wake_word": wake_word,
+        "deployment_threshold": deployment_threshold,
+        "quality_grade": quality_grade,
+        "quality_gate": quality_gate,
+        "quality_gate_blocked_export": quality_grade == "F",
+        "neg_corpus_breakdown": {tag: len(files) for tag, files in neg_tags.items()} if neg_tags else {},
+        "corpus_found": corpus_found,
     })
     if d_prime_result is not None:
         config["d_prime"] = round(d_prime_result, 2)
@@ -1211,14 +1186,21 @@ def _train_temporal_cnn(
 
     if verbose:
         print(f"\nConfig saved: {config_path}")
-        print(f"Model saved: {output_path}")
-        print(f"Load with:  WakeDetector(model='{output_path}')")
+        if model_exported:
+            print(f"Model saved: {output_path}")
+            print(f"Load with:  WakeDetector(model='{output_path}')")
 
     # Cleanup augmented files
     aug_dir = output_path.parent / "_aug_positives"
     if aug_dir.exists():
         import shutil
         shutil.rmtree(aug_dir, ignore_errors=True)
+
+    if quality_grade == "F":
+        raise RuntimeError(
+            "Model failed the quality gate with grade F; ONNX export was blocked. "
+            f"See {config_path} for quality metrics."
+        )
 
     return config
 
@@ -1232,83 +1214,178 @@ def _run_quality_gate(
     torch_device: str,
     seq_len: int,
     embedding_dim: int,
+    wake_word: str,
+    deployment_threshold: float = 0.80,
     verbose: bool = True,
-) -> None:
-    """Score 50 speech phrases via TTS and warn if FP rate is high.
+) -> tuple[str, dict[str, Any]]:
+    """Run a post-training quality gate on speech, confusables, and silence.
 
-    Generates quick speech samples, extracts temporal embeddings, scores them,
-    and prints a warning if more than 25% score above 0.5.
+    Returns:
+        Tuple of ``(grade, metrics)`` where grade is one of ``A/B/C/F``.
     """
     import tempfile
 
     import numpy as np
     import torch
 
-    quality_phrases = SPEECH_NEGATIVE_PHRASES[:50]
-    quality_dir = Path(tempfile.mkdtemp(prefix="violawake_qc_"))
-    voice = EDGE_TTS_VOICES[0]  # Use a single voice for speed
-    quality_files: list[Path] = []
+    from violawake_sdk.tools.confusables import generate_confusables
 
-    if verbose:
-        print(f"  Generating {len(quality_phrases)} test phrases for quality check...")
+    del embedding_dim  # Signature kept for compatibility with existing caller.
 
-    for i, phrase in enumerate(quality_phrases):
-        out_path = quality_dir / f"qc_{i:03d}.wav"
-        ok = _edge_tts_synthesize(phrase, voice, out_path)
-        if ok and out_path.exists():
-            quality_files.append(out_path)
+    def _score_files(audio_files: list[Path], tag: str) -> np.ndarray:
+        if not audio_files:
+            return np.array([], dtype=np.float32)
 
-    if len(quality_files) < 10:
-        if verbose:
-            print("  WARNING: Could not generate enough quality check samples. Skipping gate.")
-        return
+        embs, source_indices, _ = _extract_temporal_embeddings(
+            audio_files, tag, verbose=False, seq_len=seq_len
+        )
+        if not embs:
+            return np.array([], dtype=np.float32)
 
-    # Extract temporal embeddings
-    embs, _, _ = _extract_temporal_embeddings(
-        quality_files, "qc", verbose=False, seq_len=seq_len
-    )
+        X_qc = torch.tensor(np.array(embs), dtype=torch.float32).to(torch_device)
+        with torch.no_grad():
+            window_scores = model(X_qc).cpu().numpy().flatten()
 
-    if len(embs) == 0:
-        if verbose:
-            print("  WARNING: No embeddings extracted for quality check. Skipping gate.")
-        return
+        clip_scores: dict[int, float] = {}
+        for idx, source_idx in enumerate(source_indices):
+            score = float(window_scores[idx])
+            clip_scores[source_idx] = max(score, clip_scores.get(source_idx, float("-inf")))
 
-    # Score
+        return np.array(
+            [clip_scores[i] for i in sorted(clip_scores)],
+            dtype=np.float32,
+        )
+
+    def _fp_rate(scores: np.ndarray) -> float:
+        if len(scores) == 0:
+            return 1.0
+        return float((scores >= deployment_threshold).mean())
+
+    def _grade_label(grade: str) -> str:
+        return {
+            "A": "EXCELLENT",
+            "B": "GOOD",
+            "C": "CAUTION",
+            "F": "FAIL",
+        }[grade]
+
+    def _grade_quality(
+        speech_fp_rate: float,
+        confusable_fp_rate: float,
+        silence_max_score: float,
+    ) -> str:
+        if (
+            speech_fp_rate < 0.02
+            and confusable_fp_rate < 0.05
+            and silence_max_score < 0.20
+        ):
+            return "A"
+        if (
+            speech_fp_rate < 0.05
+            and confusable_fp_rate < 0.10
+            and silence_max_score < 0.30
+        ):
+            return "B"
+        if (
+            speech_fp_rate < 0.10
+            and confusable_fp_rate < 0.20
+            and silence_max_score < 0.50
+        ):
+            return "C"
+        return "F"
+
     model.eval()
     model = model.to(torch_device)
-    X_qc = torch.tensor(np.array(embs), dtype=torch.float32).to(torch_device)
-    with torch.no_grad():
-        scores = model(X_qc).cpu().numpy().flatten()
 
-    fp_rate = float((scores > 0.5).mean())
-    mean_score = float(scores.mean())
-    max_score = float(scores.max())
+    quality_phrases = SPEECH_NEGATIVE_PHRASES[:50]
+    voice = EDGE_TTS_VOICES[0]  # Single voice keeps the gate fast and deterministic.
 
-    if verbose:
-        print(f"  Quality gate: {len(scores)} speech samples scored")
-        print(f"    Mean score: {mean_score:.4f}, Max: {max_score:.4f}")
-        print(f"    FP rate (>0.5): {fp_rate * 100:.1f}%")
+    with tempfile.TemporaryDirectory(prefix="violawake_qc_") as tmp_dir:
+        quality_dir = Path(tmp_dir)
 
-    if fp_rate > 0.25:
-        print(
-            "\n  *** WARNING: HIGH FALSE POSITIVE RATE ***\n"
-            f"  {fp_rate * 100:.1f}% of speech test phrases scored above 0.5.\n"
-            "  This model may trigger on regular speech.\n"
-            "  Recommendation: add more speech negatives via --negatives\n"
-            "  or ensure --auto-corpus is enabled.\n"
-        )
-    elif fp_rate > 0.10:
-        print(
-            f"\n  CAUTION: {fp_rate * 100:.1f}% of speech test phrases scored >0.5.\n"
-            "  Consider adding more diverse speech negatives.\n"
-        )
-    else:
+        speech_files: list[Path] = []
         if verbose:
-            print("  Quality gate PASSED: low speech FP rate.")
+            print(f"  Generating {len(quality_phrases)} speech phrases for quality check...")
+        for i, phrase in enumerate(quality_phrases):
+            out_path = quality_dir / f"qc_speech_{i:03d}.wav"
+            ok = _edge_tts_synthesize(phrase, voice, out_path)
+            if ok and out_path.exists():
+                speech_files.append(out_path)
 
-    # Cleanup
-    import shutil
-    shutil.rmtree(quality_dir, ignore_errors=True)
+        raw_confusables = generate_confusables(wake_word, count=40)
+        confusable_words: list[str] = []
+        seen_confusables: set[str] = set()
+        normalized_wake_word = " ".join(wake_word.lower().split())
+        for word in raw_confusables:
+            normalized_word = " ".join(word.lower().split())
+            if not normalized_word or normalized_word == normalized_wake_word:
+                continue
+            if normalized_word in seen_confusables:
+                continue
+            seen_confusables.add(normalized_word)
+            confusable_words.append(word)
+            if len(confusable_words) == 20:
+                break
+
+        confusable_files: list[Path] = []
+        if verbose:
+            print(f"  Generating {len(confusable_words)} confusable words for quality check...")
+        for i, word in enumerate(confusable_words):
+            safe_word = word.replace(" ", "_")[:30]
+            out_path = quality_dir / f"qc_confusable_{i:03d}_{safe_word}.wav"
+            ok = _edge_tts_synthesize(word, voice, out_path)
+            if ok and out_path.exists():
+                confusable_files.append(out_path)
+
+        silence_audio = np.zeros(16000 * 10, dtype=np.float32)
+        silence_path = quality_dir / "qc_silence.wav"
+        _save_wav(silence_audio, silence_path)
+
+        speech_scores = _score_files(speech_files, "qc_speech")
+        confusable_scores = _score_files(confusable_files, "qc_confusable")
+        silence_scores = _score_files([silence_path], "qc_silence")
+
+    speech_fp_rate = _fp_rate(speech_scores)
+    confusable_fp_rate = _fp_rate(confusable_scores)
+    silence_max_score = float(silence_scores.max()) if len(silence_scores) else 1.0
+    grade = _grade_quality(speech_fp_rate, confusable_fp_rate, silence_max_score)
+
+    metrics: dict[str, Any] = {
+        "grade": grade,
+        "deployment_threshold": float(deployment_threshold),
+        "speech_fp_rate": speech_fp_rate,
+        "speech_sample_count": int(len(speech_scores)),
+        "confusable_fp_rate": confusable_fp_rate,
+        "confusable_sample_count": int(len(confusable_scores)),
+        "silence_max_score": silence_max_score,
+        "silence_window_count": int(len(silence_scores)),
+    }
+
+    print(f"Model Quality Grade: {grade} ({_grade_label(grade)})")
+    print(
+        f"  Speech FP rate:     {speech_fp_rate * 100:4.1f}% "
+        f"({len(speech_scores)} phrases, threshold={deployment_threshold:.2f})"
+    )
+    print(
+        f"  Confusable FP rate: {confusable_fp_rate * 100:4.1f}% "
+        f"({len(confusable_scores)} words, threshold={deployment_threshold:.2f})"
+    )
+    print(f"  Silence max score:  {silence_max_score:.2f}")
+
+    if verbose and len(speech_scores) < len(quality_phrases):
+        print(
+            f"  WARNING: Only {len(speech_scores)}/{len(quality_phrases)} speech phrases "
+            "were scored in the quality gate."
+        )
+    if verbose and len(confusable_scores) < 20:
+        print(
+            f"  WARNING: Only {len(confusable_scores)}/20 confusable words "
+            "were scored in the quality gate."
+        )
+    if verbose and len(silence_scores) == 0:
+        print("  WARNING: Silence scoring failed; quality gate forced to grade F.")
+
+    return grade, metrics
 
 
 # ---------------------------------------------------------------------------
@@ -1342,14 +1419,9 @@ def _train_mlp_on_oww(
     """
     training_start = time.monotonic()
 
-    import logging
-
-    logger = logging.getLogger("violawake.train")
-
     try:
         import numpy as np
         import torch
-        import torch.nn as nn
         import torch.optim as optim
         from torch.utils.data import DataLoader, TensorDataset
     except ImportError as e:
@@ -1465,7 +1537,6 @@ def _train_mlp_on_oww(
         if verbose:
             print(f"  Generating {n_negatives} synthetic negatives (legacy MLP mode)...")
         rng_synth = np.random.default_rng(42)
-        from violawake_sdk.training.augment import apply_additive_noise
         for i in range(n_negatives):
             clip = rng_synth.standard_normal(CLIP_SAMPLES).astype(np.float32) * 0.1
             emb = _audio_to_embedding(clip)
@@ -1702,6 +1773,44 @@ def average_checkpoints(checkpoint_paths: list[str], output_path: str) -> None:
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     onnx.save(base, output_path)
+
+
+def _copy_eval_files(files: list[Path], target_dir: Path) -> None:
+    """Copy held-out files into a flat eval directory without name collisions."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    for idx, src in enumerate(files):
+        dst = target_dir / f"{idx:05d}_{src.name}"
+        shutil.copy2(src, dst)
+
+
+def _held_out_count(n_files: int) -> int:
+    """Reserve 20% for test while keeping at least one training file."""
+    if n_files <= 1:
+        return 0
+    return min(n_files - 1, max(5, n_files // 5))
+
+
+def _auto_eval_verdict(eer_percent: float) -> str:
+    if eer_percent < 10.0:
+        return "GOOD (EER < 10%)"
+    if eer_percent <= 15.0:
+        return "ACCEPTABLE (EER <= 15%)"
+    if eer_percent <= 25.0:
+        return "WARNING (EER > 15%)"
+    return "CRITICAL (EER > 25%)"
+
+
+def _update_auto_eval_config(config_path: Path, auto_eval: dict[str, Any]) -> None:
+    """Merge auto-eval results into the saved model config."""
+    config: dict[str, Any] = {}
+    if config_path.exists():
+        with open(config_path) as f:
+            loaded = json.load(f)
+            if isinstance(loaded, dict):
+                config = loaded
+    config["auto_eval"] = auto_eval
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
 
 
 # ---------------------------------------------------------------------------
@@ -1943,30 +2052,118 @@ def main() -> None:
             if verbose:
                 print(f"Found {len(user_neg_files)} user-provided negative samples")
 
-    # Source 2: Auto-generated confusable negatives
+    # Source 2: Auto-generated confusable negatives (2 rounds, matching production)
+    # Round 1: 30 confusables x 10 voices (broad phonetic coverage)
+    # Round 2: 16 confusables x 10 voices (tighter variants for hard negatives)
     confusable_files: list[Path] = []
     if args.auto_corpus:
         if verbose:
-            print(f"\nStep 1b: Auto-generating confusable negatives...")
-        confusable_dir = corpus_dir / "confusables"
-        confusable_files = _generate_confusable_negatives(
-            args.word, confusable_dir, n_confusables=30, voices_per_word=10,
+            print("\nStep 1b: Auto-generating confusable negatives (round 1: broad)...")
+        confusable_dir_r1 = corpus_dir / "confusables_r1"
+        confusable_r1 = _generate_confusable_negatives(
+            args.word, confusable_dir_r1, n_confusables=30, voices_per_word=10,
             verbose=verbose,
         )
-        if confusable_files:
-            neg_tag_map["neg_confusable"] = confusable_files
+        if confusable_r1:
+            neg_tag_map["neg_confusable_r1"] = confusable_r1
+            confusable_files.extend(confusable_r1)
+
+        if verbose:
+            print("\nStep 1b2: Auto-generating confusable negatives (round 2: tight variants)...")
+        confusable_dir_r2 = corpus_dir / "confusables_r2"
+        confusable_r2 = _generate_confusable_negatives(
+            args.word, confusable_dir_r2, n_confusables=16, voices_per_word=10,
+            verbose=verbose,
+        )
+        if confusable_r2:
+            neg_tag_map["neg_confusable_r2"] = confusable_r2
+            confusable_files.extend(confusable_r2)
 
     # Source 3: Auto-generated speech negatives
     speech_neg_files: list[Path] = []
     if args.auto_corpus:
         if verbose:
-            print(f"\nStep 1c: Auto-generating speech negatives...")
+            print("\nStep 1c: Auto-generating speech negatives...")
         speech_neg_dir = corpus_dir / "speech_negatives"
         speech_neg_files = _generate_speech_negatives(
             speech_neg_dir, n_voices=5, verbose=verbose,
         )
         if speech_neg_files:
             neg_tag_map["neg_speech"] = speech_neg_files
+
+    # Source 4: Shared universal negative corpus (LibriSpeech, MUSAN, etc.)
+    # These are word-agnostic negatives that every wake word model needs.
+    # Without them, models only learn to distinguish the wake word from a
+    # tiny auto-generated set and false-trigger on any real-world speech.
+    _CORPUS_SEARCH_PATHS = [
+        Path(__file__).resolve().parent.parent.parent.parent / "corpus",  # repo root
+        Path.home() / ".violawake" / "corpus",
+        Path("corpus"),
+    ]
+    _CORPUS_SUBDIRS = {
+        "neg_librispeech": "librispeech",
+        "neg_musan_speech": ("musan/musan/speech", "musan/speech"),
+        "neg_musan_music": ("musan/musan/music", "musan/music"),
+        "neg_musan_noise": ("musan/musan/noise", "musan/noise"),
+    }
+    for tag, subdirs in _CORPUS_SUBDIRS.items():
+        if isinstance(subdirs, str):
+            subdirs = (subdirs,)
+        for corpus_root in _CORPUS_SEARCH_PATHS:
+            if not corpus_root.exists():
+                continue
+            for subdir in subdirs:
+                candidate = corpus_root / subdir
+                if candidate.exists():
+                    corpus_files = sorted(
+                        list(candidate.rglob("*.wav"))
+                        + list(candidate.rglob("*.flac"))
+                    )
+                    if corpus_files:
+                        # Cap each source to avoid swamping the dataset
+                        max_per_source = 2000
+                        if len(corpus_files) > max_per_source:
+                            import random
+                            rng = random.Random(42)
+                            corpus_files = sorted(rng.sample(corpus_files, max_per_source))
+                        neg_tag_map[tag] = corpus_files
+                        if verbose:
+                            print(f"  Shared corpus [{tag}]: {len(corpus_files)} files from {candidate}")
+                        break  # found this tag, move to next
+            if tag in neg_tag_map:
+                break  # found in this root, move to next tag
+
+    corpus_paths = {
+        "neg_librispeech": "~/.violawake/corpus/librispeech/   (speech recordings)",
+        "neg_musan_speech": "~/.violawake/corpus/musan/speech/  (MUSAN speech subset)",
+        "neg_musan_music": "~/.violawake/corpus/musan/music/   (MUSAN music subset)",
+        "neg_musan_noise": "~/.violawake/corpus/musan/noise/   (MUSAN noise subset)",
+    }
+    found_corpus_tags = [tag for tag in _CORPUS_SUBDIRS if neg_tag_map.get(tag)]
+    missing_corpus_tags = [tag for tag in _CORPUS_SUBDIRS if tag not in found_corpus_tags]
+    if not found_corpus_tags:
+        print(
+            "\nWARNING: No universal negative corpus found.\n"
+            "Training with TTS-only negatives may produce a model with high\n"
+            "false positive rates on real speech and music.\n"
+            "\n"
+            "Place audio files in one of these locations:\n"
+            "  ~/.violawake/corpus/librispeech/   (speech recordings)\n"
+            "  ~/.violawake/corpus/musan/speech/  (MUSAN speech subset)\n"
+            "  ~/.violawake/corpus/musan/music/   (MUSAN music subset)\n"
+            "  ~/.violawake/corpus/musan/noise/   (MUSAN noise subset)\n"
+            "\n"
+            "Or provide negatives via: --negatives <dir>\n"
+        )
+    elif missing_corpus_tags:
+        print("\nNOTE: Universal negative corpus is incomplete.")
+        print(
+            f"Found {len(found_corpus_tags)}/{len(_CORPUS_SUBDIRS)} corpus sources; "
+            "missing:"
+        )
+        for tag in missing_corpus_tags:
+            print(f"  {tag}: {corpus_paths[tag]}")
+        print("Add files to the paths above or provide negatives via --negatives <dir>.")
 
     total_neg = sum(len(v) for v in neg_tag_map.values())
     if total_neg < 5:
@@ -1983,30 +2180,134 @@ def main() -> None:
             print(f"  {tag}: {len(files)}")
 
     # Flatten for the training function
-    all_neg_files = []
+    all_neg_files: list[Path] = []
     for files in neg_tag_map.values():
         all_neg_files.extend(files)
 
+    train_pos_files = all_pos_files
+    train_neg_files = all_neg_files
+    train_neg_tag_map = {tag: list(files) for tag, files in neg_tag_map.items()}
+    eval_target_dir = eval_dir
+    auto_eval_label = "user-provided eval set" if eval_dir else "held-out 20% test set"
+
+    if eval_dir is None:
+        if verbose:
+            print("\nStep 1d: Creating held-out 20% test set...")
+
+        rng = Random(42)
+        pos_test_count = _held_out_count(len(all_pos_files))
+        neg_test_count = _held_out_count(len(all_neg_files))
+        test_pos = rng.sample(all_pos_files, pos_test_count)
+        test_neg = rng.sample(all_neg_files, neg_test_count)
+
+        test_pos_set = set(test_pos)
+        test_neg_set = set(test_neg)
+        train_pos_files = [f for f in all_pos_files if f not in test_pos_set]
+        train_neg_files = [f for f in all_neg_files if f not in test_neg_set]
+        train_neg_tag_map = {
+            tag: [f for f in files if f not in test_neg_set]
+            for tag, files in neg_tag_map.items()
+        }
+
+        if not train_pos_files or not train_neg_files:
+            print(
+                "ERROR: Held-out split left no training data. "
+                "Provide more samples or use --eval-dir.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        eval_target_dir = corpus_dir / "auto_test"
+        shutil.rmtree(eval_target_dir, ignore_errors=True)
+        _copy_eval_files(test_pos, eval_target_dir / "positives")
+        _copy_eval_files(test_neg, eval_target_dir / "negatives")
+
+        if verbose:
+            print(f"  Train positives:    {len(train_pos_files)}")
+            print(f"  Test positives:     {len(test_pos)}")
+            print(f"  Train negatives:    {len(train_neg_files)}")
+            print(f"  Test negatives:     {len(test_neg)}")
+            print(f"  Auto-test dir:      {eval_target_dir}")
+
     # -- Step 2-5: Train TemporalCNN ----------------------------------------
     _train_temporal_cnn(
-        pos_files=all_pos_files,
-        neg_files=all_neg_files,
+        pos_files=train_pos_files,
+        neg_files=train_neg_files,
         output_path=output_path,
         wake_word=args.word,
         epochs=args.epochs,
         augment=args.augment,
-        eval_dir=eval_dir,
+        eval_dir=None,
         batch_size=args.batch_size,
         lr=args.lr,
         patience=args.patience,
         verbose=verbose,
-        neg_tags=neg_tag_map,
+        neg_tags=train_neg_tag_map,
     )
 
-    if verbose:
-        print("\n" + "=" * 70)
-        print("Training complete!")
-        print("=" * 70)
+    print("\n" + "=" * 70)
+    print("Training complete!")
+    print("=" * 70)
+
+    auto_eval_payload: dict[str, Any] = {
+        "source": "auto_holdout" if eval_dir is None else "user_eval_dir",
+        "test_dir": str(eval_target_dir) if eval_target_dir else None,
+        "status": "skipped",
+    }
+    config_path = output_path.with_suffix(".config.json")
+
+    if eval_target_dir is not None:
+        try:
+            from violawake_sdk.tools.evaluate import evaluate_onnx_model
+
+            results = evaluate_onnx_model(output_path, eval_target_dir)
+            eer = results["eer_approx"] * 100
+            roc_auc = results["roc_auc"]
+            far = results["optimal_far"] * 100
+            frr = results["optimal_frr"] * 100
+            verdict = _auto_eval_verdict(eer)
+
+            print(f"\n=== Auto-Evaluation ({auto_eval_label}) ===")
+            print(f"EER:      {eer:.1f}%")
+            print(f"ROC AUC:  {roc_auc:.3f}")
+            print(f"FAR:      {far:.1f}%")
+            print(f"FRR:      {frr:.1f}%")
+            print(f"Verdict:  {verdict}")
+
+            if eer > 25.0:
+                print(
+                    "CRITICAL: Held-out EER exceeds 25%. "
+                    "Add more real positives, harder speech/background negatives, and retrain before deployment."
+                )
+            elif eer > 15.0:
+                print(
+                    "WARNING: Held-out EER exceeds 15%. "
+                    "Add more speaker/environment diversity and harder negatives, then retrain."
+                )
+
+            auto_eval_payload.update({
+                "status": "ok",
+                "architecture": results["architecture"],
+                "n_positives": results["n_positives"],
+                "n_negatives": results["n_negatives"],
+                "roc_auc": round(roc_auc, 4),
+                "eer_percent": round(eer, 2),
+                "far_percent": round(far, 2),
+                "frr_percent": round(frr, 2),
+                "optimal_threshold": round(results["optimal_threshold"], 4),
+                "verdict": verdict,
+            })
+        except Exception as e:
+            print(f"\nAuto-evaluation failed: {e}")
+            auto_eval_payload.update({
+                "status": "error",
+                "error": str(e),
+            })
+
+    try:
+        _update_auto_eval_config(config_path, auto_eval_payload)
+    except Exception as e:
+        print(f"WARNING: Failed to save auto-eval results to config: {e}")
 
 
 if __name__ == "__main__":
