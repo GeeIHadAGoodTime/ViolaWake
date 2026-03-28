@@ -122,7 +122,7 @@ pipeline.run()  # Blocks — Ctrl+C to stop
 | Wake word | Temporal CNN on OWW embeddings (ONNX) | ~100 KB | ~8ms/frame |
 | VAD | WebRTC VAD / Silero / RMS heuristic | <1 MB | <1ms/frame |
 | STT | faster-whisper `base` | 145 MB | 0.5–2s |
-| TTS | Kokoro-82M (ONNX) | 330 MB | 0.3–0.8s/sentence |
+| TTS | Kokoro-82M (ONNX) | 326 MB | 0.3–0.8s/sentence |
 
 ---
 
@@ -163,7 +163,7 @@ Models are versioned and published to GitHub Releases. Use registry names withou
 
 ```bash
 python -m violawake_sdk.tools.download_model --model temporal_cnn   # default, ~100 KB
-python -m violawake_sdk.tools.download_model --model kokoro_v1_0    # TTS, 330 MB
+python -m violawake_sdk.tools.download_model --model kokoro_v1_0    # TTS, 326 MB
 ```
 
 | Model | Type | Size | EER* | Notes |
@@ -365,4 +365,4 @@ See `CONTRIBUTING.md` for guidelines.
 
 Apache 2.0. Models trained on open datasets. See `LICENSE` for details.
 
-The ViolaWake MLP model uses OpenWakeWord as a fixed feature extractor backbone (also Apache 2.0). The MLP classification head and training pipeline are original ViolaWake work.
+ViolaWake uses OpenWakeWord as a frozen feature extractor backbone (also Apache 2.0). The classification heads (Temporal CNN, Conv-GRU) and training pipeline are original ViolaWake work.

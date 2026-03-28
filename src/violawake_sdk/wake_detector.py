@@ -504,8 +504,24 @@ class WakeDetector:
         exc_val: BaseException | None,
         exc_tb: object,
     ) -> None:
-        """Exit sync context manager. Resets internal state."""
+        """Exit sync context manager. Releases sessions and resets state."""
+        self.close()
+
+    def close(self) -> None:
+        """Release inference sessions and reset internal state.
+
+        After calling close(), the detector should not be used for inference.
+        This is called automatically when using WakeDetector as a context
+        manager.
+        """
         self.reset()
+        # Release inference session references so the underlying runtime
+        # (ONNX / TFLite) can free memory immediately rather than waiting
+        # for garbage collection.
+        self._mlp_session = None  # type: ignore[assignment]
+        if self._ensemble is not None:
+            self._ensemble.clear()
+        self._oww_backbone = None  # type: ignore[assignment]
 
     def _create_oww_backbone(self) -> OpenWakeWordBackbone:
         """Create the shared OpenWakeWord backbone."""
@@ -698,11 +714,14 @@ class WakeDetector:
         # G1: Input validation (single pass — process_core skips re-validation)
         pcm = validate_audio_chunk(audio_frame)
 
-        # Compute RMS on raw int16-scale PCM BEFORE normalization.
+        # Compute RMS on int16-scale PCM for the rms_floor comparison.
         # rms_floor=1.0 is calibrated for int16 scale (speech ≈ 500–5000,
-        # silence ≈ 0–5).  Normalizing first would put RMS in 0.0–0.7 range,
-        # making the floor unreachable.
+        # silence ≈ 0–5).  Float32 input in [-1, 1] is scaled up so the
+        # same rms_floor works regardless of input format.
         rms = float(np.sqrt(np.mean(pcm ** 2)))
+        if not self._needs_int16_normalization(audio_frame):
+            # Float32/float64 input: RMS is in [0, ~0.7] — scale to int16 range
+            rms *= 32768.0
 
         # Normalize for model inference
         if self._needs_int16_normalization(audio_frame):
