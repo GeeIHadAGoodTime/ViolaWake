@@ -30,7 +30,7 @@ See README.md or https://github.com/GeeIHadAGoodTime/ViolaWake for full document
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "ViolaWake Contributors"
 __license__ = "Apache-2.0"
 
@@ -39,6 +39,7 @@ from violawake_sdk._exceptions import (
     ModelLoadError,
     ModelNotFoundError,
     PipelineError,
+    VADBackendError,
     ViolaWakeError,
 )
 from violawake_sdk.async_detector import AsyncWakeDetector
@@ -145,6 +146,7 @@ __all__ = [
     "AudioCaptureError",
     "ModelLoadError",
     "PipelineError",
+    "VADBackendError",
     # Discovery
     "list_models",
     "list_voices",
