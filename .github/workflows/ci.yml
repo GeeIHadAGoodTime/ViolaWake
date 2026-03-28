@@ -187,6 +187,7 @@ jobs:
 
       - name: Run latency benchmarks
         run: |
+          mkdir -p benchmark-results
           pytest tests/benchmarks/bench_latency.py \
             --benchmark-json=benchmark-results/latency-${{ github.sha }}.json \
             --benchmark-histogram=benchmark-results/histogram
