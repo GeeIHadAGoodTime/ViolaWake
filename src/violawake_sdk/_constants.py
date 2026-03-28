@@ -148,7 +148,7 @@ SILENCE_GATE_RMS: float = 0.001
 LOG_THRESHOLD: float = 0.3
 
 
-def get_feature_config() -> dict:
+def get_feature_config() -> dict[str, object]:
     """Return the complete feature configuration dict.
 
     This dict is saved inside model checkpoints at training time

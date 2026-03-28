@@ -238,8 +238,8 @@ class VoicePipeline:
             return
 
         try:
-            audio = tts.synthesize(text)  # type: ignore[attr-defined]
-            tts.play(audio)  # type: ignore[attr-defined]
+            audio = tts.synthesize(text)
+            tts.play(audio)
         except Exception as e:
             logger.exception("TTS playback failed for text '%.50s': %s", text, e)
 
@@ -313,7 +313,7 @@ class VoicePipeline:
                 logger.warning("Empty audio buffer — skipping transcription")
                 return
             pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-            text = stt.transcribe(pcm)  # type: ignore[attr-defined]
+            text = stt.transcribe(pcm)
 
             if self._stop_event.is_set():
                 logger.debug("Pipeline stopping; dropping transcription result")
@@ -393,7 +393,7 @@ class VoicePipeline:
                 from violawake_sdk.stt import STTEngine
 
                 self._stt = STTEngine(model=self._stt_model)
-                self._stt.prewarm()  # type: ignore[attr-defined]
+                self._stt.prewarm()
             except ImportError:
                 return None
         return self._stt

@@ -25,7 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import scipy.io.wavfile  # type: ignore[import]
+import scipy.io.wavfile
 
 from violawake_sdk.stt import STTEngine
 

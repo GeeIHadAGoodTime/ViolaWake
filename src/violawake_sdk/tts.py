@@ -113,7 +113,7 @@ class TTSEngine:
     def _load_kokoro(self) -> object:
         """Load the Kokoro ONNX model."""
         try:
-            import kokoro_onnx  # type: ignore[import]
+            import kokoro_onnx
         except ImportError as e:
             raise ImportError(
                 "kokoro-onnx is not installed. Install with: pip install 'violawake[tts]'"
@@ -204,7 +204,7 @@ class TTSEngine:
                       immediately after starting playback.
         """
         try:
-            import sounddevice as sd  # type: ignore[import]
+            import sounddevice as sd
         except ImportError as sd_err:
             logger.debug("sounddevice not available (%s), falling back to pyaudio", sd_err)
             try:

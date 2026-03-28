@@ -119,7 +119,7 @@ class DetectorConfig:
     confirm_count: int = 1
     score_history_size: int = 50
 
-    def build(self, model: str = "temporal_cnn", **kwargs) -> WakeDetector:
+    def build(self, model: str = "temporal_cnn", **kwargs: Any) -> WakeDetector:
         """Build a WakeDetector from this config.
 
         Convenience method that passes ``self`` as the ``config=`` argument.
@@ -939,7 +939,7 @@ class WakeDetector:
         model: str = "temporal_cnn",
         threshold: float = DEFAULT_THRESHOLD,
         cooldown_s: float = DEFAULT_COOLDOWN_S,
-        **kwargs,
+        **kwargs: Any,
     ) -> _SourceDetector:
         """Create a WakeDetector bound to an AudioSource.
 

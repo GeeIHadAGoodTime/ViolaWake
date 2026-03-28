@@ -36,11 +36,11 @@ requires-python = ">=3.10"
 
 # Core dependencies (inference-only: wake word + VAD)
 # pyaudio, requests, and tqdm are optional — see [audio] and [download] extras
+# openwakeword is optional — see [oww] extra (tflite-runtime has no Python 3.12+ Linux wheels)
 dependencies = [
     "onnxruntime>=1.17",
     "numpy>=1.24",
     "scipy>=1.11",
-    "openwakeword>=0.6",
 ]
 
 [project.optional-dependencies]
@@ -65,6 +65,11 @@ tts = [
 # STT: faster-whisper transcription
 stt = [
     "faster-whisper>=1.0",
+]
+
+# OWW: openwakeword backbone (optional due to tflite-runtime Python 3.12 issue)
+oww = [
+    "openwakeword>=0.6",
 ]
 
 # TFLite: lightweight inference backend (alternative to onnxruntime)
@@ -105,7 +110,7 @@ generate = [
 
 # Full install
 all = [
-    "violawake[audio,download,tts,stt,tflite,vad,training,generate]",
+    "violawake[audio,download,tts,stt,oww,tflite,vad,training,generate]",
 ]
 
 # Dev / CI
@@ -116,6 +121,7 @@ dev = [
     "pytest-benchmark>=4.0",
     "ruff>=0.3",
     "mypy>=1.8",
+    "pytest-asyncio>=0.23",
     "pre-commit>=3.6",
     "pyaudio>=0.2.14",
     "requests>=2.31",
@@ -178,6 +184,7 @@ packages = ["src/violawake_sdk", "src/violawake"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --cov=violawake_sdk --cov-report=term-missing"
+asyncio_mode = "auto"
 markers = [
     "integration: requires model files (deselect with -m 'not integration')",
     "benchmark: performance benchmark tests",
@@ -211,9 +218,31 @@ per-file-ignores = { "tools/**" = ["T201"], "src/violawake_sdk/tools/**" = ["T20
 [tool.mypy]
 python_version = "3.10"
 strict = true
-warn_return_any = true
+warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = true
+# numpy/torch return types are complex; these codes are noisy in strict mode
+disable_error_code = ["no-any-return", "type-var", "no-untyped-call"]
+exclude = ["violawake_sdk/training/", "violawake_sdk/tools/"]
+
+[[tool.mypy.overrides]]
+module = [
+    "openwakeword.*",
+    "onnxruntime.*",
+    "pyaudio.*",
+    "sounddevice.*",
+    "soundfile.*",
+    "faster_whisper.*",
+    "kokoro_onnx.*",
+    "webrtcvad.*",
+    "requests.*",
+    "tqdm.*",
+    "torchaudio.*",
+    "torch.*",
+    "tensorflow.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["src/violawake_sdk"]

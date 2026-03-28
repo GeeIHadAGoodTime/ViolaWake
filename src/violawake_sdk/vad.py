@@ -149,7 +149,7 @@ class _SileroVADBackend:
 
     def __init__(self) -> None:
         try:
-            import torch  # type: ignore[import]
+            import torch
         except ImportError as e:
             raise ImportError(
                 "PyTorch is required for Silero VAD. Install with: pip install torch"
