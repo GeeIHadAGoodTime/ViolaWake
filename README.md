@@ -16,7 +16,7 @@
 | **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 |
 | **Training code open** | Yes | No (closed) | Yes |
 | **Custom wake words** | Yes (training CLI) | Yes (paid Console) | Yes (fine-tune) |
-| **Evaluation tooling** | `violawake-eval` (EER, FAR, FRR, ROC) | None published | Basic |
+| **Evaluation tooling** | `violawake-eval` (EER, FAR/FRR, ROC AUC) | None published | Basic |
 | **On-device** | Yes (ONNX) | Yes (proprietary C lib) | Yes (ONNX) |
 | **Streaming TTS bundle** | Yes (Kokoro-82M) | Orca (proprietary) | No |
 | **Python SDK** | First-class | C wrapper | First-class |
@@ -144,7 +144,7 @@ violawake-train \
 # To disable augmentation, add --no-augment
 # To use legacy MLP architecture, add --architecture mlp
 
-# Evaluate (EER, FAR/FRR, ROC)
+# Evaluate (EER, FAR/FRR, ROC AUC)
 violawake-eval \
   --model models/jarvis.onnx \
   --test-dir data/jarvis/test/ \
@@ -178,7 +178,8 @@ Models are versioned and published to GitHub Releases. Use registry names withou
 
 ```bash
 python -m violawake_sdk.tools.download_model --model temporal_cnn   # default, ~100 KB
-python -m violawake_sdk.tools.download_model --model kokoro_v1_0    # TTS, 326 MB
+python -m violawake_sdk.tools.download_model --model kokoro_v1_0    # TTS model, 326 MB
+python -m violawake_sdk.tools.download_model --model kokoro_voices_v1_0  # TTS voices, 28 MB
 ```
 
 | Model | Type | Size | EER* | Notes |
@@ -306,7 +307,7 @@ python examples/basic_detection.py
 
 openWakeWord is the closest open-source alternative. ViolaWake differences:
 
-- **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR, FRR, and ROC curves on any model + test set. Benchmark scripts in `benchmark_v2/` — run them yourself.
+- **Open, reproducible evaluation:** `violawake-eval` produces EER, FAR/FRR, ROC AUC, and FAPH on any model + test set. Benchmark scripts in `benchmark_v2/` — run them yourself.
 - **Production-hardened decision policy:** 4-gate pipeline (zero-input guard, score threshold, cooldown, listening gate) plus optional multi-window confirmation and speaker verification — eliminates false positives during music playback
 - **Bundled pipeline:** ViolaWake ships integrated VAD + STT + TTS, not just the wake word component
 - **Training infrastructure:** FocalLoss + EMA + SWA + augmentation pipeline (gain, stretch, pitch, noise, time shift; RIR and SpecAugment available opt-in) vs basic training in openWakeWord

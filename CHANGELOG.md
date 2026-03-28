@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - TTS integration via Kokoro-82M with sentence-chunked streaming
 - VoicePipeline orchestrating Wake->VAD->STT->TTS
 - Training CLI (violawake-train) with augmentation pipeline (gain, time stretch, pitch shift, additive noise, time shift)
-- Evaluation CLI (violawake-eval) with EER, DET curves, FAPH, FRR@FAR operating points
+- Evaluation CLI (violawake-eval) with EER, ROC AUC, FAPH, FRR@FAR operating points
 - Model registry with SHA-256 verification and auto-download
 - Confusable word generation for adversarial testing
 
