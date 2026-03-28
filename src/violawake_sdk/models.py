@@ -18,6 +18,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from violawake_sdk._exceptions import ModelNotFoundError
+
 logger = logging.getLogger(__name__)
 
 # Default model cache directory
@@ -327,11 +329,11 @@ def get_model_path(model_name: str, *, auto_download: bool = True) -> Path:
     Raises:
         FileNotFoundError: If model is not in cache and auto-download is
             disabled or unavailable.
-        KeyError: If model_name is not in MODEL_REGISTRY.
+        ModelNotFoundError: If model_name is not in MODEL_REGISTRY.
     """
     if model_name not in MODEL_REGISTRY:
         available = ", ".join(MODEL_REGISTRY.keys())
-        raise KeyError(f"Unknown model '{model_name}'. Available: {available}")
+        raise ModelNotFoundError(f"Unknown model '{model_name}'. Available: {available}")
 
     if model_name in _PACKAGE_MANAGED_MODELS:
         raise FileNotFoundError(
@@ -383,7 +385,7 @@ def download_model(
         Path to the downloaded model file.
 
     Raises:
-        KeyError: If model_name is not in MODEL_REGISTRY.
+        ModelNotFoundError: If model_name is not in MODEL_REGISTRY.
         ValueError: If SHA-256 verification fails.
         RuntimeError: If model has a placeholder hash and skip_verify is False.
     """
@@ -405,7 +407,7 @@ def download_model(
 
     if model_name not in MODEL_REGISTRY:
         available = ", ".join(MODEL_REGISTRY.keys())
-        raise KeyError(f"Unknown model '{model_name}'. Available: {available}")
+        raise ModelNotFoundError(f"Unknown model '{model_name}'. Available: {available}")
 
     if model_name in _PACKAGE_MANAGED_MODELS:
         raise ValueError(

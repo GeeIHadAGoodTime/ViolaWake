@@ -2,6 +2,9 @@
 
 Shows the ``async with`` context manager pattern and how to feed
 audio frames from an async source.
+
+Requires: pip install "violawake[audio,download]"
+          violawake-download --model temporal_cnn
 """
 
 import asyncio
@@ -29,4 +32,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nStopped.")

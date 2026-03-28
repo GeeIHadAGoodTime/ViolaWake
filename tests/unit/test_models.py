@@ -106,9 +106,11 @@ class TestGetModelPath:
             with pytest.raises(FileNotFoundError, match="viola_mlp_oww"):
                 get_model_path("viola_mlp_oww", auto_download=False)
 
-    def test_raises_key_error_for_unknown_model(self) -> None:
-        """get_model_path raises KeyError for unregistered model names."""
-        with pytest.raises(KeyError, match="nonexistent_model"):
+    def test_raises_model_not_found_for_unknown_model(self) -> None:
+        """get_model_path raises ModelNotFoundError for unregistered model names."""
+        from violawake_sdk._exceptions import ModelNotFoundError
+
+        with pytest.raises(ModelNotFoundError, match="nonexistent_model"):
             get_model_path("nonexistent_model")
 
     def test_error_message_includes_download_hint(self, tmp_path: Path) -> None:

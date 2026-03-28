@@ -148,8 +148,9 @@ This software includes or uses the following open-source components:
 1. OpenWakeWord (https://github.com/dscripka/openWakeWord)
    Copyright (c) openWakeWord Contributors
    Licensed under the Apache License, Version 2.0.
-   The ViolaWake MLP model uses OpenWakeWord's audio embedding backbone
-   as a fixed feature extractor. The MLP classification head is original work.
+   ViolaWake uses OpenWakeWord's audio embedding backbone as a frozen
+   feature extractor. The classification heads (Temporal CNN, Conv-GRU)
+   and training pipeline are original ViolaWake work.
 
 2. Kokoro-82M TTS Model (https://github.com/hexgrad/kokoro)
    Licensed under the Apache License, Version 2.0.

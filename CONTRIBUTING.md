@@ -40,7 +40,7 @@ The project has three main components:
 
 ```
 src/violawake_sdk/      # The pip-installable SDK
-  detector.py           # WakeDetector — core wake word inference
+  wake_detector.py      # WakeDetector — core wake word inference
   vad.py                # VADEngine — voice activity detection
   tts.py                # TTSEngine — Kokoro-82M TTS wrapper
   stt.py                # STTEngine — faster-whisper STT wrapper
