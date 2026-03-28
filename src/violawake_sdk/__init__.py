@@ -82,7 +82,7 @@ def list_models() -> list[dict[str, str]]:
         if spec.name in seen:
             continue
         # Hide deprecated models from user-facing output
-        if spec.description.startswith("DEPRECATED"):
+        if "DEPRECATED" in spec.description:
             continue
         seen.add(spec.name)
         result.append({
