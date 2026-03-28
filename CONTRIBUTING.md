@@ -61,6 +61,40 @@ tests/                  # Test suites (unit, integration, benchmark)
 
 **Tools** are CLI scripts (`violawake-train`, `violawake-eval`, etc.) that ship with the SDK.
 
+## Documentation Policy (Enforced)
+
+**The project IS the documentation. The code is the implementation; the README is the product. An undocumented feature isn't a feature -- it's an easter egg that nobody finds.**
+
+This is not a guideline. This is law.
+
+### Rules
+
+1. **Every public class, method, function, CLI flag, and pip extra MUST be documented in README.md before a PR is merged.** If it's not in the README, it doesn't exist to users or AI agents.
+
+2. **No PR that adds a public API may be merged without a corresponding README update.** This includes:
+   - New classes or functions exported from `__init__.py` or submodules
+   - New parameters on existing constructors or methods
+   - New CLI tools or flags on existing tools
+   - New pip extras in `pyproject.toml`
+   - New environment variables
+   - New exception types
+
+3. **Code examples in the README must be correct.** Every import path, method name, parameter name, and return type shown in a README example must match the actual source code. Incorrect examples are bugs, not documentation debt.
+
+4. **The API Reference section at the bottom of README.md is the canonical index.** Every public export must appear there with its module path. If a user can `from violawake_sdk.X import Y`, then `Y` must be in the API Reference.
+
+5. **Adversary audit on releases.** Before any PyPI release, run both:
+   - **Forward audit**: Verify every README claim against source code
+   - **Reverse audit**: Search source code for capabilities not in README
+
+### Why
+
+In March 2026, a reverse audit found **35 production-ready capabilities** that were completely undocumented: streaming TTS synthesis, file-based STT transcription, raw score access, model conversion utilities, 7 undocumented pip extras, and more. These features were built, tested, and working -- but invisible to every user, every AI agent, and every developer evaluating ViolaWake. The project was 30% of what it actually was.
+
+Documentation is not a post-implementation task. It is the product surface.
+
+---
+
 ## Code Style
 
 ### Linting and formatting

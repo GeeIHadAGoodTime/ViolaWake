@@ -30,7 +30,7 @@ See README.md or https://github.com/GeeIHadAGoodTime/ViolaWake for full document
 
 from __future__ import annotations
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "ViolaWake Contributors"
 __license__ = "Apache-2.0"
 

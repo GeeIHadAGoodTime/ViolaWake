@@ -18,6 +18,7 @@ from __future__ import annotations
 from violawake_sdk.security.cert_pinning import (
     CertPinError,
     PinSet,
+    add_pins,
     create_pinned_ssl_context,
     fetch_live_spki_pins,
     verify_certificate_pin,
@@ -26,6 +27,7 @@ from violawake_sdk.security.cert_pinning import (
 __all__ = [
     "CertPinError",
     "PinSet",
+    "add_pins",
     "create_pinned_ssl_context",
     "fetch_live_spki_pins",
     "verify_certificate_pin",

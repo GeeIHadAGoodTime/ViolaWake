@@ -80,10 +80,10 @@ print(f"Score: {score:.3f}")  # Use for plotting, custom thresholding, etc.
 from violawake_sdk.audio_source import FileSource
 
 source = FileSource("test.wav")
-# from_source() ties an AudioSource to the detector and yields results
-for detected in detector.from_source(source):
-    if detected:
-        print("Wake word found in file!")
+# from_source() creates a detector bound to an audio source
+runner = WakeDetector.from_source(source, model="temporal_cnn", threshold=0.80)
+count = runner.run(on_detect=lambda: print("Wake word found!"))
+print(f"Total detections: {count}")
 ```
 
 ---
@@ -136,11 +136,10 @@ with WakeDetector(model="temporal_cnn", threshold=0.80, cooldown_s=2.0) as detec
     # process() — raw model score (0.0-1.0), bypasses decision gates
     score: float = detector.process(audio_chunk)
 
-    # from_source() — detection loop from any AudioSource
+    # from_source() — detection loop from any AudioSource (classmethod)
     from violawake_sdk.audio_source import FileSource
-    for detected in detector.from_source(FileSource("test.wav")):
-        if detected:
-            print("Detected!")
+    runner = WakeDetector.from_source(FileSource("test.wav"))
+    count = runner.run(on_detect=lambda: print("Detected!"))
 
     # stream_mic() — built-in microphone streaming (requires [audio] extra)
     for chunk in detector.stream_mic():
@@ -272,8 +271,8 @@ Language detection is cached with a configurable TTL to avoid repeated detection
 from violawake_sdk.stt_engine import STTFileEngine, transcribe_wav_file
 
 # Class-based
-engine = STTFileEngine(model_size="base")
-text = engine.transcribe("recording.wav")
+engine = STTFileEngine(model="base")
+text = engine.transcribe_wav("recording.wav")
 
 # One-liner convenience function
 text = transcribe_wav_file("recording.wav")
@@ -1013,7 +1012,7 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 ### Top-Level Exports (`from violawake_sdk import ...`)
 
 **Core Detection:**
-- `WakeDetector` -- synchronous detector (`.detect()`, `.process()`, `.from_source()`, `.stream_mic()`, `.reset_cooldown()`, `.get_confidence()`, `.last_scores`)
+- `WakeDetector` -- synchronous detector (`.detect()`, `.process()`, `.from_source()` classmethod, `.stream_mic()`, `.reset_cooldown()`, `.get_confidence()`, `.last_scores`)
 - `AsyncWakeDetector` -- async wrapper (`.detect()`, `.process()`, `.stream()`, `.reset_cooldown()`)
 - `DetectorConfig` -- bundled config (`.build()`)
 - `WakeDecisionPolicy` -- 4-gate decision pipeline

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "violawake"
-version = "0.2.1"
+version = "0.2.2"
 description = "Open-source wake word detection SDK with training pipeline — privacy-first, on-device, Python-native"
 readme = "README.md"
 license = { file = "LICENSE" }
