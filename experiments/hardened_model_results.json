@@ -1,0 +1,1055 @@
+{
+  "baseline_D_combined": {
+    "eer_mean": 0.1367,
+    "eer_std": 0.0,
+    "trained_eer_mean": 0.0175,
+    "per_seed": [
+      {
+        "experiment": "D_combined_s42_baseline",
+        "all_eer": 0.1367,
+        "all_auc": 0.9468,
+        "trained_eer": 0.0175,
+        "pos_mean": 0.7503,
+        "neg_mean": 0.0879,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7882,
+            "false_alarm_rate": 0.0659,
+            "n_false_alarms": 36
+          },
+          "0.7": {
+            "detection_rate": 0.7431,
+            "false_alarm_rate": 0.0165,
+            "n_false_alarms": 9
+          },
+          "0.8": {
+            "detection_rate": 0.684,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          },
+          "0.9": {
+            "detection_rate": 0.5625,
+            "false_alarm_rate": 0.0018,
+            "n_false_alarms": 1
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.5866,
+            "max": 0.7764,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.4302,
+            "max": 0.7333,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9381,
+            "max": 0.9381,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.531,
+            "max": 0.703,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.1774,
+            "max": 0.6915,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.5672,
+            "max": 0.6926,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.5854,
+            "max": 0.8042,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.1484,
+            "max": 0.8864,
+            "count": 10
+          }
+        }
+      }
+    ],
+    "confusable_avg_scores": {
+      "hola": 0.5866,
+      "how_are_you": 0.4302,
+      "tone_1khz": 0.9381,
+      "vanilla": 0.531,
+      "via": 0.1774,
+      "villa": 0.5672,
+      "voila": 0.5854,
+      "what_time_is_it": 0.1484
+    }
+  },
+  "weighted_5x": {
+    "eer_mean": 0.1313,
+    "eer_std": 0.0014,
+    "trained_eer_mean": 0.027,
+    "per_seed": [
+      {
+        "experiment": "hardened_weighted5x_s42",
+        "all_eer": 0.1294,
+        "all_auc": 0.9541,
+        "trained_eer": 0.0249,
+        "pos_mean": 0.7276,
+        "neg_mean": 0.0326,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.75,
+            "false_alarm_rate": 0.0311,
+            "n_false_alarms": 17
+          },
+          "0.7": {
+            "detection_rate": 0.7292,
+            "false_alarm_rate": 0.011,
+            "n_false_alarms": 6
+          },
+          "0.8": {
+            "detection_rate": 0.6875,
+            "false_alarm_rate": 0.0037,
+            "n_false_alarms": 2
+          },
+          "0.9": {
+            "detection_rate": 0.6111,
+            "false_alarm_rate": 0.0018,
+            "n_false_alarms": 1
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4817,
+            "max": 0.7204,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.2086,
+            "max": 0.885,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9993,
+            "max": 0.9993,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.1625,
+            "max": 0.6334,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0113,
+            "max": 0.1027,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.2092,
+            "max": 0.5866,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3431,
+            "max": 0.7327,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0637,
+            "max": 0.6103,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_weighted5x_s43",
+        "all_eer": 0.1317,
+        "all_auc": 0.9304,
+        "trained_eer": 0.0216,
+        "pos_mean": 0.7117,
+        "neg_mean": 0.0187,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7361,
+            "false_alarm_rate": 0.0165,
+            "n_false_alarms": 9
+          },
+          "0.7": {
+            "detection_rate": 0.7188,
+            "false_alarm_rate": 0.0092,
+            "n_false_alarms": 5
+          },
+          "0.8": {
+            "detection_rate": 0.7049,
+            "false_alarm_rate": 0.0073,
+            "n_false_alarms": 4
+          },
+          "0.9": {
+            "detection_rate": 0.6389,
+            "false_alarm_rate": 0.0037,
+            "n_false_alarms": 2
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.3325,
+            "max": 0.8329,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.0952,
+            "max": 0.3296,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9973,
+            "max": 0.9973,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0676,
+            "max": 0.5833,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0002,
+            "max": 0.0021,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.0771,
+            "max": 0.626,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.2818,
+            "max": 0.9172,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.037,
+            "max": 0.3702,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_weighted5x_s44",
+        "all_eer": 0.1328,
+        "all_auc": 0.9491,
+        "trained_eer": 0.0344,
+        "pos_mean": 0.71,
+        "neg_mean": 0.0351,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.75,
+            "false_alarm_rate": 0.033,
+            "n_false_alarms": 18
+          },
+          "0.7": {
+            "detection_rate": 0.7083,
+            "false_alarm_rate": 0.011,
+            "n_false_alarms": 6
+          },
+          "0.8": {
+            "detection_rate": 0.6528,
+            "false_alarm_rate": 0.0073,
+            "n_false_alarms": 4
+          },
+          "0.9": {
+            "detection_rate": 0.5486,
+            "false_alarm_rate": 0.0,
+            "n_false_alarms": 0
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4712,
+            "max": 0.8272,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.2289,
+            "max": 0.8264,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.7588,
+            "max": 0.7588,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.1916,
+            "max": 0.4582,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0381,
+            "max": 0.3466,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.2294,
+            "max": 0.6581,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.4291,
+            "max": 0.8712,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0888,
+            "max": 0.8785,
+            "count": 10
+          }
+        }
+      }
+    ],
+    "confusable_avg_scores": {
+      "hola": 0.4285,
+      "how_are_you": 0.1776,
+      "tone_1khz": 0.9185,
+      "vanilla": 0.1406,
+      "via": 0.0165,
+      "villa": 0.1719,
+      "voila": 0.3513,
+      "what_time_is_it": 0.0632
+    }
+  },
+  "weighted_10x": {
+    "eer_mean": 0.142,
+    "eer_std": 0.002,
+    "trained_eer_mean": 0.0267,
+    "per_seed": [
+      {
+        "experiment": "hardened_weighted10x_s42",
+        "all_eer": 0.1423,
+        "all_auc": 0.9121,
+        "trained_eer": 0.0225,
+        "pos_mean": 0.7194,
+        "neg_mean": 0.023,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7292,
+            "false_alarm_rate": 0.0238,
+            "n_false_alarms": 13
+          },
+          "0.7": {
+            "detection_rate": 0.7222,
+            "false_alarm_rate": 0.0183,
+            "n_false_alarms": 10
+          },
+          "0.8": {
+            "detection_rate": 0.7188,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          },
+          "0.9": {
+            "detection_rate": 0.691,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.492,
+            "max": 0.7899,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.3162,
+            "max": 0.9237,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.1857,
+            "max": 0.1857,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0484,
+            "max": 0.4562,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.003,
+            "max": 0.0294,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.0685,
+            "max": 0.4361,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.1686,
+            "max": 0.7657,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0999,
+            "max": 0.9994,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_weighted10x_s43",
+        "all_eer": 0.1395,
+        "all_auc": 0.9307,
+        "trained_eer": 0.0249,
+        "pos_mean": 0.7105,
+        "neg_mean": 0.0209,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7396,
+            "false_alarm_rate": 0.022,
+            "n_false_alarms": 12
+          },
+          "0.7": {
+            "detection_rate": 0.7257,
+            "false_alarm_rate": 0.011,
+            "n_false_alarms": 6
+          },
+          "0.8": {
+            "detection_rate": 0.7049,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          },
+          "0.9": {
+            "detection_rate": 0.6528,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4085,
+            "max": 0.9161,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.0715,
+            "max": 0.5249,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9269,
+            "max": 0.9269,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0528,
+            "max": 0.4671,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0006,
+            "max": 0.0063,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.1057,
+            "max": 0.7432,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3645,
+            "max": 0.9553,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0053,
+            "max": 0.0524,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_weighted10x_s44",
+        "all_eer": 0.1443,
+        "all_auc": 0.9433,
+        "trained_eer": 0.0326,
+        "pos_mean": 0.7081,
+        "neg_mean": 0.0324,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7361,
+            "false_alarm_rate": 0.0348,
+            "n_false_alarms": 19
+          },
+          "0.7": {
+            "detection_rate": 0.7118,
+            "false_alarm_rate": 0.0201,
+            "n_false_alarms": 11
+          },
+          "0.8": {
+            "detection_rate": 0.6875,
+            "false_alarm_rate": 0.0092,
+            "n_false_alarms": 5
+          },
+          "0.9": {
+            "detection_rate": 0.6146,
+            "false_alarm_rate": 0.0037,
+            "n_false_alarms": 2
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4707,
+            "max": 0.8387,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.3514,
+            "max": 0.9559,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.7201,
+            "max": 0.7201,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.1101,
+            "max": 0.3805,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0101,
+            "max": 0.0992,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.1894,
+            "max": 0.611,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3769,
+            "max": 0.8801,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.1034,
+            "max": 0.9972,
+            "count": 10
+          }
+        }
+      }
+    ],
+    "confusable_avg_scores": {
+      "hola": 0.4571,
+      "how_are_you": 0.2464,
+      "tone_1khz": 0.6109,
+      "vanilla": 0.0704,
+      "via": 0.0046,
+      "villa": 0.1212,
+      "voila": 0.3033,
+      "what_time_is_it": 0.0695
+    }
+  },
+  "wide_5x": {
+    "eer_mean": 0.1354,
+    "eer_std": 0.0061,
+    "trained_eer_mean": 0.0214,
+    "per_seed": [
+      {
+        "experiment": "hardened_wide5x_s42",
+        "all_eer": 0.1403,
+        "all_auc": 0.9068,
+        "trained_eer": 0.0193,
+        "pos_mean": 0.7155,
+        "neg_mean": 0.0222,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7326,
+            "false_alarm_rate": 0.0201,
+            "n_false_alarms": 11
+          },
+          "0.7": {
+            "detection_rate": 0.7257,
+            "false_alarm_rate": 0.0128,
+            "n_false_alarms": 7
+          },
+          "0.8": {
+            "detection_rate": 0.7222,
+            "false_alarm_rate": 0.0073,
+            "n_false_alarms": 4
+          },
+          "0.9": {
+            "detection_rate": 0.6597,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4294,
+            "max": 0.8198,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.2376,
+            "max": 0.995,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9958,
+            "max": 0.9958,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0771,
+            "max": 0.6684,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0,
+            "max": 0.0,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.0449,
+            "max": 0.2565,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.2023,
+            "max": 0.685,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.1,
+            "max": 1.0,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_wide5x_s43",
+        "all_eer": 0.1391,
+        "all_auc": 0.9135,
+        "trained_eer": 0.024,
+        "pos_mean": 0.72,
+        "neg_mean": 0.0254,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7396,
+            "false_alarm_rate": 0.0238,
+            "n_false_alarms": 13
+          },
+          "0.7": {
+            "detection_rate": 0.7326,
+            "false_alarm_rate": 0.0147,
+            "n_false_alarms": 8
+          },
+          "0.8": {
+            "detection_rate": 0.7292,
+            "false_alarm_rate": 0.0073,
+            "n_false_alarms": 4
+          },
+          "0.9": {
+            "detection_rate": 0.6562,
+            "false_alarm_rate": 0.0018,
+            "n_false_alarms": 1
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4273,
+            "max": 0.8368,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.2331,
+            "max": 0.8994,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9999,
+            "max": 0.9999,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0839,
+            "max": 0.6029,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0003,
+            "max": 0.0014,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.1182,
+            "max": 0.5347,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3548,
+            "max": 0.8773,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0393,
+            "max": 0.393,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_wide5x_s44",
+        "all_eer": 0.1269,
+        "all_auc": 0.9431,
+        "trained_eer": 0.0208,
+        "pos_mean": 0.7185,
+        "neg_mean": 0.0224,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7535,
+            "false_alarm_rate": 0.0256,
+            "n_false_alarms": 14
+          },
+          "0.7": {
+            "detection_rate": 0.7431,
+            "false_alarm_rate": 0.0092,
+            "n_false_alarms": 5
+          },
+          "0.8": {
+            "detection_rate": 0.6979,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          },
+          "0.9": {
+            "detection_rate": 0.6111,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4778,
+            "max": 0.7659,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.1139,
+            "max": 0.9825,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9988,
+            "max": 0.9988,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0275,
+            "max": 0.1662,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0013,
+            "max": 0.0103,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.0933,
+            "max": 0.581,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.2603,
+            "max": 0.6796,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0996,
+            "max": 0.9954,
+            "count": 10
+          }
+        }
+      }
+    ],
+    "confusable_avg_scores": {
+      "hola": 0.4448,
+      "how_are_you": 0.1949,
+      "tone_1khz": 0.9982,
+      "vanilla": 0.0628,
+      "via": 0.0005,
+      "villa": 0.0855,
+      "voila": 0.2725,
+      "what_time_is_it": 0.0796
+    }
+  },
+  "twohead": {
+    "eer_mean": 0.139,
+    "eer_std": 0.0032,
+    "trained_eer_mean": 0.0308,
+    "per_seed": [
+      {
+        "experiment": "hardened_twohead_s42",
+        "all_eer": 0.1427,
+        "all_auc": 0.9317,
+        "trained_eer": 0.0272,
+        "pos_mean": 0.7145,
+        "neg_mean": 0.0303,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7292,
+            "false_alarm_rate": 0.0275,
+            "n_false_alarms": 15
+          },
+          "0.7": {
+            "detection_rate": 0.7153,
+            "false_alarm_rate": 0.0147,
+            "n_false_alarms": 8
+          },
+          "0.8": {
+            "detection_rate": 0.6979,
+            "false_alarm_rate": 0.011,
+            "n_false_alarms": 6
+          },
+          "0.9": {
+            "detection_rate": 0.6632,
+            "false_alarm_rate": 0.0037,
+            "n_false_alarms": 2
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4767,
+            "max": 0.8385,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.3655,
+            "max": 0.9646,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.5869,
+            "max": 0.5869,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0456,
+            "max": 0.3185,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0095,
+            "max": 0.0833,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.139,
+            "max": 0.4361,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.2897,
+            "max": 0.6992,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0994,
+            "max": 0.9261,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_twohead_s43",
+        "all_eer": 0.1395,
+        "all_auc": 0.9253,
+        "trained_eer": 0.0295,
+        "pos_mean": 0.7026,
+        "neg_mean": 0.0323,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7222,
+            "false_alarm_rate": 0.033,
+            "n_false_alarms": 18
+          },
+          "0.7": {
+            "detection_rate": 0.6979,
+            "false_alarm_rate": 0.0128,
+            "n_false_alarms": 7
+          },
+          "0.8": {
+            "detection_rate": 0.6771,
+            "false_alarm_rate": 0.0092,
+            "n_false_alarms": 5
+          },
+          "0.9": {
+            "detection_rate": 0.625,
+            "false_alarm_rate": 0.0055,
+            "n_false_alarms": 3
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4678,
+            "max": 0.7844,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.3418,
+            "max": 0.9242,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.9063,
+            "max": 0.9063,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0679,
+            "max": 0.3107,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0061,
+            "max": 0.0342,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.1433,
+            "max": 0.4228,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3693,
+            "max": 0.928,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0869,
+            "max": 0.8381,
+            "count": 10
+          }
+        }
+      },
+      {
+        "experiment": "hardened_twohead_s44",
+        "all_eer": 0.1348,
+        "all_auc": 0.9391,
+        "trained_eer": 0.0358,
+        "pos_mean": 0.7059,
+        "neg_mean": 0.0332,
+        "n_pos": 288,
+        "n_neg": 546,
+        "thresholds": {
+          "0.5": {
+            "detection_rate": 0.7188,
+            "false_alarm_rate": 0.0275,
+            "n_false_alarms": 15
+          },
+          "0.7": {
+            "detection_rate": 0.6979,
+            "false_alarm_rate": 0.011,
+            "n_false_alarms": 6
+          },
+          "0.8": {
+            "detection_rate": 0.6562,
+            "false_alarm_rate": 0.0073,
+            "n_false_alarms": 4
+          },
+          "0.9": {
+            "detection_rate": 0.5972,
+            "false_alarm_rate": 0.0018,
+            "n_false_alarms": 1
+          }
+        },
+        "confusable_word_scores": {
+          "hola": {
+            "mean": 0.4465,
+            "max": 0.8078,
+            "count": 10
+          },
+          "how_are_you": {
+            "mean": 0.3178,
+            "max": 0.8642,
+            "count": 10
+          },
+          "tone_1khz": {
+            "mean": 0.6913,
+            "max": 0.6913,
+            "count": 1
+          },
+          "vanilla": {
+            "mean": 0.0797,
+            "max": 0.2788,
+            "count": 10
+          },
+          "via": {
+            "mean": 0.0125,
+            "max": 0.0551,
+            "count": 10
+          },
+          "villa": {
+            "mean": 0.2028,
+            "max": 0.4909,
+            "count": 10
+          },
+          "voila": {
+            "mean": 0.3832,
+            "max": 0.9644,
+            "count": 10
+          },
+          "what_time_is_it": {
+            "mean": 0.0934,
+            "max": 0.879,
+            "count": 10
+          }
+        }
+      }
+    ],
+    "confusable_avg_scores": {
+      "hola": 0.4637,
+      "how_are_you": 0.3417,
+      "tone_1khz": 0.7282,
+      "vanilla": 0.0644,
+      "via": 0.0094,
+      "villa": 0.1617,
+      "voila": 0.3474,
+      "what_time_is_it": 0.0932
+    }
+  },
+  "_best_model": {
+    "source": "hardened_wide5x_s44",
+    "variant": "wide_5x",
+    "reason": "Best EER (12.7%) + excellent confusable rejection (avg 0.1946 vs baseline 0.5401)",
+    "file": "experiments/models/hardened_best.onnx"
+  }
+}

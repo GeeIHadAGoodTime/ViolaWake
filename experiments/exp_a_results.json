@@ -1,0 +1,267 @@
+{
+  "experiment": "A",
+  "description": "Per-frame scoring with decision policies (zero retraining)",
+  "model": "J:\\PROJECTS\\NOVVIOLA_fixed3_patched\\NOVVIOLA\\violawake_data\\trained_models\\viola_mlp_oww.onnx",
+  "eval_dir": "J:\\CLAUDE\\PROJECTS\\Wakeword\\eval_clean",
+  "n_positives": 288,
+  "n_negatives": 546,
+  "frame_stats": {
+    "pos_frames_per_clip": {
+      "min": 9,
+      "max": 9,
+      "mean": 9.0
+    },
+    "neg_frames_per_clip": {
+      "min": 9,
+      "max": 9,
+      "mean": 9.0
+    }
+  },
+  "policies": {
+    "mean": {
+      "eer": 0.18744276556776557,
+      "eer_threshold": 0.02639784746699863,
+      "auc": 0.9061482498982499,
+      "dprime": 1.8847205979208304,
+      "pos_mean": 0.3314411256025419,
+      "pos_std": 0.22035932251534635,
+      "neg_mean": 0.026376787893016215,
+      "neg_std": 0.061969971456085265,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 0.446,
+          "frr": 0.7118055555555556,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.446,
+          "frr": 0.7118055555555556,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.334,
+          "frr": 0.4826388888888889,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "max": {
+      "eer": 0.18744276556776557,
+      "eer_threshold": 0.22659006714820862,
+      "auc": 0.8920113451363452,
+      "dprime": 1.8078633777030684,
+      "pos_mean": 0.821826417102582,
+      "pos_std": 0.37252214357864927,
+      "neg_mean": 0.17345429356499906,
+      "neg_std": 0.3441984211740135,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "median": {
+      "eer": 0.23261981074481072,
+      "eer_threshold": 1.4901161193847656e-07,
+      "auc": 0.8373524623524624,
+      "dprime": 0.8286237479100058,
+      "pos_mean": 0.24199764513307148,
+      "pos_std": 0.41257326017384915,
+      "neg_mean": 0.0002451371469777146,
+      "neg_std": 0.00464587224580534,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 0.109,
+          "frr": 0.7291666666666666,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.009000000000000001,
+          "frr": 0.6805555555555556,
+          "actual_fa_per_hour": 4.395604395604395
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.007,
+          "frr": 0.6736111111111112,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "top3_mean": {
+      "eer": 0.18744276556776557,
+      "eer_threshold": 0.0791935424009959,
+      "auc": 0.9069304538054538,
+      "dprime": 2.1356552797758788,
+      "pos_mean": 0.7211693019295732,
+      "pos_std": 0.38748681300361043,
+      "neg_mean": 0.07758485055522896,
+      "neg_std": 0.1774268470057929,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 0.6076388888888888,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 0.6076388888888888,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.999,
+          "frr": 0.4722222222222222,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "consecutive_2": {
+      "eer": 0.18744276556776557,
+      "eer_threshold": 0.11329503357410431,
+      "auc": 0.8953341218966218,
+      "dprime": 2.0910146336829443,
+      "pos_mean": 0.7738083958522313,
+      "pos_std": 0.3861113686137508,
+      "neg_mean": 0.1060899203240653,
+      "neg_std": 0.234218094081493,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "consecutive_3": {
+      "eer": 0.18744276556776557,
+      "eer_threshold": 0.11329503357410431,
+      "auc": 0.9014105107855108,
+      "dprime": 2.0203538313427614,
+      "pos_mean": 0.7060532424495451,
+      "pos_std": 0.3843711079383597,
+      "neg_mean": 0.09222165227700503,
+      "neg_std": 0.19203296947858076,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    },
+    "moving_avg_3": {
+      "eer": 0.18652701465201466,
+      "eer_threshold": 0.07781828443209331,
+      "auc": 0.9077730718355719,
+      "dprime": 2.1390698078396917,
+      "pos_mean": 0.715612554681246,
+      "pos_std": 0.3871030895862419,
+      "neg_mean": 0.07503167087705727,
+      "neg_std": 0.17179116094831198,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 0.6354166666666666,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 0.6354166666666666,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.999,
+          "frr": 0.4791666666666667,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ],
+      "n_pos": 288,
+      "n_neg": 546
+    }
+  },
+  "rankings": {
+    "by_eer": [
+      "moving_avg_3",
+      "mean",
+      "max",
+      "top3_mean",
+      "consecutive_2",
+      "consecutive_3",
+      "median"
+    ],
+    "by_auc": [
+      "moving_avg_3",
+      "top3_mean",
+      "mean",
+      "consecutive_3",
+      "consecutive_2",
+      "max",
+      "median"
+    ]
+  },
+  "elapsed_seconds": 19.526374578475952
+}

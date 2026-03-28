@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 import collections
+import json
+import logging
 import threading
 import time
 from collections.abc import Callable, Generator
@@ -20,7 +21,11 @@ from violawake_sdk.confidence import ConfidenceResult, ScoreTracker
 from violawake_sdk.ensemble import EnsembleScorer, FusionStrategy
 from violawake_sdk.models import MODEL_REGISTRY, get_model_path
 from violawake_sdk.noise_profiler import NoiseProfiler
-from violawake_sdk.oww_backbone import EMBEDDING_DIM, OpenWakeWordBackbone
+from violawake_sdk.oww_backbone import (
+    EMBEDDING_DIM,
+    OpenWakeWordBackbone,
+    get_openwakeword_backbone_hashes,
+)
 from violawake_sdk.power_manager import PowerManager
 
 if TYPE_CHECKING:
@@ -489,6 +494,7 @@ class WakeDetector:
             "WakeDetector initialized: model=%s, threshold=%.2f, backend=%s",
             model, threshold, self._backend.name,
         )
+        self._warn_on_oww_backbone_change(self._resolve_model_path(model))
 
     # ------------------------------------------------------------------
     # Context manager support
@@ -526,6 +532,36 @@ class WakeDetector:
     def _create_oww_backbone(self) -> OpenWakeWordBackbone:
         """Create the shared OpenWakeWord backbone."""
         return OpenWakeWordBackbone(self._backend)
+
+    def _warn_on_oww_backbone_change(self, model_path: Path) -> None:
+        """Warn when the installed OWW backbone differs from the training config."""
+        config_path = model_path.with_suffix(".config.json")
+        if not config_path.exists():
+            return
+
+        try:
+            with config_path.open(encoding="utf-8") as f:
+                config = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+
+        expected_mel = config.get("oww_mel_sha256")
+        expected_emb = config.get("oww_emb_sha256")
+        if not isinstance(expected_mel, str) or not isinstance(expected_emb, str):
+            return
+
+        try:
+            current_hashes = get_openwakeword_backbone_hashes("onnx")
+        except Exception:
+            return
+
+        if (
+            current_hashes["oww_mel_sha256"] != expected_mel
+            or current_hashes["oww_emb_sha256"] != expected_emb
+        ):
+            logger.warning(
+                "OWW backbone version changed since training. Model may produce degraded results."
+            )
 
     def _load_session(self, model: str) -> BackendSession:
         """Load a model file via the configured backend.

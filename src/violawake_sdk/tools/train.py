@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -330,12 +331,59 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
         return False
 
 
+def _resample_audio(audio: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
+    """Resample mono audio while keeping float32 output."""
+    import numpy as np
+    from scipy.signal import resample_poly
+
+    if source_rate == target_rate:
+        return np.asarray(audio, dtype=np.float32)
+
+    gcd = math.gcd(source_rate, target_rate)
+    up = target_rate // gcd
+    down = source_rate // gcd
+    return np.asarray(resample_poly(audio, up, down), dtype=np.float32)
+
+
+def _kokoro_tts_synthesize(
+    text: str,
+    voice: str,
+    output_path: Path,
+    *,
+    engine: Any | None = None,
+) -> bool:
+    """Synthesize a single phrase with Kokoro and save as WAV at 16kHz."""
+    import numpy as np
+
+    try:
+        from violawake_sdk.tts import TTS_SAMPLE_RATE, TTSEngine
+    except ImportError:
+        return False
+
+    try:
+        kokoro_engine = engine
+        if kokoro_engine is None:
+            kokoro_engine = TTSEngine(voice=voice, sample_rate=TTS_SAMPLE_RATE)
+        else:
+            kokoro_engine.voice = voice
+
+        audio = np.asarray(kokoro_engine.synthesize(text), dtype=np.float32)
+        if audio.size == 0:
+            return False
+        if int(kokoro_engine.sample_rate) != 16000:
+            audio = _resample_audio(audio, int(kokoro_engine.sample_rate), 16000)
+        _save_wav(audio, output_path, sample_rate=16000)
+        return True
+    except Exception:
+        return False
+
+
 def _generate_tts_positives(
     wake_word: str,
     output_dir: Path,
     verbose: bool = True,
 ) -> list[Path]:
-    """Generate diverse TTS positive samples using edge-tts.
+    """Generate diverse TTS positive samples using Edge TTS with Kokoro fallback.
 
     Produces: 20 voices x 3 phrases (WORD, hey WORD, ok WORD) = 60 clean files.
     Then augmentation (noisy + reverb) multiplies to ~180 total.
@@ -351,6 +399,32 @@ def _generate_tts_positives(
     output_dir.mkdir(parents=True, exist_ok=True)
     phrases = [wake_word, f"hey {wake_word}", f"ok {wake_word}"]
     generated: list[Path] = []
+    kokoro_fallback = False
+    kokoro_engine: Any | None = None
+    kokoro_voices: list[str] = []
+
+    def _ensure_kokoro_ready() -> bool:
+        nonlocal kokoro_fallback, kokoro_engine, kokoro_voices
+        if kokoro_fallback:
+            return kokoro_engine is not None and len(kokoro_voices) > 0
+        try:
+            from violawake_sdk.tts import AVAILABLE_VOICES, TTS_SAMPLE_RATE, TTSEngine
+        except ImportError:
+            return False
+
+        print("Using Kokoro TTS for sample generation (Edge TTS unavailable)")
+        kokoro_fallback = True
+        kokoro_voices = list(AVAILABLE_VOICES)
+        if not kokoro_voices:
+            return False
+        try:
+            kokoro_engine = TTSEngine(
+                voice=kokoro_voices[0],
+                sample_rate=TTS_SAMPLE_RATE,
+            )
+        except Exception:
+            kokoro_engine = None
+        return kokoro_engine is not None
 
     if verbose:
         total = len(EDGE_TTS_VOICES) * len(phrases)
@@ -363,7 +437,24 @@ def _generate_tts_positives(
                 generated.append(clean_path)
                 continue
 
-            ok = _edge_tts_synthesize(phrase, voice, clean_path)
+            if kokoro_fallback:
+                kokoro_voice = kokoro_voices[voice_idx % len(kokoro_voices)]
+                ok = _kokoro_tts_synthesize(
+                    phrase,
+                    kokoro_voice,
+                    clean_path,
+                    engine=kokoro_engine,
+                )
+            else:
+                ok = _edge_tts_synthesize(phrase, voice, clean_path)
+                if not ok and _ensure_kokoro_ready():
+                    kokoro_voice = kokoro_voices[voice_idx % len(kokoro_voices)]
+                    ok = _kokoro_tts_synthesize(
+                        phrase,
+                        kokoro_voice,
+                        clean_path,
+                        engine=kokoro_engine,
+                    )
             if ok and clean_path.exists():
                 generated.append(clean_path)
 
@@ -1084,6 +1175,7 @@ def _train_temporal_cnn(
 
     # -- Post-training quality gate ------------------------------------------
     from violawake_sdk._constants import DEFAULT_THRESHOLD, get_feature_config
+    from violawake_sdk.oww_backbone import get_openwakeword_backbone_hashes
 
     deployment_threshold = float(DEFAULT_THRESHOLD)
 
@@ -1177,6 +1269,7 @@ def _train_temporal_cnn(
         "neg_corpus_breakdown": {tag: len(files) for tag, files in neg_tags.items()} if neg_tags else {},
         "corpus_found": corpus_found,
     })
+    config.update(get_openwakeword_backbone_hashes("onnx"))
     if d_prime_result is not None:
         config["d_prime"] = round(d_prime_result, 2)
 
@@ -1431,6 +1524,7 @@ def _train_mlp_on_oww(
 
     from violawake_sdk._constants import CLIP_SAMPLES, get_feature_config
     from violawake_sdk.audio import center_crop, load_audio
+    from violawake_sdk.oww_backbone import get_openwakeword_backbone_hashes
     from violawake_sdk.training.augment import AugmentationPipeline
     from violawake_sdk.training.losses import FocalLoss
     from violawake_sdk.training.weight_averaging import (
@@ -1732,6 +1826,7 @@ def _train_mlp_on_oww(
         "training_duration_s": round(training_duration, 2),
         "averaging_method": averaging_method,
     })
+    config.update(get_openwakeword_backbone_hashes("onnx"))
     config_path = output_path.with_suffix(".config.json")
     with open(config_path, "w") as f:
         json.dump(config, f, indent=2)

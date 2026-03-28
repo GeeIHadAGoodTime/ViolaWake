@@ -49,17 +49,24 @@ dmypy.json
 *.whl
 CHANGELOG.md.bak
 
+# Generated API docs
+docs/api/html/
+
 # Models (too large for git — use DVC or release artifacts)
 *.onnx
 *.pt
 *.bin
 models/
 
-# Training data (large — not in git)
+# Training data and corpus (large — not in git)
 data/
+corpus/
+_training_corpus/
 *.wav
 *.mp3
 *.flac
+*.npy
+*.npz
 
 # Jupyter
 .ipynb_checkpoints
@@ -99,3 +106,6 @@ console/frontend/dist/
 # Temp files
 tmp*/
 nul
+
+# Test artifacts
+test_model.config.json

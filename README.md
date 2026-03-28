@@ -21,7 +21,7 @@
 | **On-device** | Yes (ONNX) | Yes (proprietary C lib) | Yes (ONNX) |
 | **Integrated TTS** | Yes (Kokoro-82M, optional extra) | No | No |
 | **Python SDK** | First-class | C wrapper | First-class |
-| **Price at scale** | Free | $6K+/year | Free |
+| **Price at scale** | Free | Paid (free tier available) | Free |
 
 **Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing), and a 4-gate decision policy that suppresses false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% — each system tested on its own best wake word. Running in production, not a demo.
 

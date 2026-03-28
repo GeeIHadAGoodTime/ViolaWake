@@ -1,0 +1,61 @@
+{
+  "loss": "BCELoss (no focal, no label smoothing)",
+  "data": "D_combined (pos_main + pos_diverse + neg_main + neg_confusable)",
+  "seeds": [
+    42,
+    43,
+    44
+  ],
+  "per_seed": [
+    {
+      "experiment": "D_bce_s42",
+      "all_eer": 0.1304,
+      "all_auc": 0.9512,
+      "all_dprime": 2.313,
+      "all_frr_050": 0.2222,
+      "trained_eer": 0.0235,
+      "pos_mean": 0.7701,
+      "neg_mean": 0.054,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 19,
+      "best_val_loss": 0.07131505896380202,
+      "time": 30.3
+    },
+    {
+      "experiment": "D_bce_s43",
+      "all_eer": 0.1295,
+      "all_auc": 0.9467,
+      "all_dprime": 2.357,
+      "all_frr_050": 0.2326,
+      "trained_eer": 0.0138,
+      "pos_mean": 0.7642,
+      "neg_mean": 0.0389,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 27,
+      "best_val_loss": 0.06387325109952847,
+      "time": 68.2
+    },
+    {
+      "experiment": "D_bce_s44",
+      "all_eer": 0.1343,
+      "all_auc": 0.9472,
+      "all_dprime": 2.234,
+      "all_frr_050": 0.2396,
+      "trained_eer": 0.0162,
+      "pos_mean": 0.7589,
+      "neg_mean": 0.0588,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 15,
+      "best_val_loss": 0.13303110710964808,
+      "time": 41.3
+    }
+  ],
+  "eer_mean": 0.1314,
+  "eer_std": 0.0021,
+  "auc_mean": 0.9484,
+  "dprime_mean": 2.301,
+  "vs_focal_delta": -0.0046
+}

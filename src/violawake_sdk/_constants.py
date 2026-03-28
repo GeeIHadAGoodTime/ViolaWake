@@ -117,9 +117,8 @@ PCEN_EPS: float = 1e-6
 HIDDEN_SIZE: int = 64
 
 # Default detection threshold
-# Lowered from 0.70 to 0.50 — pipeline audit (2026-03-02) showed
-# 100% TP / 0% FP at 0.50 across all v3 checkpoints.
-DEFAULT_THRESHOLD: float = 0.50
+# Raised to 0.80 after false-positive flood (see ADR-002).
+DEFAULT_THRESHOLD: float = 0.80
 
 # ============================================================
 # PATHS

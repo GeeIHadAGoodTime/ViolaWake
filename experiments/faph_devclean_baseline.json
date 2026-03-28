@@ -1,0 +1,165 @@
+{
+  "model": "D_combined_bce_s42.onnx",
+  "dataset": "LibriSpeech test-clean",
+  "total_hours": 5.3878,
+  "total_windows": 154852,
+  "total_files": 2703,
+  "elapsed_seconds": 2402.5,
+  "clip_samples": 24000,
+  "step_samples": 1600,
+  "pooling": "mean",
+  "faph": {
+    "0.5": {
+      "threshold": 0.5,
+      "triggers": 566,
+      "faph": 105.05
+    },
+    "0.7": {
+      "threshold": 0.7,
+      "triggers": 388,
+      "faph": 72.01
+    },
+    "0.8": {
+      "threshold": 0.8,
+      "triggers": 314,
+      "faph": 58.28
+    },
+    "0.85": {
+      "threshold": 0.85,
+      "triggers": 261,
+      "faph": 48.44
+    },
+    "0.9": {
+      "threshold": 0.9,
+      "triggers": 214,
+      "faph": 39.72
+    },
+    "0.95": {
+      "threshold": 0.95,
+      "triggers": 140,
+      "faph": 25.98
+    }
+  },
+  "top_scores": [
+    {
+      "rank": 1,
+      "score": 0.999999,
+      "file": "5694\\64029\\5694-64029-0011.flac",
+      "time_sec": 1.4
+    },
+    {
+      "rank": 2,
+      "score": 0.999996,
+      "file": "5694\\64029\\5694-64029-0011.flac",
+      "time_sec": 1.3
+    },
+    {
+      "rank": 3,
+      "score": 0.999994,
+      "file": "1919\\142785\\1919-142785-0007.flac",
+      "time_sec": 13.7
+    },
+    {
+      "rank": 4,
+      "score": 0.999989,
+      "file": "1919\\142785\\1919-142785-0007.flac",
+      "time_sec": 13.6
+    },
+    {
+      "rank": 5,
+      "score": 0.999965,
+      "file": "3081\\166546\\3081-166546-0048.flac",
+      "time_sec": 0.2
+    },
+    {
+      "rank": 6,
+      "score": 0.999957,
+      "file": "5694\\64029\\5694-64029-0011.flac",
+      "time_sec": 1.5
+    },
+    {
+      "rank": 7,
+      "score": 0.999939,
+      "file": "251\\136532\\251-136532-0000.flac",
+      "time_sec": 0.0
+    },
+    {
+      "rank": 8,
+      "score": 0.999919,
+      "file": "251\\136532\\251-136532-0015.flac",
+      "time_sec": 5.4
+    },
+    {
+      "rank": 9,
+      "score": 0.999852,
+      "file": "3536\\23268\\3536-23268-0018.flac",
+      "time_sec": 5.3
+    },
+    {
+      "rank": 10,
+      "score": 0.999828,
+      "file": "3536\\23268\\3536-23268-0018.flac",
+      "time_sec": 5.2
+    },
+    {
+      "rank": 11,
+      "score": 0.999728,
+      "file": "251\\118436\\251-118436-0012.flac",
+      "time_sec": 3.0
+    },
+    {
+      "rank": 12,
+      "score": 0.999684,
+      "file": "3000\\15664\\3000-15664-0036.flac",
+      "time_sec": 7.8
+    },
+    {
+      "rank": 13,
+      "score": 0.999635,
+      "file": "6313\\76958\\6313-76958-0023.flac",
+      "time_sec": 0.6
+    },
+    {
+      "rank": 14,
+      "score": 0.999561,
+      "file": "3576\\138058\\3576-138058-0002.flac",
+      "time_sec": 5.3
+    },
+    {
+      "rank": 15,
+      "score": 0.999539,
+      "file": "3536\\23268\\3536-23268-0018.flac",
+      "time_sec": 5.4
+    },
+    {
+      "rank": 16,
+      "score": 0.999443,
+      "file": "3081\\166546\\3081-166546-0048.flac",
+      "time_sec": 0.3
+    },
+    {
+      "rank": 17,
+      "score": 0.999437,
+      "file": "6313\\76958\\6313-76958-0023.flac",
+      "time_sec": 0.5
+    },
+    {
+      "rank": 18,
+      "score": 0.999392,
+      "file": "777\\126732\\777-126732-0066.flac",
+      "time_sec": 6.8
+    },
+    {
+      "rank": 19,
+      "score": 0.999307,
+      "file": "6313\\76958\\6313-76958-0026.flac",
+      "time_sec": 0.1
+    },
+    {
+      "rank": 20,
+      "score": 0.999266,
+      "file": "3000\\15664\\3000-15664-0036.flac",
+      "time_sec": 8.0
+    }
+  ]
+}

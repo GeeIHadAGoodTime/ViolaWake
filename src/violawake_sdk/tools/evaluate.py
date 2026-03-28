@@ -41,6 +41,23 @@ import sys
 from pathlib import Path
 
 
+def evaluate_onnx_model(
+    model_path: str | Path,
+    test_dir: str | Path,
+    threshold: float = 0.50,
+    dump_scores_csv: str | Path | None = None,
+) -> dict:
+    """Proxy the public evaluation helper for callers importing from tools."""
+    from violawake_sdk.training.evaluate import evaluate_onnx_model as _evaluate_onnx_model
+
+    return _evaluate_onnx_model(
+        model_path=model_path,
+        test_dir=test_dir,
+        threshold=threshold,
+        dump_scores_csv=dump_scores_csv,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="violawake-eval",
@@ -102,19 +119,16 @@ def main() -> None:
     print()
 
     try:
-        from violawake_sdk.training.evaluate import evaluate_onnx_model
-    except ImportError as e:
-        print(f"ERROR: Missing dependencies: {e}", file=sys.stderr)
-        print("Install with: pip install 'violawake[training]'", file=sys.stderr)
-        sys.exit(1)
-
-    try:
         results = evaluate_onnx_model(
             model_path=model_path,
             test_dir=test_dir,
             threshold=args.threshold,
             dump_scores_csv=args.dump_scores,
         )
+    except ImportError as e:
+        print(f"ERROR: Missing dependencies: {e}", file=sys.stderr)
+        print("Install with: pip install 'violawake[training]'", file=sys.stderr)
+        sys.exit(1)
     except Exception as e:
         print(f"ERROR: Evaluation failed: {e}", file=sys.stderr)
         sys.exit(1)
@@ -133,7 +147,7 @@ def main() -> None:
     eer = results["eer_approx"] * 100
 
     print(f"Architecture:         {arch} (auto-detected)")
-    print(f"Cohen's d:            {d:.2f}")
+    print(f"Cohen's d:            {d:.2f} (synthetic negatives may inflate this metric)")
     print(f"False Accept Rate:    {far:.2f}/hr (at threshold={args.threshold})")
     print(f"False Reject Rate:    {frr:.1f}% (at threshold={args.threshold})")
     print(f"ROC AUC:              {auc_val:.3f}")

@@ -1,0 +1,37 @@
+{
+  "d_prime": 1.6219748218323782,
+  "far_per_hour": 0.0,
+  "frr": 0.8398876404494382,
+  "roc_auc": 0.8529026217228465,
+  "tp_mean": 0.3041570787684301,
+  "fp_mean": 0.035788861639571914,
+  "n_positives": 356,
+  "n_negatives": 330,
+  "threshold_used": 0.5,
+  "architecture": "mlp_on_oww",
+  "optimal_threshold": 0.15,
+  "optimal_far": 0.0696969696969697,
+  "optimal_frr": 0.3258426966292135,
+  "eer_approx": 0.1977698331630916,
+  "confusion_matrix": {
+    "tp": 57,
+    "fp": 0,
+    "tn": 330,
+    "fn": 299,
+    "precision": 1.0,
+    "recall": 0.1601123595505618,
+    "f1": 0.27602905569007263
+  },
+  "tp_scores_summary": {
+    "count": 356,
+    "mean": 0.3041570787684301,
+    "min": 5.066394805908203e-07,
+    "max": 0.9271650910377502
+  },
+  "fp_scores_summary": {
+    "count": 330,
+    "mean": 0.035788861639571914,
+    "min": 0.0,
+    "max": 0.4573039412498474
+  }
+}

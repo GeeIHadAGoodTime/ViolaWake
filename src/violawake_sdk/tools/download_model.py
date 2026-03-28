@@ -6,7 +6,7 @@ Entry point: ``violawake-download`` (declared in pyproject.toml).
 Usage::
 
     violawake-download                          # Download default models
-    violawake-download --model viola_mlp_oww    # Download a specific model
+    violawake-download --model temporal_cnn     # Download a specific model
     violawake-download --list                   # Show available models
     violawake-download --list-cached            # Show locally cached models
 """
@@ -84,8 +84,8 @@ def main() -> None:
         models_to_download = [args.model]
     else:
         # Default: download the required models for basic wake word detection
-        models_to_download = ["viola_mlp_oww", "oww_backbone"]
-        print("Downloading default models (viola_mlp_oww + oww_backbone)...")
+        models_to_download = ["temporal_cnn"]
+        print("Downloading default wake word model (temporal_cnn)...")
         print("For TTS, run: violawake-download --model kokoro_v1_0")
         print()
 
@@ -93,7 +93,10 @@ def main() -> None:
     success = True
     for model_name in models_to_download:
         try:
-            path = download_model(model_name, force=args.force, verify=verify)
+            path = download_model(
+                model_name, force=args.force, verify=verify,
+                skip_verify=args.no_verify,
+            )
             spec = MODEL_REGISTRY[model_name]
             size_mb = path.stat().st_size / 1_000_000
             print(f"  {model_name}: {path} ({size_mb:.1f} MB)")

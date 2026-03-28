@@ -294,3 +294,20 @@ class TTSEngine:
         pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$'
         parts = re.split(pattern, text)
         return [s.strip() for s in parts if s and s.strip()]
+
+    def close(self) -> None:
+        """Release model resources."""
+        self._kokoro = None
+
+    def __enter__(self) -> TTSEngine:
+        """Enter sync context manager. Returns self."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Exit sync context manager. Releases model resources."""
+        self.close()

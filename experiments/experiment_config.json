@@ -1,0 +1,120 @@
+{
+  "_comment": "ViolaWake experiment definitions. Add new experiments here — the harness reads this file.",
+  "_champion": "D_combined",
+  "_eval_dir": "eval_clean",
+
+  "experiments": {
+    "B_confusable": {
+      "description": "Add confusable-word hard negatives",
+      "pos": ["pos_main"],
+      "neg": ["neg_main", "neg_confusable"]
+    },
+    "C_diverse": {
+      "description": "Add diverse multi-voice TTS positives",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main"]
+    },
+    "D_combined": {
+      "description": "Confusable negs + diverse pos combined",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main", "neg_confusable"]
+    },
+    "E_maxdata": {
+      "description": "All available data sources",
+      "pos": ["pos_main", "pos_backup", "pos_eval_real", "pos_excluded", "pos_diverse"],
+      "neg": ["neg_main", "neg_backup", "neg_eval_real", "neg_downloads", "neg_noise", "neg_music", "neg_confusable"]
+    },
+    "F_musan": {
+      "description": "D_combined + MUSAN speech/music/noise negatives",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main", "neg_confusable", "neg_musan_speech", "neg_musan_music", "neg_musan_noise"]
+    },
+    "G_acav": {
+      "description": "D_combined + ACAV100M pre-computed negatives",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main", "neg_confusable", "neg_acav100m"],
+      "status": "pending_data"
+    },
+    "H_confusable_v2": {
+      "description": "D_combined + phoneme-mined confusable negatives",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main", "neg_confusable", "neg_confusable_v2"],
+      "status": "pending_data"
+    },
+    "I_full_corpus": {
+      "description": "D_combined + MUSAN + ACAV + confusable_v2 (full corpus)",
+      "pos": ["pos_main", "pos_diverse"],
+      "neg": ["neg_main", "neg_confusable", "neg_confusable_v2", "neg_musan_speech", "neg_musan_music", "neg_musan_noise", "neg_acav100m"],
+      "status": "pending_data"
+    },
+    "J_contexts": {
+      "description": "D_combined + viola-in-context positives (fixes viola_wake_up blind spot)",
+      "pos": ["pos_main", "pos_diverse", "pos_viola_contexts"],
+      "neg": ["neg_main", "neg_confusable"]
+    },
+    "K_contexts_confusable": {
+      "description": "J_contexts + confusable_v2 negatives (best of both)",
+      "pos": ["pos_main", "pos_diverse", "pos_viola_contexts"],
+      "neg": ["neg_main", "neg_confusable", "neg_confusable_v2"]
+    }
+  },
+
+  "data_sources": {
+    "pos_main":        {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/positives", "label": 1, "exclude_subdirs": ["_excluded"]},
+    "neg_main":        {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/negatives", "label": 0},
+    "pos_backup":      {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/_backup_originals/positives", "label": 1},
+    "neg_backup":      {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/_backup_originals/negatives", "label": 0},
+    "pos_eval_real":   {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/eval_real/positives", "label": 1},
+    "neg_eval_real":   {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/eval_real/negatives", "label": 0},
+    "pos_excluded":    {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/positives/_excluded", "label": 1},
+    "neg_downloads":   {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/_downloads/LibriSpeech", "label": 0},
+    "neg_noise":       {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/noise", "label": 0},
+    "neg_music":       {"path": "J:/PROJECTS/NOVVIOLA_fixed3_patched/NOVVIOLA/violawake_data/music", "label": 0},
+    "neg_confusable":  {"path": "experiments/training_data/confusable_negatives", "label": 0},
+    "pos_diverse":     {"path": "experiments/training_data/diverse_positives", "label": 1},
+    "neg_confusable_v2": {"path": "experiments/training_data/confusable_negatives_v2", "label": 0},
+    "neg_musan_speech": {"path": "corpus/musan/musan/speech", "label": 0},
+    "neg_musan_music":  {"path": "corpus/musan/musan/music", "label": 0},
+    "neg_musan_noise":  {"path": "corpus/musan/musan/noise", "label": 0},
+    "neg_acav100m":     {"type": "precomputed_npz", "path": "corpus/acav100m_embeddings.npz", "label": 0},
+    "pos_viola_contexts": {"path": "experiments/training_data/viola_contexts", "label": 1}
+  },
+
+  "architecture_variants": {
+    "default": {
+      "hidden_dims": [64, 32],
+      "dropout": [0.3, 0.2],
+      "activation": "relu"
+    },
+    "wide": {
+      "hidden_dims": [128, 64],
+      "dropout": [0.3, 0.2],
+      "activation": "relu"
+    },
+    "deep": {
+      "hidden_dims": [128, 64, 32],
+      "dropout": [0.3, 0.2, 0.1],
+      "activation": "relu"
+    },
+    "narrow": {
+      "hidden_dims": [32, 16],
+      "dropout": [0.2, 0.1],
+      "activation": "relu"
+    }
+  },
+
+  "training_defaults": {
+    "epochs": 60,
+    "patience": 12,
+    "batch_size": 32,
+    "lr": 1e-3,
+    "weight_decay": 1e-4,
+    "focal_gamma": 2.0,
+    "focal_alpha": 0.75,
+    "label_smoothing": 0.05,
+    "ema_decay": 0.999,
+    "augment_positives": true,
+    "augment_factor": 8,
+    "seed": 42
+  }
+}

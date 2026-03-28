@@ -1,0 +1,812 @@
+{
+  "experiment": "temporal_concat_vs_meanpool",
+  "hypothesis": "Mean-pooling destroys temporal information that helps wake word discrimination",
+  "n_samples": 13146,
+  "n_pos": 1495,
+  "n_neg": 11651,
+  "n_confusable": 1476,
+  "n_seeds": 3,
+  "summary": {
+    "meanpool_96": {
+      "eer_mean": 0.0192,
+      "eer_std": 0.0043,
+      "auc_mean": 0.9975,
+      "dprime_mean": 5.156,
+      "conf_mean": 0.0237,
+      "pos_mean": 0.8402,
+      "neg_mean": 0.008,
+      "per_seed": [
+        {
+          "name": "meanpool_96_s42",
+          "input_dim": 96,
+          "hidden_dims": [
+            64,
+            32
+          ],
+          "eer": 0.0142,
+          "eer_threshold": 0.0721,
+          "auc": 0.9984,
+          "dprime": 5.819,
+          "pos_mean": 0.8747,
+          "pos_std": 0.2027,
+          "neg_mean": 0.0067,
+          "neg_std": 0.0584,
+          "conf_mean": 0.0234,
+          "conf_std": 0.1111,
+          "best_epoch": 45,
+          "best_val_loss": 0.089852,
+          "train_time": 18.3,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0024,
+              "std": 0.0181,
+              "min": 0.0,
+              "max": 0.2588,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0294,
+              "std": 0.1248,
+              "min": 0.0,
+              "max": 0.9962,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0042,
+              "std": 0.0456,
+              "min": 0.0,
+              "max": 0.9821,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.8915,
+              "std": 0.161,
+              "min": 0.0091,
+              "max": 0.9999,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8733,
+              "std": 0.2058,
+              "min": 0.0001,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9619,
+              "false_alarm_rate": 0.007,
+              "confusable_fa_rate": 0.0264
+            },
+            "0.5": {
+              "detection_rate": 0.9351,
+              "false_alarm_rate": 0.0058,
+              "confusable_fa_rate": 0.019
+            },
+            "0.7": {
+              "detection_rate": 0.8729,
+              "false_alarm_rate": 0.0035,
+              "confusable_fa_rate": 0.0136
+            },
+            "0.8": {
+              "detection_rate": 0.7933,
+              "false_alarm_rate": 0.0012,
+              "confusable_fa_rate": 0.0054
+            },
+            "0.9": {
+              "detection_rate": 0.6448,
+              "false_alarm_rate": 0.0002,
+              "confusable_fa_rate": 0.0007
+            }
+          }
+        },
+        {
+          "name": "meanpool_96_s43",
+          "input_dim": 96,
+          "hidden_dims": [
+            64,
+            32
+          ],
+          "eer": 0.0246,
+          "eer_threshold": 0.0615,
+          "auc": 0.9974,
+          "dprime": 4.386,
+          "pos_mean": 0.8061,
+          "pos_std": 0.2513,
+          "neg_mean": 0.0077,
+          "neg_std": 0.0556,
+          "conf_mean": 0.0208,
+          "conf_std": 0.0885,
+          "best_epoch": 34,
+          "best_val_loss": 0.091353,
+          "train_time": 14.8,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0091,
+              "std": 0.0456,
+              "min": 0.0,
+              "max": 0.4741,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0241,
+              "std": 0.097,
+              "min": 0.0,
+              "max": 0.9708,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0058,
+              "std": 0.0487,
+              "min": 0.0,
+              "max": 0.8464,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.809,
+              "std": 0.2116,
+              "min": 0.0021,
+              "max": 0.9939,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8059,
+              "std": 0.2544,
+              "min": 0.0002,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9358,
+              "false_alarm_rate": 0.0075,
+              "confusable_fa_rate": 0.0224
+            },
+            "0.5": {
+              "detection_rate": 0.8722,
+              "false_alarm_rate": 0.005,
+              "confusable_fa_rate": 0.0115
+            },
+            "0.7": {
+              "detection_rate": 0.7719,
+              "false_alarm_rate": 0.0026,
+              "confusable_fa_rate": 0.0047
+            },
+            "0.8": {
+              "detection_rate": 0.6502,
+              "false_alarm_rate": 0.0004,
+              "confusable_fa_rate": 0.002
+            },
+            "0.9": {
+              "detection_rate": 0.505,
+              "false_alarm_rate": 0.0002,
+              "confusable_fa_rate": 0.0014
+            }
+          }
+        },
+        {
+          "name": "meanpool_96_s44",
+          "input_dim": 96,
+          "hidden_dims": [
+            64,
+            32
+          ],
+          "eer": 0.0187,
+          "eer_threshold": 0.1163,
+          "auc": 0.9967,
+          "dprime": 5.264,
+          "pos_mean": 0.8399,
+          "pos_std": 0.2138,
+          "neg_mean": 0.0096,
+          "neg_std": 0.0638,
+          "conf_mean": 0.0268,
+          "conf_std": 0.1093,
+          "best_epoch": 36,
+          "best_val_loss": 0.097159,
+          "train_time": 18.6,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0059,
+              "std": 0.0308,
+              "min": 0.0,
+              "max": 0.3062,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0327,
+              "std": 0.1221,
+              "min": 0.0,
+              "max": 0.8851,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0071,
+              "std": 0.0537,
+              "min": 0.0,
+              "max": 0.9828,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.8548,
+              "std": 0.1599,
+              "min": 0.1021,
+              "max": 0.9979,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8387,
+              "std": 0.2177,
+              "min": 0.0,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9579,
+              "false_alarm_rate": 0.0102,
+              "confusable_fa_rate": 0.0312
+            },
+            "0.5": {
+              "detection_rate": 0.9237,
+              "false_alarm_rate": 0.007,
+              "confusable_fa_rate": 0.0224
+            },
+            "0.7": {
+              "detection_rate": 0.8268,
+              "false_alarm_rate": 0.0025,
+              "confusable_fa_rate": 0.0088
+            },
+            "0.8": {
+              "detection_rate": 0.6809,
+              "false_alarm_rate": 0.0012,
+              "confusable_fa_rate": 0.0041
+            },
+            "0.9": {
+              "detection_rate": 0.5538,
+              "false_alarm_rate": 0.0001,
+              "confusable_fa_rate": 0.0
+            }
+          }
+        }
+      ]
+    },
+    "concat_864": {
+      "eer_mean": 0.0209,
+      "eer_std": 0.0025,
+      "auc_mean": 0.997,
+      "dprime_mean": 4.338,
+      "conf_mean": 0.0231,
+      "pos_mean": 0.8229,
+      "neg_mean": 0.0078,
+      "per_seed": [
+        {
+          "name": "concat_864_s42",
+          "input_dim": 864,
+          "hidden_dims": [
+            128,
+            64
+          ],
+          "eer": 0.0174,
+          "eer_threshold": 0.0756,
+          "auc": 0.9978,
+          "dprime": 4.482,
+          "pos_mean": 0.832,
+          "pos_std": 0.2561,
+          "neg_mean": 0.0062,
+          "neg_std": 0.0483,
+          "conf_mean": 0.0171,
+          "conf_std": 0.0817,
+          "best_epoch": 17,
+          "best_val_loss": 0.082752,
+          "train_time": 13.0,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0028,
+              "std": 0.0132,
+              "min": 0.0,
+              "max": 0.1549,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0212,
+              "std": 0.0919,
+              "min": 0.0,
+              "max": 0.965,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0046,
+              "std": 0.041,
+              "min": 0.0,
+              "max": 0.891,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.8937,
+              "std": 0.2035,
+              "min": 0.0221,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8267,
+              "std": 0.2594,
+              "min": 0.0,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9478,
+              "false_alarm_rate": 0.0066,
+              "confusable_fa_rate": 0.0169
+            },
+            "0.5": {
+              "detection_rate": 0.8883,
+              "false_alarm_rate": 0.0044,
+              "confusable_fa_rate": 0.0102
+            },
+            "0.7": {
+              "detection_rate": 0.7559,
+              "false_alarm_rate": 0.0009,
+              "confusable_fa_rate": 0.0047
+            },
+            "0.8": {
+              "detection_rate": 0.7184,
+              "false_alarm_rate": 0.0006,
+              "confusable_fa_rate": 0.0027
+            },
+            "0.9": {
+              "detection_rate": 0.6669,
+              "false_alarm_rate": 0.0002,
+              "confusable_fa_rate": 0.0014
+            }
+          }
+        },
+        {
+          "name": "concat_864_s43",
+          "input_dim": 864,
+          "hidden_dims": [
+            128,
+            64
+          ],
+          "eer": 0.0233,
+          "eer_threshold": 0.0809,
+          "auc": 0.9963,
+          "dprime": 4.096,
+          "pos_mean": 0.7988,
+          "pos_std": 0.267,
+          "neg_mean": 0.0087,
+          "neg_std": 0.0559,
+          "conf_mean": 0.0248,
+          "conf_std": 0.0951,
+          "best_epoch": 10,
+          "best_val_loss": 0.115638,
+          "train_time": 11.8,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0076,
+              "std": 0.0385,
+              "min": 0.0,
+              "max": 0.4351,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0297,
+              "std": 0.1052,
+              "min": 0.0,
+              "max": 0.9973,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0064,
+              "std": 0.0471,
+              "min": 0.0,
+              "max": 0.9007,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.8541,
+              "std": 0.2082,
+              "min": 0.0003,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.7941,
+              "std": 0.2709,
+              "min": 0.0,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9164,
+              "false_alarm_rate": 0.009,
+              "confusable_fa_rate": 0.0291
+            },
+            "0.5": {
+              "detection_rate": 0.8548,
+              "false_alarm_rate": 0.0048,
+              "confusable_fa_rate": 0.0136
+            },
+            "0.7": {
+              "detection_rate": 0.7003,
+              "false_alarm_rate": 0.001,
+              "confusable_fa_rate": 0.0027
+            },
+            "0.8": {
+              "detection_rate": 0.6448,
+              "false_alarm_rate": 0.0003,
+              "confusable_fa_rate": 0.0014
+            },
+            "0.9": {
+              "detection_rate": 0.5619,
+              "false_alarm_rate": 0.0003,
+              "confusable_fa_rate": 0.0014
+            }
+          }
+        },
+        {
+          "name": "concat_864_s44",
+          "input_dim": 864,
+          "hidden_dims": [
+            128,
+            64
+          ],
+          "eer": 0.0219,
+          "eer_threshold": 0.0848,
+          "auc": 0.997,
+          "dprime": 4.435,
+          "pos_mean": 0.838,
+          "pos_std": 0.2586,
+          "neg_mean": 0.0084,
+          "neg_std": 0.0555,
+          "conf_mean": 0.0275,
+          "conf_std": 0.1006,
+          "best_epoch": 11,
+          "best_val_loss": 0.093663,
+          "train_time": 11.7,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0087,
+              "std": 0.0425,
+              "min": 0.0,
+              "max": 0.6092,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0328,
+              "std": 0.1111,
+              "min": 0.0,
+              "max": 0.9778,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0056,
+              "std": 0.0448,
+              "min": 0.0,
+              "max": 0.9879,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.8893,
+              "std": 0.2072,
+              "min": 0.1342,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8336,
+              "std": 0.2621,
+              "min": 0.0002,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9171,
+              "false_alarm_rate": 0.0073,
+              "confusable_fa_rate": 0.0271
+            },
+            "0.5": {
+              "detection_rate": 0.8749,
+              "false_alarm_rate": 0.0036,
+              "confusable_fa_rate": 0.0136
+            },
+            "0.7": {
+              "detection_rate": 0.8067,
+              "false_alarm_rate": 0.0021,
+              "confusable_fa_rate": 0.0075
+            },
+            "0.8": {
+              "detection_rate": 0.7217,
+              "false_alarm_rate": 0.0015,
+              "confusable_fa_rate": 0.0047
+            },
+            "0.9": {
+              "detection_rate": 0.6528,
+              "false_alarm_rate": 0.0007,
+              "confusable_fa_rate": 0.0027
+            }
+          }
+        }
+      ]
+    },
+    "concat_864_wide": {
+      "eer_mean": 0.0145,
+      "eer_std": 0.0032,
+      "auc_mean": 0.9984,
+      "dprime_mean": 5.755,
+      "conf_mean": 0.0159,
+      "pos_mean": 0.8815,
+      "neg_mean": 0.0056,
+      "per_seed": [
+        {
+          "name": "concat_864_wide_s42",
+          "input_dim": 864,
+          "hidden_dims": [
+            256,
+            128,
+            64
+          ],
+          "eer": 0.0104,
+          "eer_threshold": 0.0456,
+          "auc": 0.9991,
+          "dprime": 6.716,
+          "pos_mean": 0.9178,
+          "pos_std": 0.1868,
+          "neg_mean": 0.0039,
+          "neg_std": 0.0461,
+          "conf_mean": 0.0077,
+          "conf_std": 0.0609,
+          "best_epoch": 33,
+          "best_val_loss": 0.066671,
+          "train_time": 28.5,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0005,
+              "std": 0.0073,
+              "min": 0.0,
+              "max": 0.1298,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0098,
+              "std": 0.0687,
+              "min": 0.0,
+              "max": 0.9705,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0034,
+              "std": 0.0435,
+              "min": 0.0,
+              "max": 0.9429,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.9327,
+              "std": 0.151,
+              "min": 0.1942,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.9166,
+              "std": 0.1895,
+              "min": 0.0,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9692,
+              "false_alarm_rate": 0.0046,
+              "confusable_fa_rate": 0.0075
+            },
+            "0.5": {
+              "detection_rate": 0.9599,
+              "false_alarm_rate": 0.0042,
+              "confusable_fa_rate": 0.0068
+            },
+            "0.7": {
+              "detection_rate": 0.8983,
+              "false_alarm_rate": 0.0011,
+              "confusable_fa_rate": 0.0014
+            },
+            "0.8": {
+              "detection_rate": 0.8508,
+              "false_alarm_rate": 0.0007,
+              "confusable_fa_rate": 0.0014
+            },
+            "0.9": {
+              "detection_rate": 0.7866,
+              "false_alarm_rate": 0.0007,
+              "confusable_fa_rate": 0.0014
+            }
+          }
+        },
+        {
+          "name": "concat_864_wide_s43",
+          "input_dim": 864,
+          "hidden_dims": [
+            256,
+            128,
+            64
+          ],
+          "eer": 0.0182,
+          "eer_threshold": 0.0719,
+          "auc": 0.9976,
+          "dprime": 5.128,
+          "pos_mean": 0.8566,
+          "pos_std": 0.2282,
+          "neg_mean": 0.0068,
+          "neg_std": 0.0536,
+          "conf_mean": 0.0183,
+          "conf_std": 0.0903,
+          "best_epoch": 12,
+          "best_val_loss": 0.095109,
+          "train_time": 19.0,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0062,
+              "std": 0.0454,
+              "min": 0.0,
+              "max": 0.6739,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0217,
+              "std": 0.0991,
+              "min": 0.0,
+              "max": 0.9644,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0051,
+              "std": 0.0457,
+              "min": 0.0,
+              "max": 0.8892,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.9046,
+              "std": 0.1696,
+              "min": 0.0004,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8526,
+              "std": 0.232,
+              "min": 0.0001,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9465,
+              "false_alarm_rate": 0.0068,
+              "confusable_fa_rate": 0.0183
+            },
+            "0.5": {
+              "detection_rate": 0.911,
+              "false_alarm_rate": 0.0046,
+              "confusable_fa_rate": 0.0122
+            },
+            "0.7": {
+              "detection_rate": 0.8201,
+              "false_alarm_rate": 0.0022,
+              "confusable_fa_rate": 0.0068
+            },
+            "0.8": {
+              "detection_rate": 0.7505,
+              "false_alarm_rate": 0.0009,
+              "confusable_fa_rate": 0.0027
+            },
+            "0.9": {
+              "detection_rate": 0.6595,
+              "false_alarm_rate": 0.0003,
+              "confusable_fa_rate": 0.002
+            }
+          }
+        },
+        {
+          "name": "concat_864_wide_s44",
+          "input_dim": 864,
+          "hidden_dims": [
+            256,
+            128,
+            64
+          ],
+          "eer": 0.0149,
+          "eer_threshold": 0.0849,
+          "auc": 0.9985,
+          "dprime": 5.42,
+          "pos_mean": 0.8702,
+          "pos_std": 0.2198,
+          "neg_mean": 0.006,
+          "neg_std": 0.0504,
+          "conf_mean": 0.0218,
+          "conf_std": 0.0975,
+          "best_epoch": 23,
+          "best_val_loss": 0.087137,
+          "train_time": 21.8,
+          "tag_scores": {
+            "neg_confusable": {
+              "mean": 0.0042,
+              "std": 0.0409,
+              "min": 0.0,
+              "max": 0.7101,
+              "n": 325
+            },
+            "neg_confusable_v2": {
+              "mean": 0.0268,
+              "std": 0.1078,
+              "min": 0.0,
+              "max": 0.9971,
+              "n": 1151
+            },
+            "neg_main": {
+              "mean": 0.0037,
+              "std": 0.0386,
+              "min": 0.0,
+              "max": 0.9965,
+              "n": 10175
+            },
+            "pos_diverse": {
+              "mean": 0.9127,
+              "std": 0.1849,
+              "min": 0.0127,
+              "max": 1.0,
+              "n": 117
+            },
+            "pos_main": {
+              "mean": 0.8666,
+              "std": 0.2221,
+              "min": 0.0002,
+              "max": 1.0,
+              "n": 1378
+            }
+          },
+          "thresholds": {
+            "0.3": {
+              "detection_rate": 0.9632,
+              "false_alarm_rate": 0.0076,
+              "confusable_fa_rate": 0.0251
+            },
+            "0.5": {
+              "detection_rate": 0.9284,
+              "false_alarm_rate": 0.0044,
+              "confusable_fa_rate": 0.0169
+            },
+            "0.7": {
+              "detection_rate": 0.81,
+              "false_alarm_rate": 0.0011,
+              "confusable_fa_rate": 0.0061
+            },
+            "0.8": {
+              "detection_rate": 0.7358,
+              "false_alarm_rate": 0.0003,
+              "confusable_fa_rate": 0.002
+            },
+            "0.9": {
+              "detection_rate": 0.6876,
+              "false_alarm_rate": 0.0003,
+              "confusable_fa_rate": 0.0014
+            }
+          }
+        }
+      ]
+    }
+  }
+}

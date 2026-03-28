@@ -9,10 +9,12 @@ Copied from Viola's violawake/audio.py — Viola-specific imports replaced.
 
 from __future__ import annotations
 
-import random
+import logging
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from violawake_sdk._constants import (
     AUDIO_INT16_SCALE,
@@ -72,7 +74,7 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
                 waveform = resampler(waveform)
             return waveform.squeeze().numpy()
         except Exception:
-            pass  # Fall through to wave module
+            logger.warning("torchaudio failed for %s, falling back to wave module", path, exc_info=True)
 
     # Fallback to wave module (WAV only)
     try:
@@ -90,6 +92,7 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
                 )
             return audio_float
     except Exception:
+        logger.error("Failed to load audio from %s", path, exc_info=True)
         return None
 
 
@@ -109,9 +112,8 @@ def pad_or_trim(audio: np.ndarray, target_length: int = CLIP_SAMPLES) -> np.ndar
         padding = target_length - len(audio)
         audio = np.pad(audio, (0, padding), mode="constant")
     elif len(audio) > target_length:
-        # Random crop for training, center crop for inference
-        start = random.randint(0, len(audio) - target_length)
-        audio = audio[start : start + target_length]
+        # Deterministic trim from the beginning (consistent with inference)
+        audio = audio[:target_length]
     return audio
 
 

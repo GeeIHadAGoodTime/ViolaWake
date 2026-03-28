@@ -357,3 +357,20 @@ class VADEngine:
     def reset(self) -> None:
         """Reset internal state (useful between utterances)."""
         self._backend.reset()
+
+    def close(self) -> None:
+        """Release backend resources."""
+        self._backend = None  # type: ignore[assignment]
+
+    def __enter__(self) -> VADEngine:
+        """Enter sync context manager. Returns self."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Exit sync context manager. Releases backend resources."""
+        self.close()

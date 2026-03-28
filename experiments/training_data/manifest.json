@@ -1,0 +1,3236 @@
+{
+  "generated_at": "2026-03-26T18:46:43Z",
+  "sample_rate": 16000,
+  "format": "16kHz mono 16-bit WAV",
+  "eval_voices_excluded": [
+    "en-AU-NatashaNeural",
+    "en-AU-WilliamNeural",
+    "en-CA-ClaraNeural",
+    "en-CA-LiamNeural",
+    "en-GB-LibbyNeural",
+    "en-GB-RyanNeural",
+    "en-GB-SoniaNeural",
+    "en-GB-ThomasNeural",
+    "en-IE-ConnorNeural",
+    "en-IE-EmilyNeural",
+    "en-IN-NeerjaNeural",
+    "en-IN-PrabhatNeural",
+    "en-US-AnaNeural",
+    "en-US-AndrewNeural",
+    "en-US-AriaNeural",
+    "en-US-BrianNeural",
+    "en-US-ChristopherNeural",
+    "en-US-EmmaNeural",
+    "en-US-GuyNeural",
+    "en-US-JennyNeural",
+    "en-ZA-LeahNeural",
+    "en-ZA-LukeNeural"
+  ],
+  "confusable_negatives": {
+    "voices": [
+      "en-US-AvaNeural",
+      "en-US-EricNeural",
+      "en-US-MichelleNeural",
+      "en-US-RogerNeural",
+      "en-US-SteffanNeural",
+      "en-US-AvaMultilingualNeural",
+      "en-US-BrianMultilingualNeural",
+      "en-GB-MaisieNeural",
+      "en-GB-MiaNeural",
+      "en-KE-AsiliaNeural",
+      "en-KE-ChilembaNeural",
+      "en-NG-AbeoNeural",
+      "en-NG-EzinneNeural"
+    ],
+    "words": [
+      "vanilla",
+      "villa",
+      "violet",
+      "vinyl",
+      "villain",
+      "village",
+      "viper",
+      "vista",
+      "vivid",
+      "valor",
+      "valley",
+      "valid",
+      "venture",
+      "vintage",
+      "visual",
+      "vital",
+      "volume",
+      "via",
+      "she plays the viola in the orchestra",
+      "the viola section sounds beautiful",
+      "hand me that viola please",
+      "I'll be over",
+      "I'll be over there",
+      "fly over",
+      "buy a villa"
+    ],
+    "total_files": 325,
+    "failures": 0
+  },
+  "diverse_positives": {
+    "voices": [
+      "en-AU-WilliamMultilingualNeural",
+      "en-US-AndrewMultilingualNeural",
+      "en-US-EmmaMultilingualNeural",
+      "en-HK-SamNeural",
+      "en-HK-YanNeural",
+      "en-NZ-MitchellNeural",
+      "en-NZ-MollyNeural",
+      "en-PH-JamesNeural",
+      "en-PH-RosaNeural",
+      "en-SG-LunaNeural",
+      "en-SG-WayneNeural",
+      "en-TZ-ElimuNeural",
+      "en-TZ-ImaniNeural"
+    ],
+    "phrases": [
+      "viola",
+      "hey viola",
+      "ok viola"
+    ],
+    "clean_files": 39,
+    "augmented_files": 78,
+    "total_files": 117,
+    "failures": 0
+  },
+  "files": [
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vanilla.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_villa.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_violet.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vinyl.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_villain.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_village.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_viper.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vista.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vivid.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_valor.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_valley.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_valid.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_venture.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vintage.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_visual.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_vital.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_volume.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_via.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_ill_be_over.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_ill_be_over_there.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_fly_over.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaNeural_buy_a_villa.wav",
+      "voice": "en-US-AvaNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vanilla.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_villa.wav",
+      "voice": "en-US-EricNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_violet.wav",
+      "voice": "en-US-EricNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vinyl.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_villain.wav",
+      "voice": "en-US-EricNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_village.wav",
+      "voice": "en-US-EricNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_viper.wav",
+      "voice": "en-US-EricNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vista.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vivid.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_valor.wav",
+      "voice": "en-US-EricNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_valley.wav",
+      "voice": "en-US-EricNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_valid.wav",
+      "voice": "en-US-EricNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_venture.wav",
+      "voice": "en-US-EricNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vintage.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_visual.wav",
+      "voice": "en-US-EricNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_vital.wav",
+      "voice": "en-US-EricNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_volume.wav",
+      "voice": "en-US-EricNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_via.wav",
+      "voice": "en-US-EricNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-EricNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-EricNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-EricNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_ill_be_over.wav",
+      "voice": "en-US-EricNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_ill_be_over_there.wav",
+      "voice": "en-US-EricNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_fly_over.wav",
+      "voice": "en-US-EricNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-EricNeural_buy_a_villa.wav",
+      "voice": "en-US-EricNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vanilla.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_villa.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_violet.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vinyl.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_villain.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_village.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_viper.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vista.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vivid.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_valor.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_valley.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_valid.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_venture.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vintage.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_visual.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_vital.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_volume.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_via.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_ill_be_over.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_ill_be_over_there.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_fly_over.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-MichelleNeural_buy_a_villa.wav",
+      "voice": "en-US-MichelleNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vanilla.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_villa.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_violet.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vinyl.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_villain.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_village.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_viper.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vista.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vivid.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_valor.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_valley.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_valid.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_venture.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vintage.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_visual.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_vital.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_volume.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_via.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_ill_be_over.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_ill_be_over_there.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_fly_over.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-RogerNeural_buy_a_villa.wav",
+      "voice": "en-US-RogerNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vanilla.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_villa.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_violet.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vinyl.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_villain.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_village.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_viper.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vista.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vivid.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_valor.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_valley.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_valid.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_venture.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vintage.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_visual.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_vital.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_volume.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_via.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_ill_be_over.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_ill_be_over_there.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_fly_over.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-SteffanNeural_buy_a_villa.wav",
+      "voice": "en-US-SteffanNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vanilla.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_villa.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_violet.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vinyl.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_villain.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_village.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_viper.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vista.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vivid.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_valor.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_valley.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_valid.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_venture.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vintage.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_visual.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_vital.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_volume.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_via.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_ill_be_over.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_ill_be_over_there.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_fly_over.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-AvaMultilingualNeural_buy_a_villa.wav",
+      "voice": "en-US-AvaMultilingualNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vanilla.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_villa.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_violet.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vinyl.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_villain.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_village.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_viper.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vista.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vivid.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_valor.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_valley.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_valid.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_venture.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vintage.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_visual.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_vital.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_volume.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_via.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_hand_me_that_viola_please.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_ill_be_over.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_ill_be_over_there.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_fly_over.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-US-BrianMultilingualNeural_buy_a_villa.wav",
+      "voice": "en-US-BrianMultilingualNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vanilla.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_villa.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_violet.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vinyl.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_villain.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_village.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_viper.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vista.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vivid.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_valor.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_valley.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_valid.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_venture.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vintage.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_visual.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_vital.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_volume.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_via.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_hand_me_that_viola_please.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_ill_be_over.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_ill_be_over_there.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_fly_over.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MaisieNeural_buy_a_villa.wav",
+      "voice": "en-GB-MaisieNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vanilla.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_villa.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_violet.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vinyl.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_villain.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_village.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_viper.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vista.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vivid.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_valor.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_valley.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_valid.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_venture.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vintage.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_visual.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_vital.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_volume.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_via.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_hand_me_that_viola_please.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_ill_be_over.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_ill_be_over_there.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_fly_over.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-GB-MiaNeural_buy_a_villa.wav",
+      "voice": "en-GB-MiaNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vanilla.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_villa.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_violet.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vinyl.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_villain.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_village.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_viper.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vista.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vivid.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_valor.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_valley.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_valid.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_venture.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vintage.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_visual.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_vital.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_volume.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_via.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_hand_me_that_viola_please.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_ill_be_over.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_ill_be_over_there.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_fly_over.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-AsiliaNeural_buy_a_villa.wav",
+      "voice": "en-KE-AsiliaNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vanilla.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_villa.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_violet.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vinyl.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_villain.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_village.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_viper.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vista.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vivid.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_valor.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_valley.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_valid.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_venture.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vintage.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_visual.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_vital.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_volume.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_via.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_hand_me_that_viola_please.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_ill_be_over.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_ill_be_over_there.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_fly_over.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-KE-ChilembaNeural_buy_a_villa.wav",
+      "voice": "en-KE-ChilembaNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vanilla.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_villa.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_violet.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vinyl.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_villain.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_village.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_viper.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vista.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vivid.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_valor.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_valley.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_valid.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_venture.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vintage.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_visual.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_vital.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_volume.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_via.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_hand_me_that_viola_please.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_ill_be_over.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_ill_be_over_there.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_fly_over.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-AbeoNeural_buy_a_villa.wav",
+      "voice": "en-NG-AbeoNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vanilla.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vanilla",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_villa.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_violet.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "violet",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vinyl.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vinyl",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_villain.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "villain",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_village.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "village",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_viper.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "viper",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vista.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vista",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vivid.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vivid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_valor.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "valor",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_valley.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "valley",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_valid.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "valid",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_venture.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "venture",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vintage.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vintage",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_visual.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "visual",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_vital.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "vital",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_volume.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "volume",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_via.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "via",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_she_plays_the_viola_in_the_orchestra.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "she plays the viola in the orchestra",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_the_viola_section_sounds_beautiful.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "the viola section sounds beautiful",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_hand_me_that_viola_please.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "hand me that viola please",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_ill_be_over.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "I'll be over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_ill_be_over_there.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "I'll be over there",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_fly_over.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "fly over",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "confusable_negatives\\en-NG-EzinneNeural_buy_a_villa.wav",
+      "voice": "en-NG-EzinneNeural",
+      "text": "buy a villa",
+      "type": "confusable_negative",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_viola.wav",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 18.3,
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_hey_viola.wav",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.9,
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_ok_viola.wav",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 18.7,
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-AU-WilliamMultilingualNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-AU-WilliamMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_viola.wav",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.5,
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_hey_viola.wav",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 16.8,
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_ok_viola.wav",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.5,
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-AndrewMultilingualNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-AndrewMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_viola.wav",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 22.9,
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_hey_viola.wav",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.8,
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_ok_viola.wav",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.4,
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-US-EmmaMultilingualNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-US-EmmaMultilingualNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_viola.wav",
+      "voice": "en-HK-SamNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 17.5,
+      "voice": "en-HK-SamNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-SamNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_hey_viola.wav",
+      "voice": "en-HK-SamNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 19.2,
+      "voice": "en-HK-SamNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-SamNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_ok_viola.wav",
+      "voice": "en-HK-SamNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.4,
+      "voice": "en-HK-SamNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-SamNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-SamNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_viola.wav",
+      "voice": "en-HK-YanNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.0,
+      "voice": "en-HK-YanNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-YanNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_hey_viola.wav",
+      "voice": "en-HK-YanNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 20.1,
+      "voice": "en-HK-YanNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-YanNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_ok_viola.wav",
+      "voice": "en-HK-YanNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.8,
+      "voice": "en-HK-YanNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-HK-YanNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-HK-YanNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_viola.wav",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.7,
+      "voice": "en-NZ-MitchellNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_hey_viola.wav",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 23.5,
+      "voice": "en-NZ-MitchellNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_ok_viola.wav",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.6,
+      "voice": "en-NZ-MitchellNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MitchellNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MitchellNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_viola.wav",
+      "voice": "en-NZ-MollyNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.7,
+      "voice": "en-NZ-MollyNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MollyNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_hey_viola.wav",
+      "voice": "en-NZ-MollyNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 22.4,
+      "voice": "en-NZ-MollyNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MollyNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_ok_viola.wav",
+      "voice": "en-NZ-MollyNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.4,
+      "voice": "en-NZ-MollyNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-NZ-MollyNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-NZ-MollyNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_viola.wav",
+      "voice": "en-PH-JamesNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 18.1,
+      "voice": "en-PH-JamesNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-JamesNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_hey_viola.wav",
+      "voice": "en-PH-JamesNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.7,
+      "voice": "en-PH-JamesNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-JamesNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_ok_viola.wav",
+      "voice": "en-PH-JamesNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 19.8,
+      "voice": "en-PH-JamesNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-JamesNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-JamesNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_viola.wav",
+      "voice": "en-PH-RosaNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.1,
+      "voice": "en-PH-RosaNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-RosaNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_hey_viola.wav",
+      "voice": "en-PH-RosaNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.5,
+      "voice": "en-PH-RosaNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-RosaNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_ok_viola.wav",
+      "voice": "en-PH-RosaNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 20.3,
+      "voice": "en-PH-RosaNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-PH-RosaNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-PH-RosaNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_viola.wav",
+      "voice": "en-SG-LunaNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.3,
+      "voice": "en-SG-LunaNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-LunaNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_hey_viola.wav",
+      "voice": "en-SG-LunaNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 20.4,
+      "voice": "en-SG-LunaNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-LunaNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_ok_viola.wav",
+      "voice": "en-SG-LunaNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 19.5,
+      "voice": "en-SG-LunaNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-LunaNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-LunaNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_viola.wav",
+      "voice": "en-SG-WayneNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.8,
+      "voice": "en-SG-WayneNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-WayneNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_hey_viola.wav",
+      "voice": "en-SG-WayneNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 21.0,
+      "voice": "en-SG-WayneNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-WayneNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_ok_viola.wav",
+      "voice": "en-SG-WayneNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 20.8,
+      "voice": "en-SG-WayneNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-SG-WayneNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-SG-WayneNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_viola.wav",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 15.2,
+      "voice": "en-TZ-ElimuNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_hey_viola.wav",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 17.5,
+      "voice": "en-TZ-ElimuNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_ok_viola.wav",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 17.6,
+      "voice": "en-TZ-ElimuNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ElimuNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ElimuNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_viola.wav",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.3,
+      "voice": "en-TZ-ImaniNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_hey_viola.wav",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "hey viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_hey_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 20.8,
+      "voice": "en-TZ-ImaniNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_hey_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "hey viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_ok_viola.wav",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "ok viola",
+      "type": "positive",
+      "augmentation": "clean"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_ok_viola_noisy.wav",
+      "augmentation": "noise",
+      "snr_db": 24.8,
+      "voice": "en-TZ-ImaniNeural",
+      "text": "ok viola",
+      "type": "positive"
+    },
+    {
+      "file": "diverse_positives\\en-TZ-ImaniNeural_ok_viola_reverb.wav",
+      "augmentation": "reverb",
+      "voice": "en-TZ-ImaniNeural",
+      "text": "ok viola",
+      "type": "positive"
+    }
+  ]
+}

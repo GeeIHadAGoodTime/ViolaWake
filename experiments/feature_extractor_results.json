@@ -1,0 +1,242 @@
+{
+  "test_results": {
+    "oww": {
+      "backend": "oww",
+      "status": "ok",
+      "errors": [],
+      "positive_file": "en-AU-NatashaNeural_hey_viola.wav",
+      "positive_shape": [
+        96
+      ],
+      "positive_dim": 96,
+      "positive_norm": 135.51242065429688,
+      "positive_mean": 1.7473664283752441,
+      "positive_std": 13.719853401184082,
+      "positive_min": -28.94674301147461,
+      "positive_max": 44.27937698364258,
+      "negative_file": "en-AU-NatashaNeural_hey_violet.wav",
+      "negative_shape": [
+        96
+      ],
+      "negative_dim": 96,
+      "negative_norm": 139.6181182861328,
+      "negative_mean": 2.1060097217559814,
+      "negative_std": 14.09322738647461,
+      "negative_min": -30.69782257080078,
+      "negative_max": 45.76662063598633,
+      "cosine_similarity_pos_neg": 0.9656959176063538
+    },
+    "hubert": {
+      "backend": "hubert",
+      "status": "ok",
+      "errors": [],
+      "positive_file": "en-AU-NatashaNeural_hey_viola.wav",
+      "positive_shape": [
+        768
+      ],
+      "positive_dim": 768,
+      "positive_norm": 6.062801361083984,
+      "positive_mean": 0.008535310626029968,
+      "positive_std": 0.21860593557357788,
+      "positive_min": -1.9309494495391846,
+      "positive_max": 1.6680470705032349,
+      "negative_file": "en-AU-NatashaNeural_hey_violet.wav",
+      "negative_shape": [
+        768
+      ],
+      "negative_dim": 768,
+      "negative_norm": 6.259652137756348,
+      "negative_mean": 0.005208226386457682,
+      "negative_std": 0.22581568360328674,
+      "negative_min": -2.2586007118225098,
+      "negative_max": 1.740656852722168,
+      "cosine_similarity_pos_neg": 0.9335977435112
+    },
+    "wav2vec2": {
+      "backend": "wav2vec2",
+      "status": "ok",
+      "errors": [],
+      "positive_file": "en-AU-NatashaNeural_hey_viola.wav",
+      "positive_shape": [
+        768
+      ],
+      "positive_dim": 768,
+      "positive_norm": 6.842166900634766,
+      "positive_mean": 0.004015377722680569,
+      "positive_std": 0.2468627542257309,
+      "positive_min": -1.065366268157959,
+      "positive_max": 1.3583521842956543,
+      "negative_file": "en-AU-NatashaNeural_hey_violet.wav",
+      "negative_shape": [
+        768
+      ],
+      "negative_dim": 768,
+      "negative_norm": 6.807816982269287,
+      "negative_mean": 0.0003465469926595688,
+      "negative_std": 0.24565567076206207,
+      "negative_min": -0.7418286800384521,
+      "negative_max": 0.835623562335968,
+      "cosine_similarity_pos_neg": 0.6952894926071167
+    },
+    "ecapa": {
+      "backend": "ecapa",
+      "status": "ok",
+      "errors": [],
+      "positive_file": "en-AU-NatashaNeural_hey_viola.wav",
+      "positive_shape": [
+        192
+      ],
+      "positive_dim": 192,
+      "positive_norm": 410.23486328125,
+      "positive_mean": 0.0773625373840332,
+      "positive_std": 29.606048583984375,
+      "positive_min": -90.27117156982422,
+      "positive_max": 81.91072082519531,
+      "negative_file": "en-AU-NatashaNeural_hey_violet.wav",
+      "negative_shape": [
+        192
+      ],
+      "negative_dim": 192,
+      "negative_norm": 406.5040283203125,
+      "negative_mean": 0.8591038584709167,
+      "negative_std": 29.32431983947754,
+      "negative_min": -66.92755126953125,
+      "negative_max": 81.78118133544922,
+      "cosine_similarity_pos_neg": 0.7476687431335449
+    }
+  },
+  "benchmarks": {
+    "oww": {
+      "backend": "oww",
+      "embedding_dim": 96,
+      "embedding_shape": [
+        96
+      ],
+      "mean_ms": 79.34093000658322,
+      "std_ms": 11.342765082839257,
+      "min_ms": 67.08610002533533,
+      "max_ms": 98.97869999986142,
+      "memory_after_load_mb": 398.1,
+      "memory_delta_mb": 0.0,
+      "n_iters": 10
+    },
+    "hubert": {
+      "backend": "hubert",
+      "embedding_dim": 768,
+      "embedding_shape": [
+        768
+      ],
+      "mean_ms": 92.12229000695515,
+      "std_ms": 8.964044358927925,
+      "min_ms": 81.92200001212768,
+      "max_ms": 113.00480001955293,
+      "memory_after_load_mb": 1124.8,
+      "memory_delta_mb": 0.0,
+      "n_iters": 10
+    },
+    "wav2vec2": {
+      "backend": "wav2vec2",
+      "embedding_dim": 768,
+      "embedding_shape": [
+        768
+      ],
+      "mean_ms": 81.40902000013739,
+      "std_ms": 2.054835762666486,
+      "min_ms": 79.11960000637919,
+      "max_ms": 85.89950000168756,
+      "memory_after_load_mb": 1571.2,
+      "memory_delta_mb": 0.0,
+      "n_iters": 10
+    },
+    "ecapa": {
+      "backend": "ecapa",
+      "embedding_dim": 192,
+      "embedding_shape": [
+        192
+      ],
+      "mean_ms": 98.30518999951892,
+      "std_ms": 5.32021936014127,
+      "min_ms": 91.26469999318942,
+      "max_ms": 111.31849998491816,
+      "memory_after_load_mb": 1694.3,
+      "memory_delta_mb": 0.0,
+      "n_iters": 10
+    }
+  },
+  "model_info": {
+    "oww": {
+      "name": "OpenWakeWord Embedding",
+      "embedding_dim": "96",
+      "model_size_mb": "2.4",
+      "license": "Apache-2.0",
+      "source": "openwakeword (bundled ONNX)",
+      "framework": "onnxruntime",
+      "gpu_required": "False",
+      "notes": "Current production backbone. Mel spectrogram -> CNN -> 96-dim. Lightweight but limited representational capacity."
+    },
+    "hubert_base": {
+      "name": "HuBERT Base (facebook/hubert-base-ls960)",
+      "embedding_dim": "768",
+      "model_size_mb": "362",
+      "license": "Apache-2.0",
+      "source": "huggingface/facebook/hubert-base-ls960",
+      "framework": "transformers / torchaudio",
+      "gpu_required": "False",
+      "notes": "Self-supervised speech model trained on 960h LibriSpeech. 12 transformer layers, 768-dim hidden states. Captures phonetic, prosodic, and speaker information. Available via both transformers and torchaudio pipelines."
+    },
+    "hubert_large": {
+      "name": "HuBERT Large (facebook/hubert-large-ll60k)",
+      "embedding_dim": "1024",
+      "model_size_mb": "1260",
+      "license": "Apache-2.0",
+      "source": "huggingface/facebook/hubert-large-ll60k",
+      "framework": "transformers / torchaudio",
+      "gpu_required": "False",
+      "notes": "24 layers, 1024-dim. Better representations but 3.5x slower. Probably overkill for wake word detection."
+    },
+    "wav2vec2_base": {
+      "name": "wav2vec 2.0 Base (facebook/wav2vec2-base-960h)",
+      "embedding_dim": "768",
+      "model_size_mb": "362",
+      "license": "Apache-2.0",
+      "source": "huggingface/facebook/wav2vec2-base-960h",
+      "framework": "transformers / torchaudio",
+      "gpu_required": "False",
+      "notes": "Contrastive self-supervised model, same architecture as HuBERT. Trained on 960h LibriSpeech. Very similar performance to HuBERT for downstream tasks. 12 transformer layers, 768-dim."
+    },
+    "wav2vec2_large": {
+      "name": "wav2vec 2.0 Large (facebook/wav2vec2-large-960h)",
+      "embedding_dim": "1024",
+      "model_size_mb": "1260",
+      "license": "Apache-2.0",
+      "source": "huggingface/facebook/wav2vec2-large-960h",
+      "framework": "transformers / torchaudio",
+      "gpu_required": "False",
+      "notes": "24 layers, 1024-dim. Same caveats as HuBERT Large."
+    },
+    "ecapa_tdnn": {
+      "name": "ECAPA-TDNN (speechbrain/spkrec-ecapa-voxceleb)",
+      "embedding_dim": "192",
+      "model_size_mb": "83",
+      "license": "Apache-2.0",
+      "source": "speechbrain/spkrec-ecapa-voxceleb",
+      "framework": "speechbrain (PyTorch)",
+      "gpu_required": "False",
+      "notes": "Speaker verification model. 192-dim speaker embeddings. Captures speaker identity strongly; may capture phonetic content less well than HuBERT/wav2vec2. Fastest of the transformer alternatives. Good middle ground between OWW (96) and HuBERT (768)."
+    },
+    "xvector": {
+      "name": "X-Vector (speechbrain/spkrec-xvect-voxceleb)",
+      "embedding_dim": "512",
+      "model_size_mb": "61",
+      "license": "Apache-2.0",
+      "source": "speechbrain/spkrec-xvect-voxceleb",
+      "framework": "speechbrain (PyTorch)",
+      "gpu_required": "False",
+      "notes": "TDNN-based x-vector for speaker recognition. 512-dim embeddings. Older architecture than ECAPA-TDNN but still competitive."
+    }
+  },
+  "test_files": {
+    "positive": "J:\\CLAUDE\\PROJECTS\\Wakeword\\eval_clean\\positives\\edge_tts\\en-AU-NatashaNeural_hey_viola.wav",
+    "negative": "J:\\CLAUDE\\PROJECTS\\Wakeword\\eval_clean\\negatives\\adversarial_tts\\en-AU-NatashaNeural_hey_violet.wav"
+  }
+}

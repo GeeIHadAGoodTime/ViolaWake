@@ -1,0 +1,82 @@
+{
+  "n_pos": 288,
+  "n_neg": 546,
+  "combined_eer": 0.1395,
+  "combined_optimal_threshold": 0.5,
+  "combined_dprime": 2.346,
+  "best_grid_result": {
+    "primary_threshold": 0.45,
+    "verifier_threshold": 0.8,
+    "tp": 225,
+    "fn": 63,
+    "fp": 24,
+    "tn": 522,
+    "frr": 0.2188,
+    "far": 0.044,
+    "eer_approx": 0.1314
+  },
+  "pos_primary_mean": 0.7507,
+  "neg_primary_mean": 0.088,
+  "pos_verifier_mean": 0.9377,
+  "neg_verifier_mean": 0.3162,
+  "top5_combos": [
+    {
+      "primary_threshold": 0.45,
+      "verifier_threshold": 0.8,
+      "tp": 225,
+      "fn": 63,
+      "fp": 24,
+      "tn": 522,
+      "frr": 0.2188,
+      "far": 0.044,
+      "eer_approx": 0.1314
+    },
+    {
+      "primary_threshold": 0.2,
+      "verifier_threshold": 0.8,
+      "tp": 236,
+      "fn": 52,
+      "fp": 46,
+      "tn": 500,
+      "frr": 0.1806,
+      "far": 0.0842,
+      "eer_approx": 0.1324
+    },
+    {
+      "primary_threshold": 0.5,
+      "verifier_threshold": 0.8,
+      "tp": 222,
+      "fn": 66,
+      "fp": 20,
+      "tn": 526,
+      "frr": 0.2292,
+      "far": 0.0366,
+      "eer_approx": 0.1329
+    },
+    {
+      "primary_threshold": 0.4,
+      "verifier_threshold": 0.8,
+      "tp": 225,
+      "fn": 63,
+      "fp": 27,
+      "tn": 519,
+      "frr": 0.2188,
+      "far": 0.0495,
+      "eer_approx": 0.1341
+    },
+    {
+      "primary_threshold": 0.35,
+      "verifier_threshold": 0.8,
+      "tp": 226,
+      "fn": 62,
+      "fp": 30,
+      "tn": 516,
+      "frr": 0.2153,
+      "far": 0.0549,
+      "eer_approx": 0.1351
+    }
+  ],
+  "single_stage_eer": 0.1317,
+  "vs_single_stage_delta": 0.0078,
+  "beats_single_stage": false
+}

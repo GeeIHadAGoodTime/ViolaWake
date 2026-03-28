@@ -1,0 +1,32 @@
+{
+  "files": 100,
+  "total_hours": 0.2503,
+  "total_windows": 7565,
+  "elapsed_seconds": 1261.2,
+  "comparison": {
+    "0.5": {
+      "direct_triggers": 236,
+      "direct_faph": 942.81,
+      "embed_triggers": 5,
+      "embed_faph": 19.97
+    },
+    "0.8": {
+      "direct_triggers": 196,
+      "direct_faph": 783.01,
+      "embed_triggers": 3,
+      "embed_faph": 11.98
+    },
+    "0.9": {
+      "direct_triggers": 164,
+      "direct_faph": 655.17,
+      "embed_triggers": 2,
+      "embed_faph": 7.99
+    },
+    "0.95": {
+      "direct_triggers": 131,
+      "direct_faph": 523.34,
+      "embed_triggers": 1,
+      "embed_faph": 3.99
+    }
+  }
+}

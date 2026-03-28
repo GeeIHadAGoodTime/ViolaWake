@@ -1,0 +1,98 @@
+[
+  {
+    "eer": 0.119,
+    "dprime": 2.38,
+    "pos_mean": 0.7754,
+    "neg_mean": 0.0497,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "bce_weighted",
+    "best_epoch": 19,
+    "best_val_loss": 0.07131505896380202,
+    "training_time": 25.2
+  },
+  {
+    "eer": 0.1253,
+    "dprime": 2.613,
+    "pos_mean": 0.7601,
+    "neg_mean": 0.1036,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g2_a65_ls05",
+    "best_epoch": 28,
+    "best_val_loss": 0.0090115053422108,
+    "training_time": 53.0
+  },
+  {
+    "eer": 0.1266,
+    "dprime": 2.453,
+    "pos_mean": 0.7257,
+    "neg_mean": 0.1051,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g2_a75_ls10",
+    "best_epoch": 13,
+    "best_val_loss": 0.009236567349465699,
+    "training_time": 30.8
+  },
+  {
+    "eer": 0.1355,
+    "dprime": 2.459,
+    "pos_mean": 0.7521,
+    "neg_mean": 0.1006,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g2_a75_ls00",
+    "best_epoch": 15,
+    "best_val_loss": 0.0075711995781062,
+    "training_time": 40.1
+  },
+  {
+    "eer": 0.1368,
+    "dprime": 2.399,
+    "pos_mean": 0.7802,
+    "neg_mean": 0.0977,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g1_a75_ls05",
+    "best_epoch": 16,
+    "best_val_loss": 0.01597808763510425,
+    "training_time": 38.4
+  },
+  {
+    "eer": 0.1405,
+    "dprime": 2.322,
+    "pos_mean": 0.7507,
+    "neg_mean": 0.088,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g2_a75_ls05",
+    "best_epoch": 27,
+    "best_val_loss": 0.008053616009467652,
+    "training_time": 197.2
+  },
+  {
+    "eer": 0.1428,
+    "dprime": 2.285,
+    "pos_mean": 0.7158,
+    "neg_mean": 0.1407,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g3_a75_ls05",
+    "best_epoch": 16,
+    "best_val_loss": 0.004654529337941719,
+    "training_time": 64.3
+  },
+  {
+    "eer": 0.1618,
+    "dprime": 2.048,
+    "pos_mean": 0.7228,
+    "neg_mean": 0.1659,
+    "n_pos": 288,
+    "n_neg": 546,
+    "name": "focal_g2_a85_ls05",
+    "best_epoch": 10,
+    "best_val_loss": 0.00817195380853407,
+    "training_time": 31.5
+  }
+]

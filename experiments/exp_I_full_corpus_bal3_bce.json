@@ -1,0 +1,53 @@
+{
+  "experiment": "I_full_corpus",
+  "variant": "bal3_bce",
+  "ratio": 3.0,
+  "per_seed": [
+    {
+      "experiment": "I_full_corpus_bal3_bce_s42",
+      "all_eer": 0.1408,
+      "all_auc": 0.9211,
+      "all_dprime": 2.221,
+      "all_frr_050": 0.2396,
+      "trained_eer": 0.0206,
+      "pos_mean": 0.7474,
+      "neg_mean": 0.0434,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 33,
+      "best_val_loss": 0.04366442786317744,
+      "time": 204.0
+    },
+    {
+      "experiment": "I_full_corpus_bal3_bce_s43",
+      "all_eer": 0.1312,
+      "all_auc": 0.9221,
+      "all_dprime": 2.309,
+      "all_frr_050": 0.2535,
+      "trained_eer": 0.012,
+      "pos_mean": 0.7463,
+      "neg_mean": 0.0297,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 35,
+      "best_val_loss": 0.043795783539074054,
+      "time": 214.9
+    },
+    {
+      "experiment": "I_full_corpus_bal3_bce_s44",
+      "all_eer": 0.1446,
+      "all_auc": 0.9347,
+      "all_dprime": 2.141,
+      "all_frr_050": 0.2535,
+      "trained_eer": 0.023,
+      "pos_mean": 0.736,
+      "neg_mean": 0.0554,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 17,
+      "best_val_loss": 0.07065610946673283,
+      "time": 79.0
+    }
+  ],
+  "eer_mean": 0.1389
+}

@@ -1,0 +1,826 @@
+OpenAI Codex v0.114.0 (research preview)
+--------
+workdir: J:\CLAUDE\PROJECTS\Wakeword
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: high
+reasoning summaries: none
+session id: 019d0658-d282-7821-952c-9292d6558071
+--------
+user
+You are a Codex coding agent (GPT 5.4). Do ALL the work — coding, verification, evidence.
+
+Environment: Windows 11, bash shell via Git Bash.
+Project root: J:\CLAUDE\PROJECTS\Wakeword
+
+TASK: WW-10 — Add a publish job to .github/workflows/ci.yml
+
+CONTEXT:
+- The file J:\CLAUDE\PROJECTS\Wakeword\.github\workflows\ci.yml already exists with lint, test-unit, test-integration, and benchmark jobs.
+- A separate release.yml exists with a full PyPI publish workflow triggered on v*.*.* tags.
+- The acceptance criteria for WW-10 requires: '.github/workflows/ci.yml exists with lint, test, and publish jobs.'
+- The ci.yml is MISSING a publish job. We need to add one.
+
+WHAT TO DO:
+1. Read J:\CLAUDE\PROJECTS\Wakeword\.github\workflows\ci.yml
+2. Add a publish job at the end of ci.yml that:
+   - Is named 'publish'
+   - Triggers only on: push tags matching 'v*.*.*'
+   - Has 'needs: [lint, test-unit]' dependency  
+   - Uses the PyPI trusted publishing action: pypa/gh-action-pypi-publish@release/v1
+   - Installs hatch and runs 'hatch build' first
+   - Environment: 'pypi'
+   - permissions: id-token: write, contents: read
+   - Uses 'if: startsWith(github.ref, refs/tags/v')' condition on the job
+
+3. The job should fit the style of the existing file (same indentation, same action versions @v4/@v5).
+
+4. After editing, run: git diff .github/workflows/ci.yml
+   to confirm the publish job was added.
+
+5. Report:
+   - The exact lines added (file path + line numbers)
+   - The git diff output
+
+ACCEPTANCE: .github/workflows/ci.yml must have a 'publish' job with build and PyPI publish steps, triggered on version tags.
+mcp startup: no servers
+codex
+I’m updating `.github/workflows/ci.yml` to add the missing `publish` job, then I’ll verify it with `git diff` and report the exact added lines with line numbers.
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -Path '.github/workflows/ci.yml'" in J:\CLAUDE\PROJECTS\Wakewordexec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "Get-Content -Path '.github/workflows/release.yml'" in J:\CLAUDE\PROJECTS\Wakeword succeeded in 343ms:
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *"  # 2am UTC nightly
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_DEFAULT: "3.11"
+
+jobs:
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Job 1: Lint (ruff + mypy)
+ succeeded in 352ms:
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write  # for GitHub Release creation
+  id-token: write  # for PyPI trusted publishing (OIDC)
+
+jobs:
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # Job 1: Validate the release
+  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  validate:
+    name: Validate release tag
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.extract-version.outputs.version }}
+codex
+I’ve confirmed `ci.yml` lacks any tag trigger, so adding the `publish` job alone would not run on `v*.*.*` pushes. I’m patching both the workflow trigger and the new job so the behavior is actually correct.
+file update
+M J:\CLAUDE\PROJECTS\Wakeword\.github\workflows\ci.yml
+@@ -5,2 +5,4 @@
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+@@ -136,7 +138,7 @@
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+@@ -177,7 +179,38 @@
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+apply_patch(auto_approved=true) exited 0 in 42ms:
+Success. Updated the following files:
+M J:\CLAUDE\PROJECTS\Wakeword\.github\workflows\ci.yml
+file update:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 817c699a27f6d29f6c89a770f835ce4118e23ce6..37c19899705a4e75c2017ec3e36b0068920fbc94
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,6 +3,8 @@
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
+   schedule:
+@@ -134,11 +136,11 @@
+   # ──────────────────────────────────────────────
+   # Job 4: Benchmark regression check (nightly on main)
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -175,9 +177,40 @@
+       - name: Check for regressions
+         run: python tools/benchmark_regression_check.py --threshold 0.10
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+
+file update:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 817c699a27f6d29f6c89a770f835ce4118e23ce6..37c19899705a4e75c2017ec3e36b0068920fbc94
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,6 +3,8 @@
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
+   schedule:
+@@ -134,11 +136,11 @@
+   # ──────────────────────────────────────────────
+   # Job 4: Benchmark regression check (nightly on main)
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -175,9 +177,40 @@
+       - name: Check for regressions
+         run: python tools/benchmark_regression_check.py --threshold 0.10
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+
+codex
+The workflow patch is in place. I’m pulling the numbered file view and the `git diff` now so I can give you exact added lines and the evidence from the repo state.
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$i=1; Get-Content '"'.github/workflows/ci.yml' | ForEach-Object { '{0,4}: {1}' -f "'$i, $_; $i++ }' in J:\CLAUDE\PROJECTS\Wakewordexec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "git diff -- '.github/workflows/ci.yml'" in J:\CLAUDE\PROJECTS\Wakeword succeeded in 308ms:
+   1: name: CI
+   2: 
+   3: on:
+   4:   push:
+   5:     branches: [main, develop]
+   6:     tags:
+   7:       - "v*.*.*"
+   8:   pull_request:
+   9:     branches: [main]
+  10:   schedule:
+  11:     - cron: "0 2 * * *"  # 2am UTC nightly
+  12: 
+  13: concurrency:
+  14:   group: ci-${{ github.ref }}
+  15:   cancel-in-progress: true
+  16: 
+  17: env:
+  18:   PYTHON_DEFAULT: "3.11"
+  19: 
+  20: jobs:
+ succeeded in 255ms:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e9fb2e2..37c1989 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,8 +3,12 @@ name: CI
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
++  schedule:
++    - cron: "0 2 * * *"  # 2am UTC nightly
+ 
+ concurrency:
+   group: ci-${{ github.ref }}
+@@ -179,7 +183,34 @@ jobs:
+           name: benchmark-results-${{ github.sha }}
+           path: benchmark-results/
+file update:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 817c699a27f6d29f6c89a770f835ce4118e23ce6..37c19899705a4e75c2017ec3e36b0068920fbc94
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,6 +3,8 @@
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
+   schedule:
+@@ -134,11 +136,11 @@
+   # ──────────────────────────────────────────────
+   # Job 4: Benchmark regression check (nightly on main)
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -175,9 +177,40 @@
+       - name: Check for regressions
+         run: python tools/benchmark_regression_check.py --threshold 0.10
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+
+codex
+The repo’s `git diff` shows an older change in this same file as well, so I’m isolating the lines I actually added in the current file to keep the evidence precise.
+exec
+"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command '$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new(); $lines = Get-Content -Encoding utf8 '"'.github/workflows/ci.yml'; for ("'$i = 5; $i -le 7; $i++) { '"'{0}: {1}' -f "'$i, $lines[$i-1] }; for ($i = 186; $i -le 215; $i++) { '"'{0}: {1}' -f "'$i, $lines[$i-1] }' in J:\CLAUDE\PROJECTS\Wakeword succeeded in 295ms:
+5:     branches: [main, develop]
+6:     tags:
+7:       - "v*.*.*"
+186:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+187:   # Job 5: Publish to PyPI on version tags
+188:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+189:   publish:
+190:     name: publish
+191:     runs-on: ubuntu-22.04
+192:     if: startsWith(github.ref, 'refs/tags/v')
+193:     needs: [lint, test-unit]
+194:     environment: pypi
+195:     permissions:
+196:       id-token: write
+197:       contents: read
+198: 
+199:     steps:
+200:       - uses: actions/checkout@v4
+201: 
+202:       - name: Set up Python
+file update:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 817c699a27f6d29f6c89a770f835ce4118e23ce6..37c19899705a4e75c2017ec3e36b0068920fbc94
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,6 +3,8 @@
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
+   schedule:
+@@ -134,11 +136,11 @@
+   # ──────────────────────────────────────────────
+   # Job 4: Benchmark regression check (nightly on main)
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -175,9 +177,40 @@
+       - name: Check for regressions
+         run: python tools/benchmark_regression_check.py --threshold 0.10
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+
+codex
+Added the `publish` job to [ci.yml](J:/CLAUDE/PROJECTS/Wakeword/.github/workflows/ci.yml) and added the `push.tags` trigger required for `v*.*.*` tag runs. The job is `publish`, gated with `if: startsWith(github.ref, 'refs/tags/v')`, depends on `lint` and `test-unit`, builds with `hatch build`, publishes with `pypa/gh-action-pypi-publish@release/v1`, uses `environment: pypi`, and sets `permissions` to `id-token: write` and `contents: read`.
+
+Exact lines added in [ci.yml](J:/CLAUDE/PROJECTS/Wakeword/.github/workflows/ci.yml): lines `6-7` and `186-215`.
+```text
+6:     tags:
+7:       - "v*.*.*"
+186:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+187:   # Job 5: Publish to PyPI on version tags
+188:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+189:   publish:
+190:     name: publish
+191:     runs-on: ubuntu-22.04
+192:     if: startsWith(github.ref, 'refs/tags/v')
+193:     needs: [lint, test-unit]
+194:     environment: pypi
+195:     permissions:
+196:       id-token: write
+197:       contents: read
+198: 
+199:     steps:
+200:       - uses: actions/checkout@v4
+201: 
+202:       - name: Set up Python
+203:         uses: actions/setup-python@v5
+204:         with:
+205:           python-version: ${{ env.PYTHON_DEFAULT }}
+206:           cache: pip
+207: 
+208:       - name: Install hatch
+209:         run: pip install hatch
+210: 
+211:       - name: Build wheel and sdist
+212:         run: hatch build
+213: 
+214:       - name: Publish to PyPI
+215:         uses: pypa/gh-action-pypi-publish@release/v1
+```
+
+`git diff .github/workflows/ci.yml` output:
+```diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e9fb2e2..37c1989 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,8 +3,12 @@ name: CI
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
++  schedule:
++    - cron: "0 2 * * *"  # 2am UTC nightly
+ 
+ concurrency:
+   group: ci-${{ github.ref }}
+@@ -179,7 +183,34 @@ jobs:
+           name: benchmark-results-${{ github.sha }}
+           path: benchmark-results/
+ 
+-# Nightly schedule
+-on:
+-  schedule:
+-    - cron: "0 2 * * *"  # 2am UTC nightly
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
++
+warning: in the working copy of '.github/workflows/ci.yml', LF will be replaced by CRLF the next time Git touches it
+```
+
+Note: that `git diff` includes a pre-existing `schedule` relocation already present in this file; the WW-10 change I added is the tag trigger plus the new `publish` job.
+file update:
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 817c699a27f6d29f6c89a770f835ce4118e23ce6..37c19899705a4e75c2017ec3e36b0068920fbc94
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,6 +3,8 @@
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
+   schedule:
+@@ -134,11 +136,11 @@
+   # ──────────────────────────────────────────────
+   # Job 4: Benchmark regression check (nightly on main)
+   # ──────────────────────────────────────────────
+-  benchmark:
+-    name: Benchmark regression check
+-    runs-on: ubuntu-22.04
+-    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+-    needs: [test-unit]
++  benchmark:
++    name: Benchmark regression check
++    runs-on: ubuntu-22.04
++    if: github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
++    needs: [test-unit]
+ 
+     steps:
+       - uses: actions/checkout@v4
+@@ -175,9 +177,40 @@
+       - name: Check for regressions
+         run: python tools/benchmark_regression_check.py --threshold 0.10
+ 
+-      - name: Upload benchmark results
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: benchmark-results-${{ github.sha }}
+-          path: benchmark-results/
++      - name: Upload benchmark results
++        uses: actions/upload-artifact@v4
++        with:
++          name: benchmark-results-${{ github.sha }}
++          path: benchmark-results/
++
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
+ 
+
+tokens used
+18,311
+Added the `publish` job to [ci.yml](J:/CLAUDE/PROJECTS/Wakeword/.github/workflows/ci.yml) and added the `push.tags` trigger required for `v*.*.*` tag runs. The job is `publish`, gated with `if: startsWith(github.ref, 'refs/tags/v')`, depends on `lint` and `test-unit`, builds with `hatch build`, publishes with `pypa/gh-action-pypi-publish@release/v1`, uses `environment: pypi`, and sets `permissions` to `id-token: write` and `contents: read`.
+
+Exact lines added in [ci.yml](J:/CLAUDE/PROJECTS/Wakeword/.github/workflows/ci.yml): lines `6-7` and `186-215`.
+```text
+6:     tags:
+7:       - "v*.*.*"
+186:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+187:   # Job 5: Publish to PyPI on version tags
+188:   # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+189:   publish:
+190:     name: publish
+191:     runs-on: ubuntu-22.04
+192:     if: startsWith(github.ref, 'refs/tags/v')
+193:     needs: [lint, test-unit]
+194:     environment: pypi
+195:     permissions:
+196:       id-token: write
+197:       contents: read
+198: 
+199:     steps:
+200:       - uses: actions/checkout@v4
+201: 
+202:       - name: Set up Python
+203:         uses: actions/setup-python@v5
+204:         with:
+205:           python-version: ${{ env.PYTHON_DEFAULT }}
+206:           cache: pip
+207: 
+208:       - name: Install hatch
+209:         run: pip install hatch
+210: 
+211:       - name: Build wheel and sdist
+212:         run: hatch build
+213: 
+214:       - name: Publish to PyPI
+215:         uses: pypa/gh-action-pypi-publish@release/v1
+```
+
+`git diff .github/workflows/ci.yml` output:
+```diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e9fb2e2..37c1989 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -3,8 +3,12 @@ name: CI
+ on:
+   push:
+     branches: [main, develop]
++    tags:
++      - "v*.*.*"
+   pull_request:
+     branches: [main]
++  schedule:
++    - cron: "0 2 * * *"  # 2am UTC nightly
+ 
+ concurrency:
+   group: ci-${{ github.ref }}
+@@ -179,7 +183,34 @@ jobs:
+           name: benchmark-results-${{ github.sha }}
+           path: benchmark-results/
+ 
+-# Nightly schedule
+-on:
+-  schedule:
+-    - cron: "0 2 * * *"  # 2am UTC nightly
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  # Job 5: Publish to PyPI on version tags
++  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
++  publish:
++    name: publish
++    runs-on: ubuntu-22.04
++    if: startsWith(github.ref, 'refs/tags/v')
++    needs: [lint, test-unit]
++    environment: pypi
++    permissions:
++      id-token: write
++      contents: read
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: ${{ env.PYTHON_DEFAULT }}
++          cache: pip
++
++      - name: Install hatch
++        run: pip install hatch
++
++      - name: Build wheel and sdist
++        run: hatch build
++
++      - name: Publish to PyPI
++        uses: pypa/gh-action-pypi-publish@release/v1
++
+warning: in the working copy of '.github/workflows/ci.yml', LF will be replaced by CRLF the next time Git touches it
+```
+
+Note: that `git diff` includes a pre-existing `schedule` relocation already present in this file; the WW-10 change I added is the tag trigger plus the new `publish` job.

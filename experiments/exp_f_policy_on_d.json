@@ -1,0 +1,316 @@
+{
+  "experiment": "F",
+  "description": "Decision policies on D_combined model (temporal smoothing on retrained model)",
+  "question": "Q4: Does temporal smoothing reduce EER on an already-better model?",
+  "model": "J:\\CLAUDE\\PROJECTS\\Wakeword\\experiments\\models\\D_combined.onnx",
+  "eval_dir": "J:\\CLAUDE\\PROJECTS\\Wakeword\\eval_clean",
+  "d_combined_raw_eer": 0.132,
+  "n_positives": 288,
+  "n_negatives": 546,
+  "frame_stats": {
+    "pos_frames_per_clip": {
+      "min": 9,
+      "max": 9,
+      "mean": 9.0
+    },
+    "neg_frames_per_clip": {
+      "min": 9,
+      "max": 9,
+      "mean": 9.0
+    }
+  },
+  "policies": {
+    "mean": {
+      "eer": 0.12925442612942611,
+      "eer_threshold": 0.38501478566063774,
+      "auc": 0.9550646113146113,
+      "dprime": 2.5538650260674274,
+      "pos_mean": 0.6530662508865381,
+      "pos_std": 0.21200702532681748,
+      "neg_mean": 0.17402802343454893,
+      "neg_std": 0.15943932915361148,
+      "eer_95ci_lo": 0.10648556041602178,
+      "eer_95ci_hi": 0.15202329184283045,
+      "vs_raw_eer_delta": -0.002745573870573892,
+      "vs_raw_eer_relative_pct": -2.079980204980221,
+      "beats_raw_eer": true,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 0.986,
+          "frr": 0.9895833333333334,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.792,
+          "frr": 0.6527777777777778,
+          "actual_fa_per_hour": 4.395604395604395
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.75,
+          "frr": 0.6111111111111112,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ]
+    },
+    "max": {
+      "eer": 0.21743360805860806,
+      "eer_threshold": 0.9751091003417969,
+      "auc": 0.8850700803825804,
+      "dprime": 1.5010157830517883,
+      "pos_mean": 0.9651628700602386,
+      "pos_std": 0.08298235624295988,
+      "neg_mean": 0.5582611651975157,
+      "neg_std": 0.37428230784275696,
+      "eer_95ci_lo": 0.18943754399188314,
+      "eer_95ci_hi": 0.24542967212533298,
+      "vs_raw_eer_delta": 0.08543360805860806,
+      "vs_raw_eer_relative_pct": 64.72243034743035,
+      "beats_raw_eer": false,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ]
+    },
+    "median": {
+      "eer": 0.12477106227106227,
+      "eer_threshold": 0.24700355529785156,
+      "auc": 0.9525780932030932,
+      "dprime": 2.6203132949602628,
+      "pos_mean": 0.7170773397924172,
+      "pos_std": 0.3021861702391247,
+      "neg_mean": 0.09015049651647225,
+      "neg_std": 0.15221961534366135,
+      "eer_95ci_lo": 0.10234304837604062,
+      "eer_95ci_hi": 0.1471990761660839,
+      "vs_raw_eer_delta": -0.007228937728937734,
+      "vs_raw_eer_relative_pct": -5.47646797646798,
+      "beats_raw_eer": true,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 0.987,
+          "frr": 0.7638888888888888,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.986,
+          "frr": 0.7604166666666666,
+          "actual_fa_per_hour": 4.395604395604395
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.969,
+          "frr": 0.6979166666666666,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ]
+    },
+    "top3_mean": {
+      "eer": 0.13547390109890106,
+      "eer_threshold": 0.8107474048932394,
+      "auc": 0.9452966015466016,
+      "dprime": 2.2499411160613447,
+      "pos_mean": 0.930447470776185,
+      "pos_std": 0.13160454231562563,
+      "neg_mean": 0.39383283277498204,
+      "neg_std": 0.31055805508797996,
+      "eer_95ci_lo": 0.11224707230275771,
+      "eer_95ci_hi": 0.1587007298950444,
+      "vs_raw_eer_delta": 0.0034739010989010555,
+      "vs_raw_eer_relative_pct": 2.6317432567432237,
+      "beats_raw_eer": false,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.998,
+          "frr": 0.59375,
+          "actual_fa_per_hour": 4.395604395604395
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.997,
+          "frr": 0.5381944444444444,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ]
+    },
+    "consecutive_2": {
+      "eer": 0.17549984737484736,
+      "eer_threshold": 1.0,
+      "auc": 0.8334255443630444,
+      "dprime": 1.7977607772619917,
+      "pos_mean": 0.971742745851063,
+      "pos_std": 0.13116601063130628,
+      "neg_mean": 0.44302218554766626,
+      "neg_std": 0.3946954762896084,
+      "eer_95ci_lo": 0.14968278715468636,
+      "eer_95ci_hi": 0.20131690759500837,
+      "vs_raw_eer_delta": 0.043499847374847356,
+      "vs_raw_eer_relative_pct": 32.95442982942981,
+      "beats_raw_eer": false,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ]
+    },
+    "consecutive_3": {
+      "eer": 0.14241834554334554,
+      "eer_threshold": 1.0,
+      "auc": 0.8911719067969068,
+      "dprime": 2.1599435998221534,
+      "pos_mean": 0.9145192010845575,
+      "pos_std": 0.20581310277661388,
+      "neg_mean": 0.349035440374425,
+      "neg_std": 0.30777353720082096,
+      "eer_95ci_lo": 0.11869948863036775,
+      "eer_95ci_hi": 0.16613720245632332,
+      "vs_raw_eer_delta": 0.01041834554334553,
+      "vs_raw_eer_relative_pct": 7.8926860176860085,
+      "beats_raw_eer": false,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        }
+      ]
+    },
+    "moving_avg_3": {
+      "eer": 0.1506601037851038,
+      "eer_threshold": 0.7104255060354868,
+      "auc": 0.9318019943019943,
+      "dprime": 2.186971236899127,
+      "pos_mean": 0.8945980384876884,
+      "pos_std": 0.18224075702873008,
+      "neg_mean": 0.35576646677667545,
+      "neg_std": 0.2969798614293069,
+      "eer_95ci_lo": 0.12638210196991598,
+      "eer_95ci_hi": 0.17493810560029163,
+      "vs_raw_eer_delta": 0.0186601037851038,
+      "vs_raw_eer_relative_pct": 14.136442261442273,
+      "beats_raw_eer": false,
+      "n_pos": 288,
+      "n_neg": 546,
+      "operating_points": [
+        {
+          "target_fa_per_hour": 1.0,
+          "threshold": 1.0,
+          "frr": 1.0,
+          "actual_fa_per_hour": 0.0
+        },
+        {
+          "target_fa_per_hour": 5.0,
+          "threshold": 0.998,
+          "frr": 0.6458333333333334,
+          "actual_fa_per_hour": 4.395604395604395
+        },
+        {
+          "target_fa_per_hour": 10.0,
+          "threshold": 0.997,
+          "frr": 0.5833333333333334,
+          "actual_fa_per_hour": 8.79120879120879
+        }
+      ]
+    }
+  },
+  "rankings": {
+    "by_eer": [
+      "median",
+      "mean",
+      "top3_mean",
+      "consecutive_3",
+      "moving_avg_3",
+      "consecutive_2",
+      "max"
+    ],
+    "by_auc": [
+      "mean",
+      "median",
+      "top3_mean",
+      "moving_avg_3",
+      "consecutive_3",
+      "max",
+      "consecutive_2"
+    ]
+  },
+  "verdict": {
+    "any_policy_beats_raw": true,
+    "best_policy": "median",
+    "best_eer": 0.12477106227106227,
+    "best_auc": 0.9525780932030932,
+    "best_dprime": 2.6203132949602628,
+    "n_policies_beating_raw": 2,
+    "beating_policies": [
+      "mean",
+      "median"
+    ]
+  },
+  "elapsed_seconds": 19.76628279685974
+}

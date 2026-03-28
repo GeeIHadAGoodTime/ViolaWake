@@ -173,7 +173,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/violawake_sdk"]
+packages = ["src/violawake_sdk", "src/violawake"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,41 @@
+{
+  "audit_date": "2026-03-26",
+  "executive_summary": "CRITICAL: 100% of the real speech eval set (113 positives, 302 negatives) is contaminated with training data. Every eval file has a cosine similarity of 1.0000 with its training counterpart, confirming identical audio content. The reported 1.71% EER and 98.2% detection rate at threshold 0.8 are INVALID and cannot be trusted. The model has literally memorized all eval files.",
+  "contamination_details": {
+    "eval_positive_files": 113,
+    "eval_positive_contaminated": 113,
+    "eval_positive_contamination_rate": 1.0,
+    "eval_negative_files": 302,
+    "eval_negative_contaminated": 302,
+    "eval_negative_contamination_rate": 1.0,
+    "total_eval_files": 415,
+    "total_contaminated": 415,
+    "clean_eval_files": 0,
+    "cosine_similarity_all_pairs": "1.0000 (identical embeddings)",
+    "original_122_groups_note": "The real_speech_eval.json reports 122 duplicate_groups. Our audit found 74 positive eval basenames matching positive training files. The discrepancy with 122 may be due to a different grouping method in the original script. Regardless, our audit confirms ALL 415 eval files are exact duplicates of training files."
+  },
+  "original_metrics_invalidated": {
+    "eer": 0.0171,
+    "detection_rate_at_0.8": 0.9823,
+    "status": "INVALID - computed on training data"
+  },
+  "recalculated_metrics_excluding_contaminated": {
+    "note": "IMPOSSIBLE - zero clean eval files remain after removing contaminated data",
+    "detection_rate": null,
+    "eer": null
+  },
+  "tts_eval_set_status": {
+    "eval_clean_files_on_disk": 834,
+    "eval_clean_basenames_in_training_cache": 15,
+    "contamination_rate": "~1.8% (15/834)",
+    "status": "MOSTLY CLEAN - suitable as fallback eval set",
+    "note": "The TTS eval set (eval_clean/) was NOT used for the 1.71% EER claim"
+  },
+  "recommendation": "1. The real speech eval set must be rebuilt from scratch with truly held-out recordings. 2. Until then, the TTS eval set (eval_clean/) with 834 files is the only trustworthy eval benchmark. 3. All published metrics (1.71% EER, 98.2% detection rate) should be retracted or marked as unreliable. 4. The training pipeline must add deduplication checks to prevent this from recurring. 5. The model itself is NOT necessarily bad - it may still perform well - but we have NO valid evidence for its real-world accuracy from the current eval set.",
+  "source_overlap_analysis": {
+    "unique_overlapping_basenames": 74,
+    "source_idx_overlap": 302,
+    "positive_eval_vs_positive_train_overlap": 74,
+    "positive_eval_vs_legacy_custom_overlap": 0
+  }
+}

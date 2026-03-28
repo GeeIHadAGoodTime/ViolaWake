@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - VoicePipeline orchestrating Wake->VAD->STT->TTS
 - Training CLI (violawake-train) with augmentation pipeline (gain, time stretch, pitch shift, additive noise, time shift)
 - Evaluation CLI (violawake-eval) with EER, ROC AUC, FAPH, FRR@FAR operating points
+- `violawake-generate` CLI for headless TTS sample generation
+- `violawake-expand-corpus` CLI for LibriSpeech/MUSAN corpus download
+- `[generate]` optional extra for sample generation without the full training stack
+- Quality gate with A/B/C/F grading post-training
+- Auto-evaluation with a held-out 20% test set
+- Safe tarball extraction with zip-slip protection
 - Model registry with SHA-256 verification and auto-download
 - Confusable word generation for adversarial testing
 

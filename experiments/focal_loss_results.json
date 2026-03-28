@@ -1,0 +1,480 @@
+{
+  "train_results": {},
+  "heldout_eval": {
+    "D_combined_bce_s42 (baseline)": {
+      "0.5": {
+        "detected": 1062,
+        "total": 1067,
+        "rate": 99.53
+      },
+      "0.7": {
+        "detected": 1061,
+        "total": 1067,
+        "rate": 99.44
+      },
+      "0.8": {
+        "detected": 1057,
+        "total": 1067,
+        "rate": 99.06
+      },
+      "0.85": {
+        "detected": 1056,
+        "total": 1067,
+        "rate": 98.97
+      },
+      "0.9": {
+        "detected": 1048,
+        "total": 1067,
+        "rate": 98.22
+      },
+      "0.95": {
+        "detected": 1029,
+        "total": 1067,
+        "rate": 96.44
+      }
+    },
+    "faph_hardened_s43 (R1)": {
+      "0.5": {
+        "detected": 1058,
+        "total": 1067,
+        "rate": 99.16
+      },
+      "0.7": {
+        "detected": 1052,
+        "total": 1067,
+        "rate": 98.59
+      },
+      "0.8": {
+        "detected": 1024,
+        "total": 1067,
+        "rate": 95.97
+      },
+      "0.85": {
+        "detected": 1015,
+        "total": 1067,
+        "rate": 95.13
+      },
+      "0.9": {
+        "detected": 988,
+        "total": 1067,
+        "rate": 92.6
+      },
+      "0.95": {
+        "detected": 912,
+        "total": 1067,
+        "rate": 85.47
+      }
+    },
+    "round2_s42 (R2 weighted BCE)": {
+      "0.5": {
+        "detected": 1056,
+        "total": 1067,
+        "rate": 98.97
+      },
+      "0.7": {
+        "detected": 1054,
+        "total": 1067,
+        "rate": 98.78
+      },
+      "0.8": {
+        "detected": 1043,
+        "total": 1067,
+        "rate": 97.75
+      },
+      "0.85": {
+        "detected": 1032,
+        "total": 1067,
+        "rate": 96.72
+      },
+      "0.9": {
+        "detected": 1008,
+        "total": 1067,
+        "rate": 94.47
+      },
+      "0.95": {
+        "detected": 956,
+        "total": 1067,
+        "rate": 89.6
+      }
+    },
+    "round2_s43 (R2 weighted BCE)": {
+      "0.5": {
+        "detected": 1055,
+        "total": 1067,
+        "rate": 98.88
+      },
+      "0.7": {
+        "detected": 1044,
+        "total": 1067,
+        "rate": 97.84
+      },
+      "0.8": {
+        "detected": 1017,
+        "total": 1067,
+        "rate": 95.31
+      },
+      "0.85": {
+        "detected": 999,
+        "total": 1067,
+        "rate": 93.63
+      },
+      "0.9": {
+        "detected": 963,
+        "total": 1067,
+        "rate": 90.25
+      },
+      "0.95": {
+        "detected": 855,
+        "total": 1067,
+        "rate": 80.13
+      }
+    },
+    "focal_g2_s42": {
+      "0.5": {
+        "detected": 1055,
+        "total": 1067,
+        "rate": 98.88
+      },
+      "0.7": {
+        "detected": 990,
+        "total": 1067,
+        "rate": 92.78
+      },
+      "0.8": {
+        "detected": 817,
+        "total": 1067,
+        "rate": 76.57
+      },
+      "0.85": {
+        "detected": 664,
+        "total": 1067,
+        "rate": 62.23
+      },
+      "0.9": {
+        "detected": 471,
+        "total": 1067,
+        "rate": 44.14
+      },
+      "0.95": {
+        "detected": 225,
+        "total": 1067,
+        "rate": 21.09
+      }
+    },
+    "focal_g2_s43": {
+      "0.5": {
+        "detected": 1057,
+        "total": 1067,
+        "rate": 99.06
+      },
+      "0.7": {
+        "detected": 965,
+        "total": 1067,
+        "rate": 90.44
+      },
+      "0.8": {
+        "detected": 763,
+        "total": 1067,
+        "rate": 71.51
+      },
+      "0.85": {
+        "detected": 586,
+        "total": 1067,
+        "rate": 54.92
+      },
+      "0.9": {
+        "detected": 365,
+        "total": 1067,
+        "rate": 34.21
+      },
+      "0.95": {
+        "detected": 101,
+        "total": 1067,
+        "rate": 9.47
+      }
+    },
+    "focal_g2_a_s42": {
+      "0.5": {
+        "detected": 1063,
+        "total": 1067,
+        "rate": 99.63
+      },
+      "0.7": {
+        "detected": 1028,
+        "total": 1067,
+        "rate": 96.34
+      },
+      "0.8": {
+        "detected": 916,
+        "total": 1067,
+        "rate": 85.85
+      },
+      "0.85": {
+        "detected": 777,
+        "total": 1067,
+        "rate": 72.82
+      },
+      "0.9": {
+        "detected": 580,
+        "total": 1067,
+        "rate": 54.36
+      },
+      "0.95": {
+        "detected": 298,
+        "total": 1067,
+        "rate": 27.93
+      }
+    },
+    "focal_g2_a_s43": {
+      "0.5": {
+        "detected": 1059,
+        "total": 1067,
+        "rate": 99.25
+      },
+      "0.7": {
+        "detected": 989,
+        "total": 1067,
+        "rate": 92.69
+      },
+      "0.8": {
+        "detected": 802,
+        "total": 1067,
+        "rate": 75.16
+      },
+      "0.85": {
+        "detected": 616,
+        "total": 1067,
+        "rate": 57.73
+      },
+      "0.9": {
+        "detected": 373,
+        "total": 1067,
+        "rate": 34.96
+      },
+      "0.95": {
+        "detected": 98,
+        "total": 1067,
+        "rate": 9.18
+      }
+    },
+    "focal_g3_s42": {
+      "0.5": {
+        "detected": 1051,
+        "total": 1067,
+        "rate": 98.5
+      },
+      "0.7": {
+        "detected": 872,
+        "total": 1067,
+        "rate": 81.72
+      },
+      "0.8": {
+        "detected": 617,
+        "total": 1067,
+        "rate": 57.83
+      },
+      "0.85": {
+        "detected": 440,
+        "total": 1067,
+        "rate": 41.24
+      },
+      "0.9": {
+        "detected": 250,
+        "total": 1067,
+        "rate": 23.43
+      },
+      "0.95": {
+        "detected": 70,
+        "total": 1067,
+        "rate": 6.56
+      }
+    },
+    "focal_g3_s43": {
+      "0.5": {
+        "detected": 1057,
+        "total": 1067,
+        "rate": 99.06
+      },
+      "0.7": {
+        "detected": 728,
+        "total": 1067,
+        "rate": 68.23
+      },
+      "0.8": {
+        "detected": 344,
+        "total": 1067,
+        "rate": 32.24
+      },
+      "0.85": {
+        "detected": 162,
+        "total": 1067,
+        "rate": 15.18
+      },
+      "0.9": {
+        "detected": 27,
+        "total": 1067,
+        "rate": 2.53
+      },
+      "0.95": {
+        "detected": 2,
+        "total": 1067,
+        "rate": 0.19
+      }
+    },
+    "focal_g2_hardonly_s42": {
+      "0.5": {
+        "detected": 1062,
+        "total": 1067,
+        "rate": 99.53
+      },
+      "0.7": {
+        "detected": 1054,
+        "total": 1067,
+        "rate": 98.78
+      },
+      "0.8": {
+        "detected": 1049,
+        "total": 1067,
+        "rate": 98.31
+      },
+      "0.85": {
+        "detected": 1045,
+        "total": 1067,
+        "rate": 97.94
+      },
+      "0.9": {
+        "detected": 1021,
+        "total": 1067,
+        "rate": 95.69
+      },
+      "0.95": {
+        "detected": 960,
+        "total": 1067,
+        "rate": 89.97
+      }
+    },
+    "focal_g2_hardonly_s43": {
+      "0.5": {
+        "detected": 1059,
+        "total": 1067,
+        "rate": 99.25
+      },
+      "0.7": {
+        "detected": 1054,
+        "total": 1067,
+        "rate": 98.78
+      },
+      "0.8": {
+        "detected": 1036,
+        "total": 1067,
+        "rate": 97.09
+      },
+      "0.85": {
+        "detected": 1024,
+        "total": 1067,
+        "rate": 95.97
+      },
+      "0.9": {
+        "detected": 999,
+        "total": 1067,
+        "rate": 93.63
+      },
+      "0.95": {
+        "detected": 965,
+        "total": 1067,
+        "rate": 90.44
+      }
+    }
+  },
+  "n_clean_heldout": 1067,
+  "faph_estimate": {
+    "round2_s42 (weighted BCE)": {
+      "0.8": {
+        "triggers": 5,
+        "hours": 0.992,
+        "faph": 5.04
+      },
+      "0.85": {
+        "triggers": 3,
+        "hours": 0.992,
+        "faph": 3.02
+      },
+      "0.9": {
+        "triggers": 2,
+        "hours": 0.992,
+        "faph": 2.02
+      },
+      "0.95": {
+        "triggers": 2,
+        "hours": 0.992,
+        "faph": 2.02
+      }
+    },
+    "focal_g2_hardonly_s42 (best focal)": {
+      "0.8": {
+        "triggers": 4,
+        "hours": 0.992,
+        "faph": 4.03
+      },
+      "0.85": {
+        "triggers": 2,
+        "hours": 0.992,
+        "faph": 2.02
+      },
+      "0.9": {
+        "triggers": 1,
+        "hours": 0.992,
+        "faph": 1.01
+      },
+      "0.95": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      }
+    },
+    "focal_g2_a_s42": {
+      "0.8": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.85": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.9": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.95": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      }
+    },
+    "focal_g2_a_s43": {
+      "0.8": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.85": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.9": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      },
+      "0.95": {
+        "triggers": 0,
+        "hours": 0.992,
+        "faph": 0.0
+      }
+    }
+  }
+}

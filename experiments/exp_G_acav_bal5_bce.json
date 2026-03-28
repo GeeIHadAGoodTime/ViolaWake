@@ -1,0 +1,53 @@
+{
+  "experiment": "G_acav",
+  "variant": "bal5_bce",
+  "ratio": 5.0,
+  "per_seed": [
+    {
+      "experiment": "G_acav_bal5_bce_s42",
+      "all_eer": 0.134,
+      "all_auc": 0.9009,
+      "all_dprime": 2.157,
+      "all_frr_050": 0.2535,
+      "trained_eer": 0.0101,
+      "pos_mean": 0.7401,
+      "neg_mean": 0.0418,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 38,
+      "best_val_loss": 0.03432250218746438,
+      "time": 371.1
+    },
+    {
+      "experiment": "G_acav_bal5_bce_s43",
+      "all_eer": 0.1339,
+      "all_auc": 0.9349,
+      "all_dprime": 2.156,
+      "all_frr_050": 0.2569,
+      "trained_eer": 0.0101,
+      "pos_mean": 0.7411,
+      "neg_mean": 0.0453,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 34,
+      "best_val_loss": 0.03217188106048688,
+      "time": 180.2
+    },
+    {
+      "experiment": "G_acav_bal5_bce_s44",
+      "all_eer": 0.1466,
+      "all_auc": 0.9202,
+      "all_dprime": 2.089,
+      "all_frr_050": 0.2465,
+      "trained_eer": 0.0257,
+      "pos_mean": 0.74,
+      "neg_mean": 0.0665,
+      "n_pos": 288,
+      "n_neg": 546,
+      "best_epoch": 7,
+      "best_val_loss": 0.04879938549794165,
+      "time": 73.1
+    }
+  ],
+  "eer_mean": 0.1382
+}

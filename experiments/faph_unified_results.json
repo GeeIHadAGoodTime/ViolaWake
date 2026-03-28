@@ -1,0 +1,1220 @@
+{
+  "r3_10x_s42 [PROD]": {
+    "faph": {
+      "model": "r3_10x_s42 [PROD]",
+      "model_type": "mlp",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 2737.9,
+      "avg_infer_us": 124.5,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 50,
+          "faph": 9.25
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 36,
+          "faph": 6.66
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 25,
+          "faph": 4.63
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 16,
+          "faph": 2.96
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 10,
+          "faph": 1.85
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 17,
+          "faph": 3.15
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 12,
+          "faph": 2.22
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 9,
+          "faph": 1.67
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 4,
+          "faph": 0.74
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 3,
+          "faph": 0.56
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 3,
+          "faph": 0.56
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 3,
+          "faph": 0.56
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 48,
+            "rate_pct": 80.0
+          },
+          "0.6": {
+            "detected": 43,
+            "rate_pct": 71.7
+          },
+          "0.7": {
+            "detected": 40,
+            "rate_pct": 66.7
+          },
+          "0.8": {
+            "detected": 22,
+            "rate_pct": 36.7
+          },
+          "0.9": {
+            "detected": 9,
+            "rate_pct": 15.0
+          },
+          "0.95": {
+            "detected": 3,
+            "rate_pct": 5.0
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 17,
+            "rate_pct": 28.3
+          },
+          "0.6": {
+            "detected": 17,
+            "rate_pct": 28.3
+          },
+          "0.7": {
+            "detected": 15,
+            "rate_pct": 25.0
+          },
+          "0.8": {
+            "detected": 8,
+            "rate_pct": 13.3
+          },
+          "0.9": {
+            "detected": 3,
+            "rate_pct": 5.0
+          },
+          "0.95": {
+            "detected": 1,
+            "rate_pct": 1.7
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 7,
+            "rate_pct": 11.7
+          },
+          "0.6": {
+            "detected": 7,
+            "rate_pct": 11.7
+          },
+          "0.7": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.8": {
+            "detected": 5,
+            "rate_pct": 8.3
+          },
+          "0.9": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  },
+  "j5_baseline_mlp": {
+    "faph": {
+      "model": "j5_baseline_mlp",
+      "model_type": "mlp",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 3315.0,
+      "avg_infer_us": 129.6,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 165,
+          "faph": 30.54
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 102,
+          "faph": 18.88
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 72,
+          "faph": 13.32
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 53,
+          "faph": 9.81
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 24,
+          "faph": 4.44
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 7,
+          "faph": 1.3
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 84,
+          "faph": 15.55
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 62,
+          "faph": 11.47
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 46,
+          "faph": 8.51
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 29,
+          "faph": 5.37
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 12,
+          "faph": 2.22
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 53,
+          "faph": 9.81
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 39,
+          "faph": 7.22
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 28,
+          "faph": 5.18
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 15,
+          "faph": 2.78
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 2,
+          "faph": 0.37
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 29,
+            "rate_pct": 48.3
+          },
+          "0.6": {
+            "detected": 22,
+            "rate_pct": 36.7
+          },
+          "0.7": {
+            "detected": 5,
+            "rate_pct": 8.3
+          },
+          "0.8": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 11,
+            "rate_pct": 18.3
+          },
+          "0.6": {
+            "detected": 9,
+            "rate_pct": 15.0
+          },
+          "0.7": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.6": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.7": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  },
+  "j5_temporal_cnn": {
+    "faph": {
+      "model": "j5_temporal_cnn",
+      "model_type": "temporal",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 9512.5,
+      "avg_infer_us": 144.8,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 225,
+          "faph": 41.64
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 137,
+          "faph": 25.35
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 84,
+          "faph": 15.55
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 37,
+          "faph": 6.85
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 87,
+          "faph": 16.1
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 52,
+          "faph": 9.62
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 25,
+          "faph": 4.63
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 11,
+          "faph": 2.04
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 25,
+          "faph": 4.63
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 12,
+          "faph": 2.22
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 0,
+          "faph": 0.0
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 19,
+            "rate_pct": 31.7
+          },
+          "0.6": {
+            "detected": 9,
+            "rate_pct": 15.0
+          },
+          "0.7": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.8": {
+            "detected": 4,
+            "rate_pct": 6.7
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 3,
+            "rate_pct": 5.0
+          },
+          "0.6": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.7": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.6": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.7": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  },
+  "j5_temporal_convgru": {
+    "faph": {
+      "model": "j5_temporal_convgru",
+      "model_type": "temporal",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 6300.5,
+      "avg_infer_us": 163.2,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 207,
+          "faph": 38.31
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 164,
+          "faph": 30.35
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 130,
+          "faph": 24.06
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 87,
+          "faph": 16.1
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 36,
+          "faph": 6.66
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 11,
+          "faph": 2.04
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 105,
+          "faph": 19.43
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 86,
+          "faph": 15.92
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 66,
+          "faph": 12.21
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 51,
+          "faph": 9.44
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 17,
+          "faph": 3.15
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 4,
+          "faph": 0.74
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 63,
+          "faph": 11.66
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 52,
+          "faph": 9.62
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 33,
+          "faph": 6.11
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 20,
+          "faph": 3.7
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 5,
+          "faph": 0.93
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 29,
+            "rate_pct": 48.3
+          },
+          "0.6": {
+            "detected": 21,
+            "rate_pct": 35.0
+          },
+          "0.7": {
+            "detected": 13,
+            "rate_pct": 21.7
+          },
+          "0.8": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.9": {
+            "detected": 5,
+            "rate_pct": 8.3
+          },
+          "0.95": {
+            "detected": 1,
+            "rate_pct": 1.7
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.6": {
+            "detected": 5,
+            "rate_pct": 8.3
+          },
+          "0.7": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.6": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.7": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  },
+  "j5_temporal_gru": {
+    "faph": {
+      "model": "j5_temporal_gru",
+      "model_type": "temporal",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 3248.7,
+      "avg_infer_us": 172.1,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 127,
+          "faph": 23.5
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 65,
+          "faph": 12.03
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 32,
+          "faph": 5.92
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 9,
+          "faph": 1.67
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 0,
+          "faph": 0.0
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 36,
+          "faph": 6.66
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 20,
+          "faph": 3.7
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 11,
+          "faph": 2.04
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 4,
+          "faph": 0.74
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 0,
+          "faph": 0.0
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 10,
+          "faph": 1.85
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 7,
+          "faph": 1.3
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 0,
+          "faph": 0.0
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 0,
+          "faph": 0.0
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 36,
+            "rate_pct": 60.0
+          },
+          "0.6": {
+            "detected": 26,
+            "rate_pct": 43.3
+          },
+          "0.7": {
+            "detected": 11,
+            "rate_pct": 18.3
+          },
+          "0.8": {
+            "detected": 3,
+            "rate_pct": 5.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 12,
+            "rate_pct": 20.0
+          },
+          "0.6": {
+            "detected": 7,
+            "rate_pct": 11.7
+          },
+          "0.7": {
+            "detected": 3,
+            "rate_pct": 5.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 5,
+            "rate_pct": 8.3
+          },
+          "0.6": {
+            "detected": 2,
+            "rate_pct": 3.3
+          },
+          "0.7": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  },
+  "concat_864_wide_s42": {
+    "faph": {
+      "model": "concat_864_wide_s42",
+      "model_type": "concat",
+      "total_hours": 5.4035,
+      "total_windows": 156618,
+      "elapsed_seconds": 4934.6,
+      "avg_infer_us": 151.4,
+      "faph": {
+        "1-of-1@0.5": {
+          "config": "1-of-1",
+          "threshold": 0.5,
+          "triggers": 85,
+          "faph": 15.73
+        },
+        "1-of-1@0.6": {
+          "config": "1-of-1",
+          "threshold": 0.6,
+          "triggers": 71,
+          "faph": 13.14
+        },
+        "1-of-1@0.7": {
+          "config": "1-of-1",
+          "threshold": 0.7,
+          "triggers": 69,
+          "faph": 12.77
+        },
+        "1-of-1@0.8": {
+          "config": "1-of-1",
+          "threshold": 0.8,
+          "triggers": 64,
+          "faph": 11.84
+        },
+        "1-of-1@0.9": {
+          "config": "1-of-1",
+          "threshold": 0.9,
+          "triggers": 48,
+          "faph": 8.88
+        },
+        "1-of-1@0.95": {
+          "config": "1-of-1",
+          "threshold": 0.95,
+          "triggers": 41,
+          "faph": 7.59
+        },
+        "2-of-2@0.5": {
+          "config": "2-of-2",
+          "threshold": 0.5,
+          "triggers": 20,
+          "faph": 3.7
+        },
+        "2-of-2@0.6": {
+          "config": "2-of-2",
+          "threshold": 0.6,
+          "triggers": 19,
+          "faph": 3.52
+        },
+        "2-of-2@0.7": {
+          "config": "2-of-2",
+          "threshold": 0.7,
+          "triggers": 17,
+          "faph": 3.15
+        },
+        "2-of-2@0.8": {
+          "config": "2-of-2",
+          "threshold": 0.8,
+          "triggers": 14,
+          "faph": 2.59
+        },
+        "2-of-2@0.9": {
+          "config": "2-of-2",
+          "threshold": 0.9,
+          "triggers": 9,
+          "faph": 1.67
+        },
+        "2-of-2@0.95": {
+          "config": "2-of-2",
+          "threshold": 0.95,
+          "triggers": 7,
+          "faph": 1.3
+        },
+        "3-of-3@0.5": {
+          "config": "3-of-3",
+          "threshold": 0.5,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.6": {
+          "config": "3-of-3",
+          "threshold": 0.6,
+          "triggers": 2,
+          "faph": 0.37
+        },
+        "3-of-3@0.7": {
+          "config": "3-of-3",
+          "threshold": 0.7,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.8": {
+          "config": "3-of-3",
+          "threshold": 0.8,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.9": {
+          "config": "3-of-3",
+          "threshold": 0.9,
+          "triggers": 1,
+          "faph": 0.19
+        },
+        "3-of-3@0.95": {
+          "config": "3-of-3",
+          "threshold": 0.95,
+          "triggers": 1,
+          "faph": 0.19
+        }
+      }
+    },
+    "tp": {
+      "n_files": 60,
+      "configs": {
+        "1-of-1": {
+          "0.5": {
+            "detected": 19,
+            "rate_pct": 31.7
+          },
+          "0.6": {
+            "detected": 18,
+            "rate_pct": 30.0
+          },
+          "0.7": {
+            "detected": 15,
+            "rate_pct": 25.0
+          },
+          "0.8": {
+            "detected": 11,
+            "rate_pct": 18.3
+          },
+          "0.9": {
+            "detected": 10,
+            "rate_pct": 16.7
+          },
+          "0.95": {
+            "detected": 10,
+            "rate_pct": 16.7
+          }
+        },
+        "2-of-2": {
+          "0.5": {
+            "detected": 7,
+            "rate_pct": 11.7
+          },
+          "0.6": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.7": {
+            "detected": 6,
+            "rate_pct": 10.0
+          },
+          "0.8": {
+            "detected": 3,
+            "rate_pct": 5.0
+          },
+          "0.9": {
+            "detected": 1,
+            "rate_pct": 1.7
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        },
+        "3-of-3": {
+          "0.5": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.6": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.7": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.8": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.9": {
+            "detected": 0,
+            "rate_pct": 0.0
+          },
+          "0.95": {
+            "detected": 0,
+            "rate_pct": 0.0
+          }
+        }
+      }
+    }
+  }
+}

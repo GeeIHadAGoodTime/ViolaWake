@@ -17,8 +17,8 @@ def main() -> None:
                         help="Output path for the trained ONNX model")
     parser.add_argument("--epochs", type=int, default=50, metavar="N",
                         help="Training epochs (default: 50)")
-    parser.add_argument("--augment", action="store_true", default=True,
-                        help="Enable data augmentation (default: True)")
+    parser.add_argument("--no-augment", action="store_true", default=False,
+                        help="Disable data augmentation (augmentation is on by default)")
     parser.add_argument("--quiet", action="store_true",
                         help="Suppress training progress output")
     args = parser.parse_args()
@@ -36,7 +36,7 @@ def main() -> None:
         positives_dir=positive_dir,
         output_path=output_path,
         epochs=args.epochs,
-        augment=args.augment,
+        augment=not args.no_augment,
         eval_dir=negative_dir,
         verbose=not args.quiet,
     )

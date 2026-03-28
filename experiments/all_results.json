@@ -1,0 +1,90 @@
+[
+  {
+    "experiment": "F_musan",
+    "all_eer": 0.1447,
+    "all_auc": 0.9345,
+    "all_dprime": 2.261,
+    "all_frr_050": 0.2431,
+    "trained_eer": 0.0239,
+    "trained_dprime": 5.602,
+    "pos_mean": 0.7178,
+    "neg_mean": 0.0885,
+    "n_pos": 288,
+    "n_neg": 546,
+    "best_epoch": 27,
+    "best_val_loss": 0.008512699849722217,
+    "training_time": 52.2,
+    "architecture": "default",
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "seed": 42
+  },
+  {
+    "experiment": "G_acav",
+    "all_eer": 0.1429,
+    "all_auc": 0.9277,
+    "all_dprime": 2.296,
+    "all_frr_050": 0.2222,
+    "trained_eer": 0.0331,
+    "trained_dprime": 4.776,
+    "pos_mean": 0.7163,
+    "neg_mean": 0.1353,
+    "n_pos": 288,
+    "n_neg": 546,
+    "best_epoch": 11,
+    "best_val_loss": 0.00322543388327495,
+    "training_time": 143.0,
+    "architecture": "default",
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "seed": 42
+  },
+  {
+    "experiment": "H_confusable_v2",
+    "all_eer": 0.1387,
+    "all_auc": 0.9403,
+    "all_dprime": 2.318,
+    "all_frr_050": 0.2222,
+    "trained_eer": 0.0207,
+    "trained_dprime": 5.28,
+    "pos_mean": 0.713,
+    "neg_mean": 0.0919,
+    "n_pos": 288,
+    "n_neg": 546,
+    "best_epoch": 26,
+    "best_val_loss": 0.009094295520668722,
+    "training_time": 51.8,
+    "architecture": "default",
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "seed": 42
+  },
+  {
+    "experiment": "I_full_corpus",
+    "all_eer": 0.1473,
+    "all_auc": 0.9152,
+    "all_dprime": 2.075,
+    "all_frr_050": 0.2535,
+    "trained_eer": 0.0281,
+    "trained_dprime": 5.186,
+    "pos_mean": 0.691,
+    "neg_mean": 0.0942,
+    "n_pos": 288,
+    "n_neg": 546,
+    "best_epoch": 36,
+    "best_val_loss": 0.0034541001854820987,
+    "training_time": 333.8,
+    "architecture": "default",
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "seed": 42
+  }
+]

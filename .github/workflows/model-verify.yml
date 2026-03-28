@@ -1,0 +1,89 @@
+name: Model Verification
+
+on:
+  # Weekly on Monday at 06:00 UTC
+  schedule:
+    - cron: "0 6 * * 1"
+  # On changes to model registry or this workflow
+  push:
+    branches: [main, develop]
+    paths:
+      - "src/violawake_sdk/models.py"
+      - ".github/workflows/model-verify.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/violawake_sdk/models.py"
+      - ".github/workflows/model-verify.yml"
+  # Manual trigger
+  workflow_dispatch:
+
+concurrency:
+  group: model-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-models:
+    name: Verify models (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[download]"
+          pip install onnxruntime
+
+      - name: Warn on placeholder hashes
+        run: |
+          python - <<'PY'
+          from violawake_sdk.models import MODEL_REGISTRY
+
+          seen = set()
+          placeholders = []
+          for name, spec in MODEL_REGISTRY.items():
+              if spec.name in seen:
+                  continue
+              seen.add(spec.name)
+              if spec.sha256.startswith("PLACEHOLDER"):
+                  placeholders.append(name)
+
+          if placeholders:
+              models = ", ".join(placeholders)
+              print(f"::warning::Placeholder SHA-256 values detected. Hash verification will be skipped for: {models}")
+          else:
+              print("All model hashes are populated.")
+          PY
+
+      - name: Cache downloaded models
+        uses: actions/cache@v4
+        id: model-cache
+        with:
+          path: ~/.violawake/models
+          key: model-verify-v1-${{ hashFiles('src/violawake_sdk/models.py') }}
+          restore-keys: |
+            model-verify-v1-
+
+      - name: Verify all models
+        run: python scripts/verify_models.py --ci
+        env:
+          VIOLAWAKE_MODEL_DIR: ~/.violawake/models
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-verification-py${{ matrix.python-version }}
+          path: model-verify-report.json
+          retention-days: 30
