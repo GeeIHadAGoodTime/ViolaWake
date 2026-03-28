@@ -17,11 +17,11 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Default configuration
-DEFAULT_NOISE_WINDOW_S = 5.0      # Seconds of audio to average for noise floor
-DEFAULT_MIN_THRESHOLD = 0.60      # Never drop threshold below this
-DEFAULT_MAX_THRESHOLD = 0.95      # Never raise threshold above this
-DEFAULT_SNR_BOOST_DB = 6.0        # SNR above which threshold can be lowered
-DEFAULT_SNR_PENALTY_DB = 3.0      # SNR below which threshold should be raised
+DEFAULT_NOISE_WINDOW_S = 5.0  # Seconds of audio to average for noise floor
+DEFAULT_MIN_THRESHOLD = 0.60  # Never drop threshold below this
+DEFAULT_MAX_THRESHOLD = 0.95  # Never raise threshold above this
+DEFAULT_SNR_BOOST_DB = 6.0  # SNR above which threshold can be lowered
+DEFAULT_SNR_PENALTY_DB = 3.0  # SNR below which threshold should be raised
 
 
 @dataclass(frozen=True)

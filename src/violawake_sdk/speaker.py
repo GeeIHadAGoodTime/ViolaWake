@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -273,12 +273,16 @@ class SpeakerVerificationHook:
         if is_verified:
             logger.debug(
                 "Speaker verified: id=%s, similarity=%.3f (threshold=%.3f)",
-                best_id, best_sim, threshold,
+                best_id,
+                best_sim,
+                threshold,
             )
         else:
             logger.debug(
                 "Speaker rejected: best_id=%s, similarity=%.3f (threshold=%.3f)",
-                best_id, best_sim, threshold,
+                best_id,
+                best_sim,
+                threshold,
             )
 
         return SpeakerVerifyResult(
@@ -362,7 +366,7 @@ class SpeakerVerificationHook:
             # Try reading the given path as JSON directly
             json_path = path
 
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open(json_path, encoding="utf-8") as f:
             metadata = json.load(f)
 
         npz_path = path.with_suffix(".npz")
@@ -381,7 +385,9 @@ class SpeakerVerificationHook:
             if n_emb > self._MAX_EMBEDDINGS_PER_SPEAKER:
                 logger.warning(
                     "Speaker '%s' claims %d embeddings, capping to %d to prevent DoS",
-                    sid, n_emb, self._MAX_EMBEDDINGS_PER_SPEAKER,
+                    sid,
+                    n_emb,
+                    self._MAX_EMBEDDINGS_PER_SPEAKER,
                 )
                 n_emb = self._MAX_EMBEDDINGS_PER_SPEAKER
             for i in range(n_emb):

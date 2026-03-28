@@ -55,9 +55,7 @@ def get_backend(
         return _make_tflite()
     if name == "auto":
         return _auto_select(providers)
-    raise ValueError(
-        f"Unknown backend {name!r}.  Choose from: 'onnx', 'tflite', 'auto'."
-    )
+    raise ValueError(f"Unknown backend {name!r}.  Choose from: 'onnx', 'tflite', 'auto'.")
 
 
 def _make_onnx(providers: list[str] | None = None) -> InferenceBackend:

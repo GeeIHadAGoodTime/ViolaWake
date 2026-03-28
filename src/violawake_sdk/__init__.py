@@ -87,11 +87,13 @@ def list_models() -> list[dict[str, str]]:
         if spec.name in ("oww_backbone", "kokoro_v1_0", "kokoro_voices_v1_0"):
             continue
         seen.add(spec.name)
-        result.append({
-            "name": name,
-            "description": spec.description,
-            "version": spec.version,
-        })
+        result.append(
+            {
+                "name": name,
+                "description": spec.description,
+                "version": spec.version,
+            }
+        )
     return result
 
 

@@ -176,11 +176,13 @@ def _check_embedding_overlap(
     for i in range(len(eval_embs)):
         for j in range(len(train_embs)):
             if sim_matrix[i, j] >= cosine_threshold:
-                overlapping.append({
-                    "train_file": str(train_embs[j][0]),
-                    "eval_file": str(eval_embs[i][0]),
-                    "cosine_similarity": float(sim_matrix[i, j]),
-                })
+                overlapping.append(
+                    {
+                        "train_file": str(train_embs[j][0]),
+                        "eval_file": str(eval_embs[i][0]),
+                        "cosine_similarity": float(sim_matrix[i, j]),
+                    }
+                )
 
     return {
         "method": "embedding",
@@ -262,7 +264,10 @@ def main() -> None:
     import json
 
     result = check_contamination(
-        args.train, args.eval, args.method, args.cosine_threshold,
+        args.train,
+        args.eval,
+        args.method,
+        args.cosine_threshold,
     )
 
     print(json.dumps(result, indent=2))

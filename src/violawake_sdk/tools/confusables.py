@@ -351,11 +351,7 @@ def _generate_token_confusables(token: str) -> set[str]:
         | _generate_prefix_suffix_variants(token)
         | _generate_syllable_variants(token)
     )
-    return {
-        candidate
-        for candidate in raw_candidates
-        if _is_viable_candidate(token, candidate)
-    }
+    return {candidate for candidate in raw_candidates if _is_viable_candidate(token, candidate)}
 
 
 def _is_viable_phrase(original: str, candidate: str) -> bool:

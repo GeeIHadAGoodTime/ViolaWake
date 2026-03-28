@@ -118,9 +118,7 @@ def apply_time_stretch(audio: np.ndarray, rate: float) -> np.ndarray:
     return np.interp(indices, np.arange(original_len), audio).astype(np.float32)
 
 
-def apply_pitch_shift(
-    audio: np.ndarray, semitones: float, sample_rate: int = 16000
-) -> np.ndarray:
+def apply_pitch_shift(audio: np.ndarray, semitones: float, sample_rate: int = 16000) -> np.ndarray:
     """Pitch shift by resampling then time-correcting.
 
     Algorithm: resample to shift pitch, then stretch back to original
@@ -230,9 +228,7 @@ def apply_additive_noise(
     return np.clip(result, -1.0, 1.0).astype(np.float32)
 
 
-def apply_time_shift(
-    audio: np.ndarray, shift_samples: int
-) -> np.ndarray:
+def apply_time_shift(audio: np.ndarray, shift_samples: int) -> np.ndarray:
     """Shift audio in time by rolling with zero-fill.
 
     Args:
@@ -318,14 +314,14 @@ def spec_augment(
         if f == 0:
             continue
         f0 = int(_randint(0, max(n_freq - f, 1)))
-        spec[f0: f0 + f, :] = 0.0
+        spec[f0 : f0 + f, :] = 0.0
 
     for _ in range(num_time_masks):
         t = int(_randint(0, time_mask_param + 1))
         if t == 0:
             continue
         t0 = int(_randint(0, max(n_time - t, 1)))
-        spec[:, t0: t0 + t] = 0.0
+        spec[:, t0 : t0 + t] = 0.0
 
     return spec
 
@@ -529,9 +525,7 @@ class AugmentationPipeline:
                 if loaded_rir is not None:
                     self._rir_cache.append(loaded_rir)
 
-    def augment_spectrogram(
-        self, spectrogram: np.ndarray
-    ) -> np.ndarray:
+    def augment_spectrogram(self, spectrogram: np.ndarray) -> np.ndarray:
         """Apply SpecAugment masking to a spectrogram if enabled.
 
         Uses the config's p_spec_augment probability and SpecAugment
@@ -611,9 +605,7 @@ class AugmentationPipeline:
 
         return variants
 
-    def augment_batch(
-        self, clips: list[np.ndarray], factor: int = 10
-    ) -> list[np.ndarray]:
+    def augment_batch(self, clips: list[np.ndarray], factor: int = 10) -> list[np.ndarray]:
         """Augment a batch of clips.
 
         Args:

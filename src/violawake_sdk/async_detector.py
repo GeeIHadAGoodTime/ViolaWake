@@ -28,13 +28,10 @@ from typing import Any
 
 import numpy as np
 
+from violawake_sdk.confidence import ConfidenceResult
 from violawake_sdk.wake_detector import (
-    DEFAULT_COOLDOWN_S,
-    DEFAULT_THRESHOLD,
-    WakeDecisionPolicy,
     WakeDetector,
 )
-from violawake_sdk.confidence import ConfidenceResult
 
 
 class AsyncWakeDetector:
@@ -62,7 +59,9 @@ class AsyncWakeDetector:
         """Enter async context manager."""
         return self
 
-    async def __aexit__(self, exc_type: type | None, exc_val: BaseException | None, exc_tb: object) -> None:
+    async def __aexit__(
+        self, exc_type: type | None, exc_val: BaseException | None, exc_tb: object
+    ) -> None:
         """Exit async context manager, shutting down the executor."""
         self.close()
 

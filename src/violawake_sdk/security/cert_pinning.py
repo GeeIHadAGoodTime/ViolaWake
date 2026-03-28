@@ -41,7 +41,7 @@ import ssl
 import sys
 import threading
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -57,6 +57,7 @@ class CertPinError(Exception):
 # ---------------------------------------------------------------------------
 # Pin storage
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class PinSet:
@@ -114,29 +115,35 @@ class PinSet:
 
 _GITHUB_PINS = PinSet(
     hostname="github.com",
-    pins=frozenset([
-        DYNAMIC_PIN_FETCH_ON_FIRST_USE,
-    ]),
+    pins=frozenset(
+        [
+            DYNAMIC_PIN_FETCH_ON_FIRST_USE,
+        ]
+    ),
     include_subdomains=True,
     expires=datetime(2028, 1, 1, tzinfo=timezone.utc),
 )
 
 _GITHUB_OBJECTS_PINS = PinSet(
     hostname="objects.githubusercontent.com",
-    pins=frozenset([
-        # GitHub objects CDN — same CA chain as github.com
-        DYNAMIC_PIN_FETCH_ON_FIRST_USE,
-    ]),
+    pins=frozenset(
+        [
+            # GitHub objects CDN — same CA chain as github.com
+            DYNAMIC_PIN_FETCH_ON_FIRST_USE,
+        ]
+    ),
     include_subdomains=True,
     expires=datetime(2028, 1, 1, tzinfo=timezone.utc),
 )
 
 _HUGGINGFACE_PINS = PinSet(
     hostname="huggingface.co",
-    pins=frozenset([
-        # HuggingFace uses Amazon/Cloudfront — pin the intermediate
-        DYNAMIC_PIN_FETCH_ON_FIRST_USE,
-    ]),
+    pins=frozenset(
+        [
+            # HuggingFace uses Amazon/Cloudfront — pin the intermediate
+            DYNAMIC_PIN_FETCH_ON_FIRST_USE,
+        ]
+    ),
     include_subdomains=True,
     expires=datetime(2028, 1, 1, tzinfo=timezone.utc),
 )
@@ -163,6 +170,7 @@ _dynamic_pin_cache_lock = threading.Lock()
 # SPKI extraction
 # ---------------------------------------------------------------------------
 
+
 def _extract_spki_hash_from_der_cert(der_cert: bytes) -> str:
     """Extract SHA-256 hash of SPKI from a DER-encoded certificate.
 
@@ -186,12 +194,13 @@ def _extract_spki_hash_from_der_cert(der_cert: bytes) -> str:
 
     try:
         cert = x509.load_der_x509_certificate(der_cert)
-        spki_der = cert.public_key().public_bytes(
-            Encoding.DER, PublicFormat.SubjectPublicKeyInfo
-        )
+        spki_der = cert.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
         return hashlib.sha256(spki_der).hexdigest()
     except Exception:
-        logger.warning("Failed to parse certificate with cryptography library; using ASN.1 fallback", exc_info=True)
+        logger.warning(
+            "Failed to parse certificate with cryptography library; using ASN.1 fallback",
+            exc_info=True,
+        )
         return _extract_spki_hash_asn1_fallback(der_cert)
 
 
@@ -230,7 +239,7 @@ def _extract_spki_hash_asn1_fallback(der_cert: bytes) -> str:
             num_bytes = length_byte & 0x7F
             if offset + num_bytes > len(data):
                 raise ValueError("DER parse error: length bytes exceed data")
-            length = int.from_bytes(data[offset:offset + num_bytes], "big")
+            length = int.from_bytes(data[offset : offset + num_bytes], "big")
             return tag, offset + num_bytes, length
 
     def _skip_element(data: bytes, offset: int) -> int:
@@ -242,9 +251,7 @@ def _extract_spki_hash_asn1_fallback(der_cert: bytes) -> str:
         """Enter a SEQUENCE, return (content_start, content_end)."""
         tag, content_start, content_length = _read_tag_length(data, offset)
         if tag != 0x30:
-            raise ValueError(
-                "DER parse error: expected SEQUENCE (0x30), got 0x%02x" % tag
-            )
+            raise ValueError(f"DER parse error: expected SEQUENCE (0x30), got 0x{tag:02x}")
         return content_start, content_start + content_length
 
     # Parse outer SEQUENCE (Certificate)
@@ -282,13 +289,11 @@ def _extract_spki_hash_asn1_fallback(der_cert: bytes) -> str:
     # The SPKI includes the tag and length, so we hash from pos to end of content
     # Re-read to get full element boundaries
     tag_byte = der_cert[pos]
-    spki_bytes = der_cert[pos:spki_content_start + spki_content_length]
+    spki_bytes = der_cert[pos : spki_content_start + spki_content_length]
 
     # Verify it's a SEQUENCE
     if tag_byte != 0x30:
-        raise ValueError(
-            "DER parse error: subjectPublicKeyInfo not a SEQUENCE"
-        )
+        raise ValueError("DER parse error: subjectPublicKeyInfo not a SEQUENCE")
 
     return hashlib.sha256(spki_bytes).hexdigest()
 
@@ -296,6 +301,7 @@ def _extract_spki_hash_asn1_fallback(der_cert: bytes) -> str:
 # ---------------------------------------------------------------------------
 # Live pin fetching
 # ---------------------------------------------------------------------------
+
 
 def fetch_live_spki_pins(
     hostname: str,
@@ -319,7 +325,7 @@ def fetch_live_spki_pins(
     context = ssl.create_default_context()
     pins = []
 
-    with socket.create_connection((hostname, port), timeout=timeout) as sock:
+    with socket.create_connection((hostname, port), timeout=timeout) as sock:  # noqa: SIM117
         with context.wrap_socket(sock, server_hostname=hostname) as tls_sock:
             # get_verified_chain() returns the full verified certificate chain
             # as a list of DER-encoded bytes. It was added in Python 3.13.
@@ -328,10 +334,9 @@ def fetch_live_spki_pins(
             # but still provides meaningful SPKI pinning for the server cert.
             der_chain = None
             if sys.version_info >= (3, 13):
-                try:
+                try:  # noqa: SIM105
                     der_chain = tls_sock.get_verified_chain()  # type: ignore[attr-defined]
                 except AttributeError:
-                    # Defensive: in case a runtime doesn't expose it despite version check
                     pass
 
             if der_chain is None:
@@ -355,6 +360,7 @@ def fetch_live_spki_pins(
 # ---------------------------------------------------------------------------
 # Certificate verification
 # ---------------------------------------------------------------------------
+
 
 def _check_cert_expiry(
     peer_cert: dict[str, Any] | None,
@@ -463,10 +469,7 @@ def verify_certificate_pin(
 
     # Check against all pins (current + backup)
     # Skip placeholder pins that indicate dynamic fetch is needed
-    real_pins = {
-        p for p in pin_set.pins
-        if not p.startswith("DYNAMIC_PIN_FETCH")
-    }
+    real_pins = {p for p in pin_set.pins if not p.startswith("DYNAMIC_PIN_FETCH")}
 
     if not real_pins:
         with _dynamic_pin_cache_lock:
@@ -538,6 +541,7 @@ def _bootstrap_dynamic_pin(hostname: str, observed_hash: str) -> None:
 # ---------------------------------------------------------------------------
 # SSL context creation
 # ---------------------------------------------------------------------------
+
 
 def create_pinned_ssl_context(
     hostname: str,
@@ -611,6 +615,7 @@ def verify_connection_pin(
 # ---------------------------------------------------------------------------
 # High-level download integration
 # ---------------------------------------------------------------------------
+
 
 def pinned_download(
     url: str,
@@ -730,7 +735,7 @@ def _verify_host_pin(
     context = create_pinned_ssl_context(hostname, strict=strict)
 
     try:
-        with socket.create_connection((hostname, port), timeout=timeout) as sock:
+        with socket.create_connection((hostname, port), timeout=timeout) as sock:  # noqa: SIM117
             with context.wrap_socket(sock, server_hostname=hostname) as tls_sock:
                 return verify_connection_pin(tls_sock, hostname, strict=strict)
     except CertPinError:

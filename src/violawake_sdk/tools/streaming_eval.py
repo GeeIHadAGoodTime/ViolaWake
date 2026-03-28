@@ -59,8 +59,7 @@ def streaming_faph(
         import soundfile as sf
     except ImportError:
         raise ImportError(
-            "soundfile is required for streaming evaluation. "
-            "Install with: pip install soundfile"
+            "soundfile is required for streaming evaluation. Install with: pip install soundfile"
         ) from None
 
     import numpy as np
@@ -80,7 +79,7 @@ def streaming_faph(
     detector.reset()
 
     for start in range(0, len(audio) - frame_samples + 1, frame_samples):
-        frame = audio[start:start + frame_samples]
+        frame = audio[start : start + frame_samples]
         if detector.detect(frame.tobytes()):
             timestamp = start / sample_rate
             triggers.append(timestamp)
@@ -116,9 +115,7 @@ def streaming_faph_directory(
     Returns:
         Dict with aggregate FAPH, per-file results, and total hours.
     """
-    audio_files = sorted(
-        list(Path(audio_dir).rglob("*.wav"))
-    )
+    audio_files = sorted(list(Path(audio_dir).rglob("*.wav")))
 
     if not audio_files:
         return {
@@ -215,7 +212,9 @@ def main() -> None:
 
     from violawake_sdk.wake_detector import WakeDetector
 
-    print(f"Loading detector: model={args.model}, threshold={args.threshold}, confirm={args.confirm}")
+    print(
+        f"Loading detector: model={args.model}, threshold={args.threshold}, confirm={args.confirm}"
+    )
     detector = WakeDetector(
         model=args.model,
         threshold=args.threshold,
@@ -234,8 +233,10 @@ def main() -> None:
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print(f"\nResults:")
-            print(f"  Duration:        {result['total_hours'] * 3600:.1f}s ({result['total_hours']:.4f}h)")
+            print("\nResults:")
+            print(
+                f"  Duration:        {result['total_hours'] * 3600:.1f}s ({result['total_hours']:.4f}h)"
+            )
             print(f"  False accepts:   {result['n_false_accepts']}")
             print(f"  FAPH:            {result['faph']}")
             if result["trigger_timestamps"]:
@@ -248,15 +249,20 @@ def main() -> None:
 
         print(f"Processing directory: {args.audio_dir}")
         result = streaming_faph_directory(
-            detector, args.audio_dir, args.frame_ms, verbose=not args.json,
+            detector,
+            args.audio_dir,
+            args.frame_ms,
+            verbose=not args.json,
         )
 
         if args.json:
             print(json.dumps(result, indent=2))
         else:
-            print(f"\nAggregate Results:")
+            print("\nAggregate Results:")
             print(f"  Files processed: {result['n_files']}")
-            print(f"  Total duration:  {result['total_hours'] * 3600:.1f}s ({result['total_hours']:.4f}h)")
+            print(
+                f"  Total duration:  {result['total_hours'] * 3600:.1f}s ({result['total_hours']:.4f}h)"
+            )
             print(f"  False accepts:   {result['n_false_accepts']}")
             print(f"  FAPH:            {result['faph']}")
             if result["n_errors"] > 0:

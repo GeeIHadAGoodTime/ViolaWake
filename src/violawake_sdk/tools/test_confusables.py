@@ -85,7 +85,9 @@ def _iter_candidate_audio_paths(audio_dir: Path, confusable: str) -> tuple[Path,
     return tuple(paths)
 
 
-def _load_audio_from_dir(confusable: str, audio_dir: Path, sample_rate: int) -> tuple[np.ndarray, str]:
+def _load_audio_from_dir(
+    confusable: str, audio_dir: Path, sample_rate: int
+) -> tuple[np.ndarray, str]:
     for candidate_path in _iter_candidate_audio_paths(audio_dir, confusable):
         if not candidate_path.exists():
             continue

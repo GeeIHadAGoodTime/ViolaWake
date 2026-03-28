@@ -100,7 +100,9 @@ class STTFileEngine:
             audio_float32 = audio_data
         else:
             # Handle int32, uint8, etc. by normalising to [-1, 1]
-            info = np.iinfo(audio_data.dtype) if np.issubdtype(audio_data.dtype, np.integer) else None
+            info = (
+                np.iinfo(audio_data.dtype) if np.issubdtype(audio_data.dtype, np.integer) else None
+            )
             if info is not None:
                 audio_float32 = audio_data.astype(np.float32) / max(abs(info.min), info.max)
             else:

@@ -44,12 +44,12 @@ logger = logging.getLogger(__name__)
 # human-readable ONNX-style type strings for SessionInput/SessionOutput.
 
 _TFLITE_DTYPE_TO_NP: dict[int, np.dtype[Any]] = {
-    0: np.dtype(np.float32),   # kTfLiteFloat32
-    1: np.dtype(np.int32),     # kTfLiteInt32
-    2: np.dtype(np.uint8),     # kTfLiteUInt8
-    3: np.dtype(np.int64),     # kTfLiteInt64
-    7: np.dtype(np.float16),   # kTfLiteFloat16
-    9: np.dtype(np.int8),      # kTfLiteInt8
+    0: np.dtype(np.float32),  # kTfLiteFloat32
+    1: np.dtype(np.int32),  # kTfLiteInt32
+    2: np.dtype(np.uint8),  # kTfLiteUInt8
+    3: np.dtype(np.int64),  # kTfLiteInt64
+    7: np.dtype(np.float16),  # kTfLiteFloat16
+    9: np.dtype(np.int8),  # kTfLiteInt8
     11: np.dtype(np.float64),  # kTfLiteFloat64
 }
 
@@ -82,9 +82,7 @@ def _resolve_dtype(raw_dtype: Any) -> tuple[np.dtype[Any], str]:
     try:
         as_dtype = np.dtype(raw_dtype)
         # Check if it's a recognised numpy type (not just an int misinterpreted)
-        if isinstance(raw_dtype, (np.dtype, type)) and issubclass(
-            as_dtype.type, np.generic
-        ):
+        if isinstance(raw_dtype, (np.dtype, type)) and issubclass(as_dtype.type, np.generic):
             type_str = f"tensor({as_dtype.name})"
             return as_dtype, type_str
     except (TypeError, AttributeError):
@@ -93,8 +91,7 @@ def _resolve_dtype(raw_dtype: Any) -> tuple[np.dtype[Any], str]:
     # Case 2: integer constant (TFLite C API)
     np_dt = _TFLITE_DTYPE_TO_NP.get(raw_dtype)
     type_str = _TFLITE_DTYPE_TO_STR.get(raw_dtype) or (
-        f"tensor({np_dt.name})" if np_dt is not None
-        else f"tensor(unknown_{raw_dtype})"
+        f"tensor({np_dt.name})" if np_dt is not None else f"tensor(unknown_{raw_dtype})"
     )
     if np_dt is None:
         np_dt = np.dtype(np.float32)  # safe fallback
@@ -134,6 +131,7 @@ def _get_tflite_interpreter_class() -> type:
 # ──────────────────────────────────────────────────────────────────────────────
 # TFLiteSession
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TFLiteSession(BackendSession):
     """Wraps a TFLite ``Interpreter`` with the same API as ``OnnxSession``.
@@ -209,9 +207,7 @@ class TFLiteSession(BackendSession):
             expected_shape = tuple(detail["shape"])
             actual_shape = tuple(array.shape)
             if expected_shape != actual_shape:
-                self._interpreter.resize_tensor_input(
-                    detail["index"], list(actual_shape)
-                )
+                self._interpreter.resize_tensor_input(detail["index"], list(actual_shape))
                 needs_allocate = True
 
         if needs_allocate:
@@ -253,10 +249,7 @@ class TFLiteSession(BackendSession):
             # .copy() is required because TFLite's get_tensor() returns a
             # view into the interpreter's internal buffer, which is
             # overwritten on the next invoke() call.
-            return [
-                self._interpreter.get_tensor(d["index"]).copy()
-                for d in self._output_details
-            ]
+            return [self._interpreter.get_tensor(d["index"]).copy() for d in self._output_details]
 
         results: list[np.ndarray] = []
         for oname in output_names:
@@ -280,9 +273,7 @@ class TFLiteSession(BackendSession):
         except ValueError:
             pass
         available = list(self._input_name_to_idx.keys())
-        raise KeyError(
-            f"Input tensor {name!r} not found.  Available: {available}"
-        )
+        raise KeyError(f"Input tensor {name!r} not found.  Available: {available}")
 
     def _resolve_output_index(self, name: str) -> int:
         """Map an output tensor name to its detail-list index."""
@@ -295,14 +286,13 @@ class TFLiteSession(BackendSession):
         except ValueError:
             pass
         available = list(self._output_name_to_idx.keys())
-        raise KeyError(
-            f"Output tensor {name!r} not found.  Available: {available}"
-        )
+        raise KeyError(f"Output tensor {name!r} not found.  Available: {available}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # TFLiteBackend
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TFLiteBackend(InferenceBackend):
     """Backend powered by ``tflite-runtime`` (or ``tensorflow.lite``)."""
@@ -328,9 +318,7 @@ class TFLiteBackend(InferenceBackend):
             )
             interpreter.allocate_tensors()
         except Exception as e:
-            raise ModelLoadError(
-                f"TFLite failed to load {model_path}: {e}"
-            ) from e
+            raise ModelLoadError(f"TFLite failed to load {model_path}: {e}") from e
 
         logger.debug("TFLiteBackend loaded: %s (threads=%d)", model_path, num_threads)
         return TFLiteSession(interpreter, model_path)
@@ -346,6 +334,7 @@ class TFLiteBackend(InferenceBackend):
 # ──────────────────────────────────────────────────────────────────────────────
 # Model conversion utility:  ONNX -> TFLite
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def convert_onnx_to_tflite(
     onnx_path: str | Path,
@@ -378,10 +367,7 @@ def convert_onnx_to_tflite(
     if not onnx_path.exists():
         raise FileNotFoundError(f"ONNX model not found: {onnx_path}")
 
-    if tflite_path is None:
-        tflite_path = onnx_path.with_suffix(".tflite")
-    else:
-        tflite_path = Path(tflite_path)
+    tflite_path = onnx_path.with_suffix(".tflite") if tflite_path is None else Path(tflite_path)
 
     # ---- Step 1: ONNX -> TF SavedModel ----
     saved_model_dir = _onnx_to_saved_model(onnx_path)
@@ -447,9 +433,7 @@ def _onnx_to_saved_model(onnx_path: Path) -> Path:
         tf_rep = prepare(onnx_model)
         tf_rep.export_graph(str(saved_model_dir))
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to convert {onnx_path} to SavedModel: {e}"
-        ) from e
+        raise RuntimeError(f"Failed to convert {onnx_path} to SavedModel: {e}") from e
 
     logger.debug("ONNX -> SavedModel via onnx-tf: %s", saved_model_dir)
     return saved_model_dir
@@ -465,8 +449,7 @@ def _saved_model_to_tflite(
         import tensorflow as tf
     except ImportError:
         raise ImportError(
-            "tensorflow is required for TFLite conversion.  Install with:\n"
-            "  pip install tensorflow"
+            "tensorflow is required for TFLite conversion.  Install with:\n  pip install tensorflow"
         ) from None
 
     converter = tf.lite.TFLiteConverter.from_saved_model(str(saved_model_dir))
@@ -477,9 +460,7 @@ def _saved_model_to_tflite(
     try:
         tflite_model = converter.convert()
     except Exception as e:
-        raise RuntimeError(
-            f"TFLite conversion failed for {saved_model_dir}: {e}"
-        ) from e
+        raise RuntimeError(f"TFLite conversion failed for {saved_model_dir}: {e}") from e
 
     tflite_path.parent.mkdir(parents=True, exist_ok=True)
     tflite_path.write_bytes(tflite_model)

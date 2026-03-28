@@ -46,7 +46,7 @@ _STATE_RESPONDING = "responding"
 
 # Audio constants
 SAMPLE_RATE = 16_000
-FRAME_SAMPLES = 320   # 20ms
+FRAME_SAMPLES = 320  # 20ms
 MAX_COMMAND_DURATION_S = 10.0  # Max recording length before force-stop
 SILENCE_FRAMES_STOP = 30  # Number of consecutive silence frames to stop recording (~600ms)
 MAX_RECORDING_FRAMES = int(MAX_COMMAND_DURATION_S / (FRAME_SAMPLES / SAMPLE_RATE))  # Pre-computed
@@ -148,7 +148,9 @@ class VoicePipeline:
 
         logger.info(
             "VoicePipeline initialized: wake=%s, stt=%s, tts=%s",
-            wake_word, stt_model, tts_voice,
+            wake_word,
+            stt_model,
+            tts_voice,
         )
 
     def on_command(self, handler: CommandHandler) -> CommandHandler:
@@ -306,7 +308,7 @@ class VoicePipeline:
                     "truncating to even boundary",
                     len(audio_bytes),
                 )
-                audio_bytes = audio_bytes[:len(audio_bytes) & ~1]
+                audio_bytes = audio_bytes[: len(audio_bytes) & ~1]
             if len(audio_bytes) == 0:
                 logger.warning("Empty audio buffer — skipping transcription")
                 return
@@ -360,9 +362,7 @@ class VoicePipeline:
         """
         with self._worker_lock:
             if self._worker_thread is not None and self._worker_thread.is_alive():
-                logger.warning(
-                    "Previous worker thread still alive — skipping new spawn"
-                )
+                logger.warning("Previous worker thread still alive — skipping new spawn")
                 with self._state_lock:
                     self._state = _STATE_IDLE
                 return
@@ -391,6 +391,7 @@ class VoicePipeline:
         if self._stt is None:
             try:
                 from violawake_sdk.stt import STTEngine
+
                 self._stt = STTEngine(model=self._stt_model)
                 self._stt.prewarm()  # type: ignore[attr-defined]
             except ImportError:
@@ -402,6 +403,7 @@ class VoicePipeline:
         if self._tts is None and self._enable_tts:
             try:
                 from violawake_sdk.tts import TTSEngine
+
                 self._tts = TTSEngine(voice=self._tts_voice)
             except ImportError:
                 return None

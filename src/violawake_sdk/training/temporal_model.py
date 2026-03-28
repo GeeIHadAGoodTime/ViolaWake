@@ -240,11 +240,9 @@ if _TORCH_AVAILABLE:
             hidden = self.gru_drop(hidden.squeeze(0))  # (batch, gru_hidden)
             return self.head(hidden)
 
-
     def count_parameters(model: nn.Module) -> int:
         """Count total trainable parameters in a model."""
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
-
 
     def export_temporal_onnx(
         model: nn.Module,

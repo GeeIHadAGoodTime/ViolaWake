@@ -26,7 +26,7 @@ def main() -> None:
         "--model",
         metavar="NAME",
         help="Model name to download (see --list for available names). "
-             "Downloads required defaults if omitted.",
+        "Downloads required defaults if omitted.",
     )
     parser.add_argument(
         "--list",
@@ -94,7 +94,9 @@ def main() -> None:
     for model_name in models_to_download:
         try:
             path = download_model(
-                model_name, force=args.force, verify=verify,
+                model_name,
+                force=args.force,
+                verify=verify,
                 skip_verify=args.no_verify,
             )
             spec = MODEL_REGISTRY[model_name]

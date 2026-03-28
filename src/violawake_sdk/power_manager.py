@@ -49,6 +49,7 @@ def _get_battery_info() -> tuple[int, bool]:
     # Try psutil first (cross-platform)
     try:
         import psutil
+
         batt = psutil.sensors_battery()
         if batt is not None:
             return int(batt.percent), not batt.power_plugged
@@ -82,6 +83,7 @@ def _get_battery_info() -> tuple[int, bool]:
     if platform.system() == "Linux":
         try:
             from pathlib import Path
+
             bat_path = Path("/sys/class/power_supply/BAT0")
             if bat_path.exists():
                 capacity = int((bat_path / "capacity").read_text().strip())

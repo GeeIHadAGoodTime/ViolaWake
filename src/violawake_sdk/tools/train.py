@@ -207,6 +207,7 @@ ProgressCallback = Callable[[dict[str, Any]], None]
 # Utility: ONNX runtime provider auto-detection
 # ---------------------------------------------------------------------------
 
+
 def get_best_provider(device: str | None = None) -> str:
     """Auto-detect the best ONNX Runtime execution provider.
 
@@ -253,6 +254,7 @@ def get_best_provider(device: str | None = None) -> str:
 # Edge-TTS audio synthesis helpers (async -> sync bridge)
 # ---------------------------------------------------------------------------
 
+
 def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
     """Synthesize a single phrase with edge-tts and save as WAV at 16kHz.
 
@@ -282,10 +284,9 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
             loop = asyncio.get_event_loop()
             if loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as pool:
-                    mp3_data = pool.submit(
-                        lambda: asyncio.run(_synth())
-                    ).result(timeout=30)
+                    mp3_data = pool.submit(lambda: asyncio.run(_synth())).result(timeout=30)
             else:
                 mp3_data = loop.run_until_complete(_synth())
         except RuntimeError:
@@ -297,6 +298,7 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
         # Convert MP3 to WAV at 16kHz using pydub or ffmpeg
         try:
             from pydub import AudioSegment
+
             seg = AudioSegment.from_mp3(io.BytesIO(mp3_data))
             seg = seg.set_channels(1).set_frame_rate(16000).set_sample_width(2)
             seg.export(str(output_path), format="wav")
@@ -314,6 +316,7 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
 
         try:
             import torchaudio
+
             waveform, sr = torchaudio.load(tmp_path)
             if waveform.shape[0] > 1:
                 waveform = waveform.mean(dim=0, keepdim=True)
@@ -428,7 +431,9 @@ def _generate_tts_positives(
 
     if verbose:
         total = len(EDGE_TTS_VOICES) * len(phrases)
-        print(f"  Generating TTS positives: {len(EDGE_TTS_VOICES)} voices x {len(phrases)} phrases = {total} clean samples...")
+        print(
+            f"  Generating TTS positives: {len(EDGE_TTS_VOICES)} voices x {len(phrases)} phrases = {total} clean samples..."
+        )
 
     for voice_idx, voice in enumerate(EDGE_TTS_VOICES):
         for phrase_idx, phrase in enumerate(phrases):
@@ -461,26 +466,34 @@ def _generate_tts_positives(
                 # Generate noisy variant
                 try:
                     from violawake_sdk.audio import load_audio
+                    from violawake_sdk.training.augment import apply_additive_noise
+
                     audio = load_audio(clean_path)
                     if audio is not None and len(audio) > 0:
                         rng = np.random.default_rng(voice_idx * 100 + phrase_idx)
 
                         # Noisy variant (SNR 10-15 dB)
                         noisy = apply_additive_noise(audio, snr_db=12.0, rng=rng)
-                        noisy_path = output_dir / f"tts_pos_{voice_idx:02d}_{phrase_idx}_{voice}_noisy.wav"
+                        noisy_path = (
+                            output_dir / f"tts_pos_{voice_idx:02d}_{phrase_idx}_{voice}_noisy.wav"
+                        )
                         _save_wav(noisy, noisy_path)
                         generated.append(noisy_path)
 
                         # Reverb variant
                         reverbed = rir_augment(audio, rng=rng)
-                        reverb_path = output_dir / f"tts_pos_{voice_idx:02d}_{phrase_idx}_{voice}_reverb.wav"
+                        reverb_path = (
+                            output_dir / f"tts_pos_{voice_idx:02d}_{phrase_idx}_{voice}_reverb.wav"
+                        )
                         _save_wav(reverbed, reverb_path)
                         generated.append(reverb_path)
                 except Exception:
                     pass  # Augmented variants are best-effort
 
         if verbose and (voice_idx + 1) % 5 == 0:
-            print(f"    {voice_idx + 1}/{len(EDGE_TTS_VOICES)} voices done ({len(generated)} files)")
+            print(
+                f"    {voice_idx + 1}/{len(EDGE_TTS_VOICES)} voices done ({len(generated)} files)"
+            )
 
     if verbose:
         print(f"  TTS positives generated: {len(generated)} files")
@@ -512,7 +525,9 @@ def _generate_confusable_negatives(
         if confusable_words[:5]:
             print(f"    Top 5: {', '.join(confusable_words[:5])}")
         total = len(confusable_words) * voices_per_word
-        print(f"  Synthesizing: {len(confusable_words)} words x {voices_per_word} voices = {total} samples...")
+        print(
+            f"  Synthesizing: {len(confusable_words)} words x {voices_per_word} voices = {total} samples..."
+        )
 
     voices_subset = EDGE_TTS_VOICES[:voices_per_word]
     generated: list[Path] = []
@@ -553,7 +568,9 @@ def _generate_speech_negatives(
 
     total = len(SPEECH_NEGATIVE_PHRASES) * n_voices
     if verbose:
-        print(f"  Generating speech negatives: {len(SPEECH_NEGATIVE_PHRASES)} phrases x {n_voices} voices = {total} samples...")
+        print(
+            f"  Generating speech negatives: {len(SPEECH_NEGATIVE_PHRASES)} phrases x {n_voices} voices = {total} samples..."
+        )
 
     for phrase_idx, phrase in enumerate(SPEECH_NEGATIVE_PHRASES):
         for voice_idx, voice in enumerate(voices_subset):
@@ -568,7 +585,9 @@ def _generate_speech_negatives(
                 generated.append(out_path)
 
         if verbose and (phrase_idx + 1) % 25 == 0:
-            print(f"    {phrase_idx + 1}/{len(SPEECH_NEGATIVE_PHRASES)} phrases done ({len(generated)} files)")
+            print(
+                f"    {phrase_idx + 1}/{len(SPEECH_NEGATIVE_PHRASES)} phrases done ({len(generated)} files)"
+            )
 
     if verbose:
         print(f"  Speech negatives generated: {len(generated)} files")
@@ -578,8 +597,9 @@ def _generate_speech_negatives(
 
 def _save_wav(audio: np.ndarray, path: Path, sample_rate: int = 16000) -> None:
     """Save float32 audio to a WAV file."""
-    import numpy as np
     import wave
+
+    import numpy as np
 
     audio = np.clip(audio, -1.0, 1.0)
     pcm_i16 = (audio * 32767).astype(np.int16)
@@ -593,6 +613,7 @@ def _save_wav(audio: np.ndarray, path: Path, sample_rate: int = 16000) -> None:
 # ---------------------------------------------------------------------------
 # Temporal embedding extraction (9-frame windows from OWW backbone)
 # ---------------------------------------------------------------------------
+
 
 def _extract_temporal_embeddings(
     audio_files: list[Path],
@@ -653,9 +674,7 @@ def _extract_temporal_embeddings(
         try:
             # embed_clips returns (n_clips, n_frames, embedding_dim)
             # This is the PRODUCTION embedding path — batch mode, not streaming.
-            frame_embeddings_3d = preprocessor.embed_clips(
-                audio_i16.reshape(1, -1), ncpu=1
-            )
+            frame_embeddings_3d = preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1)
             # Shape: (1, n_frames, 96) -> (n_frames, 96)
             frame_embeddings = frame_embeddings_3d[0]  # (n_frames, 96)
 
@@ -699,6 +718,7 @@ def _extract_temporal_embeddings(
 # ---------------------------------------------------------------------------
 # MLP single-frame embedding extraction (legacy path)
 # ---------------------------------------------------------------------------
+
 
 def _extract_mlp_embeddings(
     audio_files: list[Path],
@@ -756,7 +776,9 @@ def _extract_mlp_embeddings(
             failures += 1
 
         if verbose and (file_idx + 1) % 100 == 0:
-            print(f"    {file_idx + 1}/{len(audio_files)} files -> {len(all_embeddings)} embeddings")
+            print(
+                f"    {file_idx + 1}/{len(audio_files)} files -> {len(all_embeddings)} embeddings"
+            )
 
     if verbose:
         print(
@@ -770,6 +792,7 @@ def _extract_mlp_embeddings(
 # ---------------------------------------------------------------------------
 # Group-aware train/val split
 # ---------------------------------------------------------------------------
+
 
 def _group_aware_split(
     labels: np.ndarray,
@@ -805,9 +828,12 @@ def _group_aware_split(
 
     val_mask = np.zeros(len(labels), dtype=bool)
     for i in range(len(labels)):
-        if labels[i] == 1 and source_idx[i] in val_pos_sources:
-            val_mask[i] = True
-        elif labels[i] == 0 and source_idx[i] in val_neg_sources:
+        if (
+            labels[i] == 1
+            and source_idx[i] in val_pos_sources
+            or labels[i] == 0
+            and source_idx[i] in val_neg_sources
+        ):
             val_mask[i] = True
 
     train_indices = np.where(~val_mask)[0]
@@ -822,6 +848,7 @@ def _group_aware_split(
 # ---------------------------------------------------------------------------
 # Core training: TemporalCNN (production architecture)
 # ---------------------------------------------------------------------------
+
 
 def _train_temporal_cnn(
     pos_files: list[Path],
@@ -932,7 +959,9 @@ def _train_temporal_cnn(
                 n_augmented += 1
 
         if verbose:
-            print(f"  {len(pos_files)} originals + {n_augmented} augmented = {len(augmented_pos_files)} total")
+            print(
+                f"  {len(pos_files)} originals + {n_augmented} augmented = {len(augmented_pos_files)} total"
+            )
 
     # -- Extract temporal embeddings -----------------------------------------
     if verbose:
@@ -989,8 +1018,7 @@ def _train_temporal_cnn(
 
     if len(all_neg_embs) < 5:
         print(
-            f"ERROR: Only {len(all_neg_embs)} negative embeddings extracted. "
-            "Need at least 5.",
+            f"ERROR: Only {len(all_neg_embs)} negative embeddings extracted. Need at least 5.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1111,14 +1139,16 @@ def _train_temporal_cnn(
         current_lr = scheduler.get_last_lr()[0]
 
         if progress_callback is not None:
-            progress_callback({
-                "epoch": epoch,
-                "total_epochs": epochs,
-                "train_loss": avg_train,
-                "val_loss": avg_val,
-                "best_val_loss": best_val_loss,
-                "lr": current_lr,
-            })
+            progress_callback(
+                {
+                    "epoch": epoch,
+                    "total_epochs": epochs,
+                    "train_loss": avg_train,
+                    "val_loss": avg_val,
+                    "best_val_loss": best_val_loss,
+                    "lr": current_lr,
+                }
+            )
 
         if verbose and (epoch % 10 == 0 or epoch == 1 or no_improve == 0):
             marker = " *" if epoch == best_epoch else ""
@@ -1194,9 +1224,7 @@ def _train_temporal_cnn(
 
     if quality_grade == "F":
         print(
-            "\n"
-            + "!" * 72
-            + "\nQUALITY GATE FAILED: model is not ready for deployment.\n"
+            "\n" + "!" * 72 + "\nQUALITY GATE FAILED: model is not ready for deployment.\n"
             f"  Speech FP rate:     {quality_gate['speech_fp_rate'] * 100:.1f}%\n"
             f"  Confusable FP rate: {quality_gate['confusable_fp_rate'] * 100:.1f}%\n"
             f"  Silence max score:  {quality_gate['silence_max_score']:.2f}\n"
@@ -1205,7 +1233,8 @@ def _train_temporal_cnn(
             f"  - Expand confusable negatives for '{wake_word}' and retrain.\n"
             "  - Audit mislabeled positives/negatives and remove noisy clips.\n"
             "  - Raise the deployment threshold only after checking recall on eval data.\n"
-            + "!" * 72
+            + "!"
+            * 72
         )
 
     model_exported = quality_grade != "F"
@@ -1216,9 +1245,7 @@ def _train_temporal_cnn(
         if verbose:
             print(f"\nExporting model to ONNX: {output_path}")
 
-        export_temporal_onnx(
-            model, str(output_path), seq_len=seq_len, embedding_dim=EMBEDDING_DIM
-        )
+        export_temporal_onnx(model, str(output_path), seq_len=seq_len, embedding_dim=EMBEDDING_DIM)
     elif verbose:
         print("\nSkipping ONNX export because the quality gate failed.")
 
@@ -1242,33 +1269,37 @@ def _train_temporal_cnn(
 
     # -- Save config ---------------------------------------------------------
     config = get_feature_config()
-    config.update({
-        "architecture": "temporal_cnn",
-        "model_class": "TemporalCNN",
-        "embedding_dim": EMBEDDING_DIM,
-        "seq_len": seq_len,
-        "n_params": n_params,
-        "n_pos_samples": n_pos,
-        "n_neg_samples": n_neg,
-        "augmented": augment,
-        "epochs_trained": min(epoch, epochs),
-        "best_epoch": best_epoch,
-        "best_val_loss": float(best_val_loss),
-        "ema_val_loss": float(ema_val_loss),
-        "averaging_method": method,
-        "ema_decay": ema_decay,
-        "batch_size": batch_size,
-        "lr": lr,
-        "patience": patience,
-        "training_duration_s": round(training_duration, 2),
-        "wake_word": wake_word,
-        "deployment_threshold": deployment_threshold,
-        "quality_grade": quality_grade,
-        "quality_gate": quality_gate,
-        "quality_gate_blocked_export": quality_grade == "F",
-        "neg_corpus_breakdown": {tag: len(files) for tag, files in neg_tags.items()} if neg_tags else {},
-        "corpus_found": corpus_found,
-    })
+    config.update(
+        {
+            "architecture": "temporal_cnn",
+            "model_class": "TemporalCNN",
+            "embedding_dim": EMBEDDING_DIM,
+            "seq_len": seq_len,
+            "n_params": n_params,
+            "n_pos_samples": n_pos,
+            "n_neg_samples": n_neg,
+            "augmented": augment,
+            "epochs_trained": min(epoch, epochs),
+            "best_epoch": best_epoch,
+            "best_val_loss": float(best_val_loss),
+            "ema_val_loss": float(ema_val_loss),
+            "averaging_method": method,
+            "ema_decay": ema_decay,
+            "batch_size": batch_size,
+            "lr": lr,
+            "patience": patience,
+            "training_duration_s": round(training_duration, 2),
+            "wake_word": wake_word,
+            "deployment_threshold": deployment_threshold,
+            "quality_grade": quality_grade,
+            "quality_gate": quality_gate,
+            "quality_gate_blocked_export": quality_grade == "F",
+            "neg_corpus_breakdown": {tag: len(files) for tag, files in neg_tags.items()}
+            if neg_tags
+            else {},
+            "corpus_found": corpus_found,
+        }
+    )
     config.update(get_openwakeword_backbone_hashes("onnx"))
     if d_prime_result is not None:
         config["d_prime"] = round(d_prime_result, 2)
@@ -1287,6 +1318,7 @@ def _train_temporal_cnn(
     aug_dir = output_path.parent / "_aug_positives"
     if aug_dir.exists():
         import shutil
+
         shutil.rmtree(aug_dir, ignore_errors=True)
 
     if quality_grade == "F":
@@ -1301,6 +1333,7 @@ def _train_temporal_cnn(
 # ---------------------------------------------------------------------------
 # Post-training quality gate
 # ---------------------------------------------------------------------------
+
 
 def _run_quality_gate(
     model: Any,
@@ -1367,23 +1400,11 @@ def _run_quality_gate(
         confusable_fp_rate: float,
         silence_max_score: float,
     ) -> str:
-        if (
-            speech_fp_rate < 0.02
-            and confusable_fp_rate < 0.05
-            and silence_max_score < 0.20
-        ):
+        if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence_max_score < 0.20:
             return "A"
-        if (
-            speech_fp_rate < 0.05
-            and confusable_fp_rate < 0.10
-            and silence_max_score < 0.30
-        ):
+        if speech_fp_rate < 0.05 and confusable_fp_rate < 0.10 and silence_max_score < 0.30:
             return "B"
-        if (
-            speech_fp_rate < 0.10
-            and confusable_fp_rate < 0.20
-            and silence_max_score < 0.50
-        ):
+        if speech_fp_rate < 0.10 and confusable_fp_rate < 0.20 and silence_max_score < 0.50:
             return "C"
         return "F"
 
@@ -1485,6 +1506,7 @@ def _run_quality_gate(
 # Legacy MLP training (kept for backward compatibility)
 # ---------------------------------------------------------------------------
 
+
 def _train_mlp_on_oww(
     positives_dir: Path,
     output_path: Path,
@@ -1515,6 +1537,7 @@ def _train_mlp_on_oww(
     try:
         import numpy as np
         import torch
+        import torch.nn as nn
         import torch.optim as optim
         from torch.utils.data import DataLoader, TensorDataset
     except ImportError as e:
@@ -1540,9 +1563,7 @@ def _train_mlp_on_oww(
         sys.exit(1)
 
     # -- Collect files -------------------------------------------------------
-    pos_files = sorted(
-        list(positives_dir.rglob("*.wav")) + list(positives_dir.rglob("*.flac"))
-    )
+    pos_files = sorted(list(positives_dir.rglob("*.wav")) + list(positives_dir.rglob("*.flac")))
     if len(pos_files) < 5:
         print(f"ERROR: Found only {len(pos_files)} positive samples.", file=sys.stderr)
         sys.exit(1)
@@ -1614,9 +1635,7 @@ def _train_mlp_on_oww(
     neg_source_file_idx = []
 
     if negatives_dir and negatives_dir.exists():
-        neg_files = sorted(
-            list(negatives_dir.rglob("*.wav")) + list(negatives_dir.rglob("*.flac"))
-        )
+        neg_files = sorted(list(negatives_dir.rglob("*.wav")) + list(negatives_dir.rglob("*.flac")))
         for file_idx, f in enumerate(neg_files):
             audio = load_audio(f)
             if audio is None:
@@ -1731,14 +1750,16 @@ def _train_mlp_on_oww(
 
         current_lr = scheduler.get_last_lr()[0]
         if progress_callback is not None:
-            progress_callback({
-                "epoch": epoch,
-                "total_epochs": epochs,
-                "train_loss": avg_train_loss,
-                "val_loss": avg_val_loss,
-                "best_val_loss": best_val_loss,
-                "lr": current_lr,
-            })
+            progress_callback(
+                {
+                    "epoch": epoch,
+                    "total_epochs": epochs,
+                    "train_loss": avg_train_loss,
+                    "val_loss": avg_val_loss,
+                    "best_val_loss": best_val_loss,
+                    "lr": current_lr,
+                }
+            )
 
         if verbose and (epoch % 10 == 0 or epoch == 1 or epochs_without_improvement == 0):
             marker = " *" if epoch == best_epoch else ""
@@ -1805,27 +1826,32 @@ def _train_mlp_on_oww(
     model.eval()
     dummy_input = torch.zeros(1, embedding_dim)
     torch.onnx.export(
-        model, dummy_input, str(output_path),
-        input_names=["embedding"], output_names=["score"],
+        model,
+        dummy_input,
+        str(output_path),
+        input_names=["embedding"],
+        output_names=["score"],
         dynamic_axes={"embedding": {0: "batch"}, "score": {0: "batch"}},
         opset_version=11,
     )
 
     # Config
     config = get_feature_config()
-    config.update({
-        "architecture": "mlp_on_oww",
-        "embedding_dim": embedding_dim,
-        "hidden_dim": hidden_dim,
-        "n_pos_samples": len(pos_embeddings),
-        "n_neg_samples": len(neg_embeddings),
-        "augmented": augment,
-        "epochs": epochs,
-        "best_epoch": best_epoch,
-        "best_val_loss": float(best_val_loss),
-        "training_duration_s": round(training_duration, 2),
-        "averaging_method": averaging_method,
-    })
+    config.update(
+        {
+            "architecture": "mlp_on_oww",
+            "embedding_dim": embedding_dim,
+            "hidden_dim": hidden_dim,
+            "n_pos_samples": len(pos_embeddings),
+            "n_neg_samples": len(neg_embeddings),
+            "augmented": augment,
+            "epochs": epochs,
+            "best_epoch": best_epoch,
+            "best_val_loss": float(best_val_loss),
+            "training_duration_s": round(training_duration, 2),
+            "averaging_method": averaging_method,
+        }
+    )
     config.update(get_openwakeword_backbone_hashes("onnx"))
     config_path = output_path.with_suffix(".config.json")
     with open(config_path, "w") as f:
@@ -1838,6 +1864,7 @@ def _train_mlp_on_oww(
 # ---------------------------------------------------------------------------
 # Checkpoint averaging (utility, kept from original)
 # ---------------------------------------------------------------------------
+
 
 def average_checkpoints(checkpoint_paths: list[str], output_path: str) -> None:
     """Average weights of multiple ONNX model checkpoints (SWA).
@@ -1912,6 +1939,7 @@ def _update_auto_eval_config(config_path: Path, auto_eval: dict[str, Any]) -> No
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="violawake-train",
@@ -1934,7 +1962,7 @@ def main() -> None:
         metavar="DIR",
         default=None,
         help="Directory containing positive WAV/FLAC samples of the wake word. "
-             "If fewer than 100 samples, auto-generated TTS positives fill the gap.",
+        "If fewer than 100 samples, auto-generated TTS positives fill the gap.",
     )
     parser.add_argument(
         "--output",
@@ -1947,7 +1975,7 @@ def main() -> None:
         metavar="DIR",
         default=None,
         help="Optional directory of negative WAV/FLAC files (speech, music, etc.). "
-             "Added on top of auto-generated negatives.",
+        "Added on top of auto-generated negatives.",
     )
     parser.add_argument(
         "--epochs",
@@ -1994,7 +2022,7 @@ def main() -> None:
         choices=["temporal_cnn", "mlp"],
         default="temporal_cnn",
         help="Model architecture (default: temporal_cnn). "
-             "'mlp' is the legacy single-frame architecture.",
+        "'mlp' is the legacy single-frame architecture.",
     )
     parser.add_argument(
         "--auto-corpus",
@@ -2013,7 +2041,7 @@ def main() -> None:
         "--eval-dir",
         metavar="DIR",
         help="Optional test set directory for evaluation after training. "
-             "Must contain positives/ and negatives/ subdirectories.",
+        "Must contain positives/ and negatives/ subdirectories.",
     )
     parser.add_argument(
         "--neg-ratio",
@@ -2116,7 +2144,9 @@ def main() -> None:
     tts_pos_files: list[Path] = []
     if args.auto_corpus and len(user_pos_files) < 100:
         if verbose:
-            print(f"\nStep 1a: Auto-generating TTS positives (have {len(user_pos_files)}, need ~100+)...")
+            print(
+                f"\nStep 1a: Auto-generating TTS positives (have {len(user_pos_files)}, need ~100+)..."
+            )
         tts_pos_dir = corpus_dir / "tts_positives"
         tts_pos_files = _generate_tts_positives(args.word, tts_pos_dir, verbose=verbose)
 
@@ -2130,8 +2160,10 @@ def main() -> None:
         sys.exit(1)
 
     if verbose:
-        print(f"\nTotal positive files: {len(all_pos_files)} "
-              f"({len(user_pos_files)} user + {len(tts_pos_files)} TTS)")
+        print(
+            f"\nTotal positive files: {len(all_pos_files)} "
+            f"({len(user_pos_files)} user + {len(tts_pos_files)} TTS)"
+        )
 
     # Collect negative files from multiple sources
     neg_tag_map: dict[str, list[Path]] = {}
@@ -2156,7 +2188,10 @@ def main() -> None:
             print("\nStep 1b: Auto-generating confusable negatives (round 1: broad)...")
         confusable_dir_r1 = corpus_dir / "confusables_r1"
         confusable_r1 = _generate_confusable_negatives(
-            args.word, confusable_dir_r1, n_confusables=30, voices_per_word=10,
+            args.word,
+            confusable_dir_r1,
+            n_confusables=30,
+            voices_per_word=10,
             verbose=verbose,
         )
         if confusable_r1:
@@ -2167,7 +2202,10 @@ def main() -> None:
             print("\nStep 1b2: Auto-generating confusable negatives (round 2: tight variants)...")
         confusable_dir_r2 = corpus_dir / "confusables_r2"
         confusable_r2 = _generate_confusable_negatives(
-            args.word, confusable_dir_r2, n_confusables=16, voices_per_word=10,
+            args.word,
+            confusable_dir_r2,
+            n_confusables=16,
+            voices_per_word=10,
             verbose=verbose,
         )
         if confusable_r2:
@@ -2181,7 +2219,9 @@ def main() -> None:
             print("\nStep 1c: Auto-generating speech negatives...")
         speech_neg_dir = corpus_dir / "speech_negatives"
         speech_neg_files = _generate_speech_negatives(
-            speech_neg_dir, n_voices=5, verbose=verbose,
+            speech_neg_dir,
+            n_voices=5,
+            verbose=verbose,
         )
         if speech_neg_files:
             neg_tag_map["neg_speech"] = speech_neg_files
@@ -2211,19 +2251,21 @@ def main() -> None:
                 candidate = corpus_root / subdir
                 if candidate.exists():
                     corpus_files = sorted(
-                        list(candidate.rglob("*.wav"))
-                        + list(candidate.rglob("*.flac"))
+                        list(candidate.rglob("*.wav")) + list(candidate.rglob("*.flac"))
                     )
                     if corpus_files:
                         # Cap each source to avoid swamping the dataset
                         max_per_source = 2000
                         if len(corpus_files) > max_per_source:
                             import random
+
                             rng = random.Random(42)
                             corpus_files = sorted(rng.sample(corpus_files, max_per_source))
                         neg_tag_map[tag] = corpus_files
                         if verbose:
-                            print(f"  Shared corpus [{tag}]: {len(corpus_files)} files from {candidate}")
+                            print(
+                                f"  Shared corpus [{tag}]: {len(corpus_files)} files from {candidate}"
+                            )
                         break  # found this tag, move to next
             if tag in neg_tag_map:
                 break  # found in this root, move to next tag
@@ -2252,10 +2294,7 @@ def main() -> None:
         )
     elif missing_corpus_tags:
         print("\nNOTE: Universal negative corpus is incomplete.")
-        print(
-            f"Found {len(found_corpus_tags)}/{len(_CORPUS_SUBDIRS)} corpus sources; "
-            "missing:"
-        )
+        print(f"Found {len(found_corpus_tags)}/{len(_CORPUS_SUBDIRS)} corpus sources; missing:")
         for tag in missing_corpus_tags:
             print(f"  {tag}: {corpus_paths[tag]}")
         print("Add files to the paths above or provide negatives via --negatives <dir>.")
@@ -2300,8 +2339,7 @@ def main() -> None:
         train_pos_files = [f for f in all_pos_files if f not in test_pos_set]
         train_neg_files = [f for f in all_neg_files if f not in test_neg_set]
         train_neg_tag_map = {
-            tag: [f for f in files if f not in test_neg_set]
-            for tag, files in neg_tag_map.items()
+            tag: [f for f in files if f not in test_neg_set] for tag, files in neg_tag_map.items()
         }
 
         if not train_pos_files or not train_neg_files:
@@ -2380,24 +2418,28 @@ def main() -> None:
                     "Add more speaker/environment diversity and harder negatives, then retrain."
                 )
 
-            auto_eval_payload.update({
-                "status": "ok",
-                "architecture": results["architecture"],
-                "n_positives": results["n_positives"],
-                "n_negatives": results["n_negatives"],
-                "roc_auc": round(roc_auc, 4),
-                "eer_percent": round(eer, 2),
-                "far_percent": round(far, 2),
-                "frr_percent": round(frr, 2),
-                "optimal_threshold": round(results["optimal_threshold"], 4),
-                "verdict": verdict,
-            })
+            auto_eval_payload.update(
+                {
+                    "status": "ok",
+                    "architecture": results["architecture"],
+                    "n_positives": results["n_positives"],
+                    "n_negatives": results["n_negatives"],
+                    "roc_auc": round(roc_auc, 4),
+                    "eer_percent": round(eer, 2),
+                    "far_percent": round(far, 2),
+                    "frr_percent": round(frr, 2),
+                    "optimal_threshold": round(results["optimal_threshold"], 4),
+                    "verdict": verdict,
+                }
+            )
         except Exception as e:
             print(f"\nAuto-evaluation failed: {e}")
-            auto_eval_payload.update({
-                "status": "error",
-                "error": str(e),
-            })
+            auto_eval_payload.update(
+                {
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
 
     try:
         _update_auto_eval_config(config_path, auto_eval_payload)

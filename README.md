@@ -217,7 +217,7 @@ python -m violawake_sdk.tools.download_model --model kokoro_voices_v1_0  # TTS v
 pip install violawake
 ```
 
-> **Note:** The PyPI package is `violawake` but the Python import is `violawake_sdk` (e.g., `from violawake_sdk import WakeDetector`). This follows PEP 423 conventions for SDK packages.
+> **Note:** Both `import violawake` and `import violawake_sdk` work. The canonical import is `violawake_sdk` (e.g., `from violawake_sdk import WakeDetector`), but `from violawake import WakeDetector` is also supported for convenience.
 
 **With microphone input and model downloading:**
 ```bash

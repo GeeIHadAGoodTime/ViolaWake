@@ -151,7 +151,9 @@ def main() -> None:
     print(f"False Accept Rate:    {far:.2f}/hr (at threshold={args.threshold})")
     print(f"False Reject Rate:    {frr:.1f}% (at threshold={args.threshold})")
     print(f"ROC AUC:              {auc_val:.3f}")
-    print(f"Optimal threshold:    {opt_thresh:.2f} (FAR={opt_far:.1f}%, FRR={opt_frr:.1f}%, EER~{eer:.1f}%)")
+    print(
+        f"Optimal threshold:    {opt_thresh:.2f} (FAR={opt_far:.1f}%, FRR={opt_frr:.1f}%, EER~{eer:.1f}%)"
+    )
     print(f"Positives scored:     {n_pos}")
     print(f"Negatives scored:     {n_neg}")
     print()
@@ -184,16 +186,22 @@ def main() -> None:
         print("SCORE DISTRIBUTION")
         print("-" * 50)
         import numpy as np
+
         pos_arr = np.array(results["tp_scores"])
         neg_arr = np.array(results["fp_scores"])
-        print(f"Positive mean:  {pos_arr.mean():.3f}  std: {pos_arr.std():.3f}  min: {pos_arr.min():.3f}  max: {pos_arr.max():.3f}")
-        print(f"Negative mean:  {neg_arr.mean():.3f}  std: {neg_arr.std():.3f}  min: {neg_arr.min():.3f}  max: {neg_arr.max():.3f}")
+        print(
+            f"Positive mean:  {pos_arr.mean():.3f}  std: {pos_arr.std():.3f}  min: {pos_arr.min():.3f}  max: {pos_arr.max():.3f}"
+        )
+        print(
+            f"Negative mean:  {neg_arr.mean():.3f}  std: {neg_arr.std():.3f}  min: {neg_arr.min():.3f}  max: {neg_arr.max():.3f}"
+        )
 
     if args.dump_scores:
         print(f"\nPer-file scores written to: {args.dump_scores}")
 
     if args.json:
         import json
+
         # Remove list fields for JSON output (they can be large)
         json_results = {k: v for k, v in results.items() if not isinstance(v, list)}
         with open(args.json, "w") as f:

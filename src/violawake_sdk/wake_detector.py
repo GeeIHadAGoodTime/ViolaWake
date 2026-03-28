@@ -8,7 +8,7 @@ import logging
 import threading
 import time
 from collections.abc import Callable, Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -36,21 +36,21 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Frame configuration (matches production Viola)
-SAMPLE_RATE = 16_000          # 16 kHz mono
-FRAME_MS = 20                 # 20ms frames
-FRAME_SAMPLES = 320           # 16000 * 0.020
+SAMPLE_RATE = 16_000  # 16 kHz mono
+FRAME_MS = 20  # 20ms frames
+FRAME_SAMPLES = 320  # 16000 * 0.020
 DEFAULT_THRESHOLD = _CONST_DEFAULT_THRESHOLD  # Canonical value from _constants.py (ADR-002)
-DEFAULT_COOLDOWN_S = 2.0      # Minimum seconds between detections
+DEFAULT_COOLDOWN_S = 2.0  # Minimum seconds between detections
 WAKE_WORD_ALIASES = {
     "viola": "temporal_cnn",
 }
 
 # OWW backbone constants
-MEL_BINS = 32                 # Mel spectrogram frequency bins
-MEL_FRAMES_PER_EMBEDDING = 76 # Mel frames per embedding window
-MEL_STRIDE = 8                # Mel frame stride between embeddings
+MEL_BINS = 32  # Mel spectrogram frequency bins
+MEL_FRAMES_PER_EMBEDDING = 76  # Mel frames per embedding window
+MEL_STRIDE = 8  # Mel frame stride between embeddings
 # Audio buffer limits
-_MAX_AUDIO_SAMPLES = SAMPLE_RATE * 2   # 2s ring buffer (32000 samples)
+_MAX_AUDIO_SAMPLES = SAMPLE_RATE * 2  # 2s ring buffer (32000 samples)
 _MAX_CHUNK_SAMPLES = SAMPLE_RATE * 10  # Maximum accepted chunk: 10s
 _MAX_PROCESS_FRAME_SAMPLES = FRAME_SAMPLES * 10  # Largest non-pathological frame for process()
 
@@ -137,18 +137,25 @@ class DetectorConfig:
 
 # Names of advanced kwargs that overlap with DetectorConfig fields.
 # Used to detect conflicts when both config= and individual kwargs are given.
-_CONFIG_FIELD_NAMES = frozenset({
-    "models", "fusion_strategy", "fusion_weights",
-    "adaptive_threshold", "noise_profiler",
-    "speaker_verify_fn",
-    "power_manager",
-    "confirm_count", "score_history_size",
-})
+_CONFIG_FIELD_NAMES = frozenset(
+    {
+        "models",
+        "fusion_strategy",
+        "fusion_weights",
+        "adaptive_threshold",
+        "noise_profiler",
+        "speaker_verify_fn",
+        "power_manager",
+        "confirm_count",
+        "score_history_size",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # G1: Input validation utilities
 # ---------------------------------------------------------------------------
+
 
 def validate_audio_chunk(data: bytes | np.ndarray) -> np.ndarray:
     """Validate and normalize an audio chunk for use with WakeDetector.
@@ -193,9 +200,7 @@ def validate_audio_chunk(data: bytes | np.ndarray) -> np.ndarray:
             logger.warning("Audio chunk contained non-finite values (NaN/inf); replaced with 0")
         pcm = data.astype(np.float32)
     else:
-        raise TypeError(
-            f"Audio chunk must be bytes or numpy ndarray, got {type(data).__name__}"
-        )
+        raise TypeError(f"Audio chunk must be bytes or numpy ndarray, got {type(data).__name__}")
 
     if len(pcm) > _MAX_CHUNK_SAMPLES:
         raise ValueError(
@@ -347,10 +352,7 @@ class WakeDetector:
             "confirm_count": confirm_count,
             "score_history_size": score_history_size,
         }
-        explicit_kwargs = {
-            name for name, val in _locals.items()
-            if val is not _UNSET
-        }
+        explicit_kwargs = {name for name, val in _locals.items() if val is not _UNSET}
         if config is not None and explicit_kwargs:
             raise ValueError(
                 f"Cannot specify both config= and individual advanced kwargs. "
@@ -400,9 +402,7 @@ class WakeDetector:
         if cooldown_s < 0:
             raise ValueError(f"cooldown_s must be >= 0, got {cooldown_s!r}")
         if backend not in self._VALID_BACKENDS:
-            raise ValueError(
-                f"backend must be one of {self._VALID_BACKENDS}, got {backend!r}"
-            )
+            raise ValueError(f"backend must be one of {self._VALID_BACKENDS}, got {backend!r}")
         if confirm_count < 1:
             raise ValueError(f"confirm_count must be >= 1, got {confirm_count}")
 
@@ -415,7 +415,8 @@ class WakeDetector:
 
         # K2: Confidence tracking
         self._score_tracker = ScoreTracker(
-            threshold=threshold, history_size=score_history_size,
+            threshold=threshold,
+            history_size=score_history_size,
         )
         self._confirm_required = confirm_count
         self._confirm_counter = 0
@@ -448,6 +449,7 @@ class WakeDetector:
         # Warn on deprecated models
         if model in MODEL_REGISTRY and "DEPRECATED" in MODEL_REGISTRY[model].description:
             import warnings
+
             warnings.warn(
                 f"Model '{model}' is deprecated: {MODEL_REGISTRY[model].description}. "
                 f"Use model='temporal_cnn' instead.",
@@ -475,7 +477,8 @@ class WakeDetector:
                 maxlen=self._temporal_seq_len,
             )
             logger.info(
-                "Temporal model detected: seq_len=%d", self._temporal_seq_len,
+                "Temporal model detected: seq_len=%d",
+                self._temporal_seq_len,
             )
         else:
             self._is_temporal = False
@@ -492,7 +495,9 @@ class WakeDetector:
 
         logger.info(
             "WakeDetector initialized: model=%s, threshold=%.2f, backend=%s",
-            model, threshold, self._backend.name,
+            model,
+            threshold,
+            self._backend.name,
         )
         self._warn_on_oww_backbone_change(self._resolve_model_path(model))
 
@@ -585,9 +590,10 @@ class WakeDetector:
                 logger.warning(
                     "TFLite backend selected but only .onnx file found at %s. "
                     "Convert with: python -c "
-                    "\"from violawake_sdk.backends.tflite_backend import "
+                    '"from violawake_sdk.backends.tflite_backend import '
                     "convert_onnx_to_tflite; convert_onnx_to_tflite('%s')\"",
-                    model_path, model_path,
+                    model_path,
+                    model_path,
                 )
 
         try:
@@ -692,7 +698,8 @@ class WakeDetector:
                 logger.warning(
                     "Audio frame has %d samples (not a multiple of %d). "
                     "Expected 16kHz, 20ms frames. Returning score 0.0.",
-                    pcm.shape[0], FRAME_SAMPLES,
+                    pcm.shape[0],
+                    FRAME_SAMPLES,
                 )
                 return 0.0
         with self._backbone_lock:
@@ -700,17 +707,25 @@ class WakeDetector:
             if embedding is None:
                 score = self._last_score
             elif self._ensemble is not None and self._ensemble.model_count > 0:
-                score = self._ensemble.score(embedding.flatten()) if produced_embedding else self._last_score
+                score = (
+                    self._ensemble.score(embedding.flatten())
+                    if produced_embedding
+                    else self._last_score
+                )
             elif self._is_temporal:
                 if produced_embedding:
                     self._embedding_buffer.append(embedding.flatten())
                     if len(self._embedding_buffer) >= self._temporal_seq_len:
                         temporal_input = np.stack(list(self._embedding_buffer))
                         temporal_input = temporal_input.reshape(
-                            1, self._temporal_seq_len, EMBEDDING_DIM,
+                            1,
+                            self._temporal_seq_len,
+                            EMBEDDING_DIM,
                         ).astype(np.float32)
                         score = float(
-                            self._mlp_session.run(None, {self._mlp_input_name: temporal_input})[0].flatten()[0]
+                            self._mlp_session.run(None, {self._mlp_input_name: temporal_input})[
+                                0
+                            ].flatten()[0]
                         )
                     else:
                         score = 0.0
@@ -754,21 +769,17 @@ class WakeDetector:
         # rms_floor=1.0 is calibrated for int16 scale (speech ≈ 500–5000,
         # silence ≈ 0–5).  Float32 input in [-1, 1] is scaled up so the
         # same rms_floor works regardless of input format.
-        rms = float(np.sqrt(np.mean(pcm ** 2)))
+        rms = float(np.sqrt(np.mean(pcm**2)))
         if not self._needs_int16_normalization(audio_frame):
             # Float32/float64 input: RMS is in [0, ~0.7] — scale to int16 range
             rms *= 32768.0
 
         # Normalize for model inference
-        if self._needs_int16_normalization(audio_frame):
-            model_pcm = pcm / 32768.0
-        else:
-            model_pcm = pcm
+        model_pcm = pcm / 32768.0 if self._needs_int16_normalization(audio_frame) else pcm
 
         # K7: Power management -- skip frame if power manager says so
-        if self._power_manager is not None:
-            if not self._power_manager.should_process(pcm):
-                return False
+        if self._power_manager is not None and not self._power_manager.should_process(pcm):
+            return False
 
         # K4: Update noise profiler and get adaptive threshold
         if self._noise_profiler is not None and self._adaptive_threshold:
@@ -810,7 +821,7 @@ class WakeDetector:
 
             if detected:
                 # K5: Speaker verification post-detection
-                if self._speaker_verify_fn is not None and speaker_embedding is not None:
+                if self._speaker_verify_fn is not None and speaker_embedding is not None:  # noqa: SIM102
                     if not self._speaker_verify_fn(speaker_embedding.flatten()):
                         logger.debug("Speaker verification rejected detection")
                         return False
@@ -831,15 +842,14 @@ class WakeDetector:
         Lock ordering: _backbone_lock then _lock, matching _process_core
         to prevent ABBA deadlock.
         """
-        with self._backbone_lock:
-            with self._lock:
-                self._policy.reset_cooldown()
-                self._confirm_counter = 0
-                self._last_score = 0.0
-                self._score_tracker.reset()
-                self._oww_backbone.reset()
-                if self._is_temporal:
-                    self._embedding_buffer.clear()
+        with self._backbone_lock, self._lock:
+            self._policy.reset_cooldown()
+            self._confirm_counter = 0
+            self._last_score = 0.0
+            self._score_tracker.reset()
+            self._oww_backbone.reset()
+            if self._is_temporal:
+                self._embedding_buffer.clear()
 
     # ------------------------------------------------------------------
     # K2: Confidence API
@@ -947,7 +957,10 @@ class WakeDetector:
             A _SourceDetector wrapping both the source and detector.
         """
         detector = cls(
-            model=model, threshold=threshold, cooldown_s=cooldown_s, **kwargs,
+            model=model,
+            threshold=threshold,
+            cooldown_s=cooldown_s,
+            **kwargs,
         )
         return _SourceDetector(detector=detector, source=source)
 
@@ -967,8 +980,12 @@ class WakeDetector:
         pa = pyaudio.PyAudio()
         try:
             stream = pa.open(
-                format=pyaudio.paInt16, channels=1, rate=SAMPLE_RATE, input=True,
-                frames_per_buffer=FRAME_SAMPLES, input_device_index=device_index,
+                format=pyaudio.paInt16,
+                channels=1,
+                rate=SAMPLE_RATE,
+                input=True,
+                frames_per_buffer=FRAME_SAMPLES,
+                input_device_index=device_index,
             )
         except Exception as e:
             pa.terminate()
@@ -986,7 +1003,9 @@ class WakeDetector:
                     consecutive_errors = 0
                 except Exception as e:
                     consecutive_errors += 1
-                    logger.warning("Mic read error (%d/%d): %s", consecutive_errors, _MAX_CONSECUTIVE_ERRORS, e)
+                    logger.warning(
+                        "Mic read error (%d/%d): %s", consecutive_errors, _MAX_CONSECUTIVE_ERRORS, e
+                    )
                     if consecutive_errors >= _MAX_CONSECUTIVE_ERRORS:
                         raise AudioCaptureError(
                             f"Microphone read failed {_MAX_CONSECUTIVE_ERRORS} consecutive times. "
@@ -1064,11 +1083,15 @@ class WakewordDetector:
     """
 
     def __init__(
-        self, wake_word: str = "viola", threshold: float = DEFAULT_THRESHOLD,
-        cooldown_s: float = DEFAULT_COOLDOWN_S, providers: list[str] | None = None,
+        self,
+        wake_word: str = "viola",
+        threshold: float = DEFAULT_THRESHOLD,
+        cooldown_s: float = DEFAULT_COOLDOWN_S,
+        providers: list[str] | None = None,
         backend: str = "auto",
     ) -> None:
         import warnings
+
         warnings.warn(
             "WakewordDetector is deprecated. Use WakeDetector instead.",
             DeprecationWarning,
@@ -1099,8 +1122,10 @@ class WakewordDetector:
         with self._init_lock:
             if self._detector is None:
                 self._detector = WakeDetector(
-                    model=self._model_name, threshold=self.threshold,
-                    cooldown_s=self.cooldown_s, providers=self.providers,
+                    model=self._model_name,
+                    threshold=self.threshold,
+                    cooldown_s=self.cooldown_s,
+                    providers=self.providers,
                     backend=self.backend,
                 )
         return self._detector

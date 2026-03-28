@@ -11,6 +11,7 @@ See ADR-005 for the full rationale behind this distribution approach.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
@@ -152,11 +153,9 @@ def check_registry_integrity(*, strict: bool = True) -> list[str]:
     prevent shipping unverified models.  ``download_model()`` also calls this
     for the specific model being downloaded (unless ``skip_verify=True``).
     """
-    placeholder_models = sorted(set(
-        name
-        for name, spec in MODEL_REGISTRY.items()
-        if "placeholder" in spec.sha256.lower()
-    ))
+    placeholder_models = sorted(
+        set(name for name, spec in MODEL_REGISTRY.items() if "placeholder" in spec.sha256.lower())
+    )
     if placeholder_models and strict:
         raise RuntimeError(
             f"Registry integrity check failed — {len(placeholder_models)} model(s) have "
@@ -212,8 +211,8 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
         RuntimeError: If the download fails.
     """
     import tempfile
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     url_suffix = Path(spec.url).suffix
     ext = url_suffix or ".onnx"
@@ -273,15 +272,11 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
 
     except Exception as e:
         if tmp_fd is not None:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(tmp_fd)
-            except OSError:
-                pass
         if tmp_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
         print(" FAILED", file=sys.stderr, flush=True)
         raise RuntimeError(
             f"Auto-download of model '{model_name}' failed: {e}. "
@@ -295,7 +290,9 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
 
     # Size validation (same logic as download_model)
     actual_size = model_path.stat().st_size
-    if spec.size_bytes and abs(actual_size - spec.size_bytes) > max(1024, spec.size_bytes * SIZE_TOLERANCE_FRACTION):
+    if spec.size_bytes and abs(actual_size - spec.size_bytes) > max(
+        1024, spec.size_bytes * SIZE_TOLERANCE_FRACTION
+    ):
         model_path.unlink(missing_ok=True)
         raise ValueError(
             f"Size validation failed for auto-downloaded '{model_name}'. "
@@ -305,7 +302,9 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
 
     logger.info(
         "Auto-downloaded model '%s' to %s (%.1f MB)",
-        model_name, model_path, model_path.stat().st_size / 1e6,
+        model_name,
+        model_path,
+        model_path.stat().st_size / 1e6,
     )
     return model_path
 
@@ -401,8 +400,7 @@ def download_model(
         from tqdm import tqdm  # lazy import — optional [download] extra
     except ImportError:
         raise ImportError(
-            "tqdm is required for model downloading. "
-            "Install with: pip install violawake[download]"
+            "tqdm is required for model downloading. Install with: pip install violawake[download]"
         ) from None
 
     if model_name not in MODEL_REGISTRY:
@@ -507,20 +505,18 @@ def download_model(
     except Exception:
         # G3: Clean up temp file on error
         if tmp_fd is not None:
-            try:
+            with contextlib.suppress(OSError):
                 os.close(tmp_fd)
-            except OSError:
-                pass
         if tmp_path is not None:
-            try:
+            with contextlib.suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
-            except OSError:
-                pass
         raise
 
     # Verify file size matches spec (catches truncated downloads)
     actual_size = model_path.stat().st_size
-    if spec.size_bytes and abs(actual_size - spec.size_bytes) > max(1024, spec.size_bytes * SIZE_TOLERANCE_FRACTION):
+    if spec.size_bytes and abs(actual_size - spec.size_bytes) > max(
+        1024, spec.size_bytes * SIZE_TOLERANCE_FRACTION
+    ):
         model_path.unlink(missing_ok=True)
         raise ValueError(
             f"Size validation failed for '{model_name}'. "
@@ -531,7 +527,9 @@ def download_model(
     if verify:
         _verify_sha256(model_path, spec.sha256, model_name)
 
-    logger.info("Model downloaded and cached: %s (%.1f MB)", model_path, model_path.stat().st_size / 1e6)
+    logger.info(
+        "Model downloaded and cached: %s (%.1f MB)", model_path, model_path.stat().st_size / 1e6
+    )
     return model_path
 
 

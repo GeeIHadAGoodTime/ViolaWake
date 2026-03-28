@@ -63,12 +63,8 @@ def _coerce_to_bytes(audio: bytes | np.ndarray) -> bytes:
             return (audio * 32768).clip(-32768, 32767).astype(np.int16).tobytes()
         if audio.dtype == np.int16:
             return audio.tobytes()
-        raise ValueError(
-            f"ndarray dtype must be float32, float64, or int16, got {audio.dtype}"
-        )
-    raise TypeError(
-        f"audio must be bytes or np.ndarray, got {type(audio).__name__}"
-    )
+        raise ValueError(f"ndarray dtype must be float32, float64, or int16, got {audio.dtype}")
+    raise TypeError(f"audio must be bytes or np.ndarray, got {type(audio).__name__}")
 
 
 class _VADBackendProtocol(Protocol):
@@ -88,11 +84,12 @@ class _WebRTCVADBackend:
 
     def __init__(self, aggressiveness: int = 2) -> None:
         """Args:
-            aggressiveness: 0–3. 0 is least aggressive (more false accepts),
-                            3 is most aggressive (more false rejects). Default 2.
+        aggressiveness: 0–3. 0 is least aggressive (more false accepts),
+                        3 is most aggressive (more false rejects). Default 2.
         """
         try:
             import webrtcvad
+
             self._vad = webrtcvad.Vad(aggressiveness)
         except ImportError as e:
             raise ImportError(
@@ -102,11 +99,13 @@ class _WebRTCVADBackend:
             raise RuntimeError(f"Failed to initialize WebRTC VAD: {e}") from e
 
     # Valid frame sizes for WebRTC VAD: 10ms, 20ms, 30ms at 16kHz (int16 = 2 bytes/sample)
-    _VALID_FRAME_BYTES = frozenset({
-        160 * 2,   # 10ms at 16kHz
-        320 * 2,   # 20ms at 16kHz
-        480 * 2,   # 30ms at 16kHz
-    })
+    _VALID_FRAME_BYTES = frozenset(
+        {
+            160 * 2,  # 10ms at 16kHz
+            320 * 2,  # 20ms at 16kHz
+            480 * 2,  # 30ms at 16kHz
+        }
+    )
 
     def process_frame(self, audio_bytes: bytes) -> float:
         """Returns 1.0 if speech detected, 0.0 if not (WebRTC is binary).
@@ -153,8 +152,7 @@ class _SileroVADBackend:
             import torch  # type: ignore[import]
         except ImportError as e:
             raise ImportError(
-                "PyTorch is required for Silero VAD. "
-                "Install with: pip install torch"
+                "PyTorch is required for Silero VAD. Install with: pip install torch"
             ) from e
 
         try:
@@ -172,9 +170,7 @@ class _SileroVADBackend:
                 "the remote repo is not integrity-verified. Pin to a known "
                 "commit hash in production deployments."
             )
-            model, _ = torch.hub.load(
-                "snakers4/silero-vad", "silero_vad", trust_repo=True
-            )
+            model, _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
         except (RuntimeError, OSError) as e:
             raise RuntimeError(
                 f"Failed to load Silero VAD model from torch.hub. "
@@ -250,7 +246,7 @@ class _RMSHeuristicBackend:
                 f"audio_bytes length must be even (int16 = 2 bytes/sample), got {len(audio_bytes)}"
             )
         pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)
-        rms = float(np.sqrt(np.mean(pcm ** 2)))
+        rms = float(np.sqrt(np.mean(pcm**2)))
 
         if rms >= self._speech_threshold:
             return 1.0
@@ -258,7 +254,9 @@ class _RMSHeuristicBackend:
             return 0.0
         else:
             # Linear interpolation in the ambiguous zone
-            return (rms - self._silence_threshold) / (self._speech_threshold - self._silence_threshold)
+            return (rms - self._silence_threshold) / (
+                self._speech_threshold - self._silence_threshold
+            )
 
     def reset(self) -> None:
         """Stateless — no-op."""
@@ -290,7 +288,11 @@ def _create_backend(
             logger.info("VAD backend: Silero")
             return VADBackend.SILERO, b
         except Exception as e:
-            logger.debug("Silero VAD unavailable (%s: %s), falling back to RMS heuristic", type(e).__name__, e)
+            logger.debug(
+                "Silero VAD unavailable (%s: %s), falling back to RMS heuristic",
+                type(e).__name__,
+                e,
+            )
         logger.info("VAD backend: RMS heuristic")
         return VADBackend.RMS, _RMSHeuristicBackend()
     else:

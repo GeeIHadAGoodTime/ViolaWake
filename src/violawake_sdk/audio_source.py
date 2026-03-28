@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     import pyaudio
 
+import contextlib
+
 import numpy as np
 
 from violawake_sdk._constants import SAMPLE_RATE
@@ -156,7 +158,7 @@ class FileSource:
         self._buffer = b""
 
         if self._path.suffix.lower() == ".wav":
-            self._wf = wave.open(str(self._path), "rb")
+            self._wf = wave.open(str(self._path), "rb")  # noqa: SIM115
             sr = self._wf.getframerate()
             ch = self._wf.getnchannels()
             sw = self._wf.getsampwidth()
@@ -316,7 +318,7 @@ class NetworkSource:
                 self._conn, addr = self._sock.accept()
                 self._conn.settimeout(self._timeout)
                 logger.info("NetworkSource: client connected from %s", addr)
-            except socket.timeout:
+            except TimeoutError:
                 logger.warning("NetworkSource: no client connected within timeout")
         elif self._protocol == "udp":
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -342,7 +344,7 @@ class NetworkSource:
                 else:
                     data, _ = self._sock.recvfrom(4096)
                 self._buffer += data
-        except socket.timeout:
+        except TimeoutError:
             return None
         except Exception as e:
             logger.warning("NetworkSource read error: %s", e)
@@ -355,16 +357,12 @@ class NetworkSource:
     def stop(self) -> None:
         """Close network sockets."""
         if self._conn is not None:
-            try:
+            with contextlib.suppress(OSError):
                 self._conn.close()
-            except OSError:
-                pass
             self._conn = None
         if self._sock is not None:
-            try:
+            with contextlib.suppress(OSError):
                 self._sock.close()
-            except OSError:
-                pass
             self._sock = None
         self._buffer = b""
         logger.info("NetworkSource stopped")
@@ -426,14 +424,10 @@ class CallbackSource:
                     self._queue.put_nowait(frame)
                 except queue.Full:
                     # Drop oldest frame to make room
-                    try:
+                    with contextlib.suppress(queue.Empty):
                         self._queue.get_nowait()
-                    except queue.Empty:
-                        pass
-                    try:
+                    with contextlib.suppress(queue.Full):
                         self._queue.put_nowait(frame)
-                    except queue.Full:
-                        pass
 
     def read_frame(self) -> bytes | None:
         """Read one 20ms frame, blocking up to timeout seconds."""

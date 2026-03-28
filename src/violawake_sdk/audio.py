@@ -14,8 +14,6 @@ from pathlib import Path
 
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 from violawake_sdk._constants import (
     AUDIO_INT16_SCALE,
     CLIP_SAMPLES,
@@ -37,6 +35,8 @@ from violawake_sdk._constants import (
     WIN_LENGTH,
     WIN_LENGTH_MEL,
 )
+
+logger = logging.getLogger(__name__)
 
 # Optional imports
 _TORCHAUDIO_AVAILABLE = False
@@ -74,7 +74,9 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
                 waveform = resampler(waveform)
             return waveform.squeeze().numpy()
         except Exception:
-            logger.warning("torchaudio failed for %s, falling back to wave module", path, exc_info=True)
+            logger.warning(
+                "torchaudio failed for %s, falling back to wave module", path, exc_info=True
+            )
 
     # Fallback to wave module (WAV only)
     try:
@@ -87,12 +89,10 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
             if sr != target_sr:
                 from scipy import signal
 
-                audio_float = signal.resample(
-                    audio_float, int(len(audio_float) * target_sr / sr)
-                )
+                audio_float = signal.resample(audio_float, int(len(audio_float) * target_sr / sr))
             return audio_float
     except Exception:
-        logger.error("Failed to load audio from %s", path, exc_info=True)
+        logger.exception("Failed to load audio from %s", path)
         return None
 
 

@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 # Audio conversion helpers (no ffmpeg required)
 # ---------------------------------------------------------------------------
 
+
 def _mp3_bytes_to_pcm(mp3_data: bytes, target_sr: int) -> bytes | None:
     """Convert MP3 bytes to 16-bit mono PCM at *target_sr*.
 
@@ -67,8 +68,7 @@ def _mp3_bytes_to_pcm(mp3_data: bytes, target_sr: int) -> bytes | None:
         return seg.raw_data
     except Exception as exc:
         print(
-            f"WARNING: MP3 decode failed ({exc}). "
-            "Install ffmpeg for reliable MP3 support.",
+            f"WARNING: MP3 decode failed ({exc}). Install ffmpeg for reliable MP3 support.",
             file=sys.stderr,
         )
         return None
@@ -88,7 +88,8 @@ def _save_wav(pcm_data: bytes, path: Path, sample_rate: int = 16_000) -> None:
 # Augmentation helpers (numpy only -- no heavy pipeline import)
 # ---------------------------------------------------------------------------
 
-def _pcm_to_float(pcm: bytes) -> "np.ndarray":
+
+def _pcm_to_float(pcm: bytes) -> np.ndarray:
     """Convert 16-bit PCM bytes to float32 numpy array in [-1, 1]."""
     import numpy as np
 
@@ -96,7 +97,7 @@ def _pcm_to_float(pcm: bytes) -> "np.ndarray":
     return samples / 32768.0
 
 
-def _float_to_pcm(arr: "np.ndarray") -> bytes:
+def _float_to_pcm(arr: np.ndarray) -> bytes:
     """Convert float32 numpy array back to 16-bit PCM bytes."""
     import numpy as np
 
@@ -109,11 +110,9 @@ def _add_noise(pcm: bytes, snr_db: float) -> bytes:
     import numpy as np
 
     signal = _pcm_to_float(pcm)
-    rms_signal = max(np.sqrt(np.mean(signal ** 2)), 1e-10)
+    rms_signal = max(np.sqrt(np.mean(signal**2)), 1e-10)
     rms_noise = rms_signal / (10 ** (snr_db / 20.0))
-    noise = np.random.default_rng().normal(0, rms_noise, signal.shape).astype(
-        np.float32
-    )
+    noise = np.random.default_rng().normal(0, rms_noise, signal.shape).astype(np.float32)
     return _float_to_pcm(signal + noise)
 
 
@@ -127,7 +126,7 @@ def _add_reverb(pcm: bytes, sample_rate: int) -> bytes:
     rir = np.random.default_rng(42).normal(0, 1, rir_len).astype(np.float32)
     rir *= np.exp(-np.linspace(0, 6, rir_len)).astype(np.float32)
     rir[0] = 1.0
-    rir /= max(np.sqrt(np.sum(rir ** 2)), 1e-10)
+    rir /= max(np.sqrt(np.sum(rir**2)), 1e-10)
 
     convolved = np.convolve(signal, rir, mode="full")[: len(signal)]
     return _float_to_pcm(convolved)
@@ -137,14 +136,14 @@ def _add_reverb(pcm: bytes, sample_rate: int) -> bytes:
 # Edge TTS helpers
 # ---------------------------------------------------------------------------
 
+
 async def _get_english_voices(max_voices: int) -> list[dict]:
     """Return up to *max_voices* English Edge TTS voices."""
     try:
         import edge_tts
     except ImportError:
         print(
-            "ERROR: edge-tts is required for TTS generation. "
-            "Install with: pip install edge-tts",
+            "ERROR: edge-tts is required for TTS generation. Install with: pip install edge-tts",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -195,6 +194,7 @@ def _safe_filename(text: str) -> str:
 # ---------------------------------------------------------------------------
 # Core generation logic
 # ---------------------------------------------------------------------------
+
 
 async def _generate_positives(
     word: str,
@@ -290,7 +290,7 @@ async def _generate_negatives(
         return 0
 
     saved = 0
-    total = min(neg_count, len(confusables) * len(voice_list))
+    min(neg_count, len(confusables) * len(voice_list))
 
     tasks: list[tuple[str, str]] = []
     idx = 0
@@ -300,7 +300,7 @@ async def _generate_negatives(
         tasks.append((voice["ShortName"], confusable))
         idx += 1
 
-    for i, (voice_name, text) in enumerate(tasks):
+    for _i, (voice_name, text) in enumerate(tasks):
         voice_short = voice_name.split("-")[-1].replace("Neural", "").strip()
         base_name = f"{voice_short}_{_safe_filename(text)}"
 
@@ -323,6 +323,7 @@ async def _generate_negatives(
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 async def _async_main(args: argparse.Namespace) -> None:
     """Async body called by main()."""

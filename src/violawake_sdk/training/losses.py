@@ -69,9 +69,7 @@ if _TORCH_AVAILABLE:
             """
             # Apply label smoothing
             if self.label_smoothing > 0:
-                targets = (
-                    targets * (1.0 - self.label_smoothing) + self.label_smoothing / 2.0
-                )
+                targets = targets * (1.0 - self.label_smoothing) + self.label_smoothing / 2.0
 
             # Clamp predictions for numerical stability
             p = torch.clamp(inputs, min=1e-7, max=1.0 - 1e-7)
@@ -99,4 +97,6 @@ else:
         """Stub when PyTorch is not available."""
 
         def __init__(self, *args, **kwargs):
-            raise ImportError("PyTorch required for FocalLoss. Install with: pip install 'violawake[training]'")
+            raise ImportError(
+                "PyTorch required for FocalLoss. Install with: pip install 'violawake[training]'"
+            )

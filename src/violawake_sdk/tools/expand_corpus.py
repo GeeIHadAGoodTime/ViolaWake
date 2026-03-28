@@ -63,9 +63,7 @@ def _safe_extract(tar: tarfile.TarFile, dest: str) -> None:
     for member in tar.getmembers():
         member_path = os.path.realpath(os.path.join(dest, member.name))
         if not member_path.startswith(dest_resolved + os.sep) and member_path != dest_resolved:
-            raise ValueError(
-                f"Refusing to extract {member.name!r}: path traversal detected"
-            )
+            raise ValueError(f"Refusing to extract {member.name!r}: path traversal detected")
     # Safe — all members resolve inside dest
     try:
         tar.extractall(path=dest, filter="data")
@@ -100,7 +98,9 @@ def _stream_download_and_extract(
             downloaded += len(chunk)
             if verbose and total > 0 and downloaded % (10 * 1024 * 1024) < 65536:
                 pct = downloaded * 100 // total
-                print(f"  Downloaded {downloaded // (1024 * 1024)} MB / {total // (1024 * 1024)} MB ({pct}%)")
+                print(
+                    f"  Downloaded {downloaded // (1024 * 1024)} MB / {total // (1024 * 1024)} MB ({pct}%)"
+                )
 
     try:
         if verbose:
@@ -231,8 +231,7 @@ def prepare_streaming_corpus(
     from violawake_sdk.audio import load_audio
 
     audio_files = sorted(
-        list(Path(audio_dir).rglob("*.wav"))
-        + list(Path(audio_dir).rglob("*.flac"))
+        list(Path(audio_dir).rglob("*.wav")) + list(Path(audio_dir).rglob("*.flac"))
     )
 
     if not audio_files:
@@ -293,7 +292,7 @@ def prepare_streaming_corpus(
 
 def _write_wav(path: Path, audio_int16: np.ndarray, sample_rate: int) -> None:
     """Write a mono int16 WAV file without external dependencies."""
-    n_samples = len(audio_int16)
+    len(audio_int16)
     data_bytes = audio_int16.tobytes()
     # WAV header (44 bytes)
     header = struct.pack(
@@ -302,13 +301,13 @@ def _write_wav(path: Path, audio_int16: np.ndarray, sample_rate: int) -> None:
         36 + len(data_bytes),  # file size - 8
         b"WAVE",
         b"fmt ",
-        16,      # chunk size
-        1,       # PCM format
-        1,       # mono
+        16,  # chunk size
+        1,  # PCM format
+        1,  # mono
         sample_rate,
         sample_rate * 2,  # byte rate
-        2,       # block align
-        16,      # bits per sample
+        2,  # block align
+        16,  # bits per sample
         b"data",
         len(data_bytes),
     )
@@ -368,7 +367,9 @@ def main() -> None:
         audio_dir = args.audio_dir or args.output
         streaming_out = Path(args.output) / "streaming"
         prepare_streaming_corpus(
-            audio_dir, str(streaming_out), args.chunk_seconds,
+            audio_dir,
+            str(streaming_out),
+            args.chunk_seconds,
         )
         return
 

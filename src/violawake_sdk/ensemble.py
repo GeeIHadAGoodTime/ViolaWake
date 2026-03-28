@@ -175,7 +175,9 @@ class EnsembleScorer:
         emb_2d = embedding.reshape(1, -1)
         scores: list[float] = []
 
-        for idx, (session, input_name) in enumerate(zip(self._sessions, self._input_names)):
+        for idx, (session, input_name) in enumerate(
+            zip(self._sessions, self._input_names, strict=False)
+        ):
             try:
                 result = session.run(None, {input_name: emb_2d})  # type: ignore[union-attr]
                 score = float(np.asarray(result[0]).flatten()[0])
@@ -184,7 +186,9 @@ class EnsembleScorer:
             except Exception as e:
                 logger.warning(
                     "Ensemble model %d/%d inference failed: %s",
-                    idx, len(self._sessions), e,
+                    idx,
+                    len(self._sessions),
+                    e,
                 )
                 scores.append(0.0)
 

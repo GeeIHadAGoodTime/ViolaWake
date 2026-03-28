@@ -85,8 +85,7 @@ if _TORCH_AVAILABLE:
             self.model = model
             self.decay = decay
             self.shadow: dict[str, torch.Tensor] = {
-                name: param.data.clone()
-                for name, param in model.named_parameters()
+                name: param.data.clone() for name, param in model.named_parameters()
             }
             self._backup: dict[str, torch.Tensor] | None = None
             self.num_updates: int = 0
@@ -107,8 +106,7 @@ if _TORCH_AVAILABLE:
             ``restore()``.
             """
             self._backup = {
-                name: param.data.clone()
-                for name, param in self.model.named_parameters()
+                name: param.data.clone() for name, param in self.model.named_parameters()
             }
             for name, param in self.model.named_parameters():
                 param.data.copy_(self.shadow[name])
@@ -190,8 +188,7 @@ if _TORCH_AVAILABLE:
             """
             if self._avg_params is None:
                 self._avg_params = {
-                    name: param.data.clone()
-                    for name, param in model.named_parameters()
+                    name: param.data.clone() for name, param in model.named_parameters()
                 }
                 self.n_collected = 1
             else:
@@ -266,8 +263,7 @@ else:
 
         def __init__(self, *args, **kwargs):
             raise ImportError(
-                "PyTorch required for EMATracker. "
-                "Install with: pip install 'violawake[training]'"
+                "PyTorch required for EMATracker. Install with: pip install 'violawake[training]'"
             )
 
     class SWACollector:  # type: ignore[no-redef]
@@ -275,8 +271,7 @@ else:
 
         def __init__(self, *args, **kwargs):
             raise ImportError(
-                "PyTorch required for SWACollector. "
-                "Install with: pip install 'violawake[training]'"
+                "PyTorch required for SWACollector. Install with: pip install 'violawake[training]'"
             )
 
     def auto_select_averaging(*args, **kwargs) -> str:

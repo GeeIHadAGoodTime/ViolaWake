@@ -38,12 +38,12 @@ SENTENCE_BOUNDARIES = ".!?;:"
 
 # Available Kokoro voices
 AVAILABLE_VOICES = [
-    "af_heart",   # American Female (default)
+    "af_heart",  # American Female (default)
     "af_bella",
     "af_sarah",
-    "am_adam",    # American Male
+    "am_adam",  # American Male
     "am_michael",
-    "bf_emma",    # British Female
+    "bf_emma",  # British Female
     "bf_isabella",
     "bm_george",  # British Male
     "bm_lewis",
@@ -88,14 +88,10 @@ class TTSEngine:
                          Kokoro outputs 24kHz; resampled if different.
         """
         if voice not in AVAILABLE_VOICES:
-            raise ValueError(
-                f"Unknown voice '{voice}'. Available: {', '.join(AVAILABLE_VOICES)}"
-            )
+            raise ValueError(f"Unknown voice '{voice}'. Available: {', '.join(AVAILABLE_VOICES)}")
 
         if not (0.1 <= speed <= 3.0):
-            raise ValueError(
-                f"Speed must be between 0.1 and 3.0, got {speed}"
-            )
+            raise ValueError(f"Speed must be between 0.1 and 3.0, got {speed}")
 
         self.voice = voice
         self.speed = speed
@@ -234,8 +230,7 @@ class TTSEngine:
             import pyaudio
         except ImportError:
             raise ImportError(
-                "pyaudio is required for audio playback. "
-                "Install with: pip install violawake[audio]"
+                "pyaudio is required for audio playback. Install with: pip install violawake[audio]"
             ) from None
 
         if not blocking:
@@ -273,8 +268,7 @@ class TTSEngine:
             from scipy.signal import resample_poly
         except ImportError as e:
             raise ImportError(
-                "scipy is required for audio resampling. "
-                "Install with: pip install scipy"
+                "scipy is required for audio resampling. Install with: pip install scipy"
             ) from e
         gcd = math.gcd(src_rate, dst_rate)
         return resample_poly(audio, dst_rate // gcd, src_rate // gcd).astype(np.float32)
@@ -291,7 +285,7 @@ class TTSEngine:
         import re
 
         # Split on sentence-ending punctuation followed by space+uppercase or end of string
-        pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$'
+        pattern = r"(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$"
         parts = re.split(pattern, text)
         return [s.strip() for s in parts if s and s.strip()]
 

@@ -93,7 +93,8 @@ def detect_architecture(model_path: Path, session) -> str:
             if last_dim and _OWW_EMBEDDING_DIM_RANGE[0] <= last_dim <= _OWW_EMBEDDING_DIM_RANGE[1]:
                 logger.info(
                     "Architecture detected from input shape %s: mlp_on_oww (dim=%d)",
-                    input_shape, last_dim,
+                    input_shape,
+                    last_dim,
                 )
                 return "mlp_on_oww"
         elif len(input_shape) >= 3:
@@ -103,14 +104,14 @@ def detect_architecture(model_path: Path, session) -> str:
             last_dim = numeric_dims[-1] if numeric_dims else None
             seq_dim = numeric_dims[0] if len(numeric_dims) >= 2 else None
             is_temporal_oww = (
-                last_dim == 96
-                and seq_dim is not None
-                and seq_dim <= 20
+                last_dim == 96 and seq_dim is not None and seq_dim <= 20
             ) or input_name == "embeddings"
             if is_temporal_oww:
                 logger.info(
                     "Architecture detected from input shape %s: temporal_oww (dim=%s, seq=%s)",
-                    input_shape, last_dim, seq_dim,
+                    input_shape,
+                    last_dim,
+                    seq_dim,
                 )
                 return "temporal_oww"
             logger.info(
@@ -130,7 +131,9 @@ def detect_architecture(model_path: Path, session) -> str:
 # ── Core metrics ──────────────────────────────────────────────────────────────
 
 
-def compute_dprime(pos_scores: list[float] | np.ndarray, neg_scores: list[float] | np.ndarray) -> float:
+def compute_dprime(
+    pos_scores: list[float] | np.ndarray, neg_scores: list[float] | np.ndarray
+) -> float:
     """
     Compute the repo's historical "d-prime" metric.
 
@@ -321,7 +324,9 @@ def _dump_scores_csv(
         for fpath, score in zip(neg_files, neg_scores, strict=True):
             writer.writerow([str(fpath), "negative", f"{score:.6f}", score >= threshold])
 
-    logger.info("Score dump written to %s (%d entries)", csv_path, len(pos_scores) + len(neg_scores))
+    logger.info(
+        "Score dump written to %s (%d entries)", csv_path, len(pos_scores) + len(neg_scores)
+    )
 
 
 # ── Scoring backends ──────────────────────────────────────────────────────────
@@ -347,8 +352,7 @@ def _build_oww_scorer(session, input_name: str):
         from openwakeword.model import Model as OWWModel  # type: ignore[import]
     except ImportError as e:
         raise ImportError(
-            "openwakeword required for MLP-on-OWW evaluation. "
-            "pip install openwakeword"
+            "openwakeword required for MLP-on-OWW evaluation. pip install openwakeword"
         ) from e
 
     from violawake_sdk._constants import CLIP_SAMPLES
@@ -435,8 +439,7 @@ def _build_temporal_oww_scorer(session, input_name: str):
         from openwakeword.model import Model as OWWModel  # type: ignore[import]
     except ImportError as e:
         raise ImportError(
-            "openwakeword required for temporal OWW evaluation. "
-            "pip install openwakeword"
+            "openwakeword required for temporal OWW evaluation. pip install openwakeword"
         ) from e
 
     from violawake_sdk._constants import CLIP_SAMPLES
@@ -482,7 +485,7 @@ def _build_temporal_oww_scorer(session, input_name: str):
             # Slide window and take max score
             max_score = -1.0
             for i in range(n_frames - seq_len + 1):
-                window = emb[i:i + seq_len][np.newaxis, :, :].astype(np.float32)
+                window = emb[i : i + seq_len][np.newaxis, :, :].astype(np.float32)
                 score = session.run(None, {input_name: window})[0]
                 s = float(np.asarray(score).flatten()[0])
                 if s > max_score:
@@ -662,14 +665,22 @@ def evaluate_onnx_model(
     # Dump per-file scores if requested
     if dump_scores_csv is not None:
         _dump_scores_csv(
-            pos_scored_files, pos_scores,
-            neg_scored_files, neg_scores,
-            threshold, Path(dump_scores_csv),
+            pos_scored_files,
+            pos_scores,
+            neg_scored_files,
+            neg_scores,
+            threshold,
+            Path(dump_scores_csv),
         )
 
     logger.info(
         "Evaluation complete: arch=%s, d'=%.2f, FAR=%.2f/hr, FRR=%.1f%%, AUC=%.3f, optimal_thresh=%.2f",
-        architecture, d_prime, far_per_hour, frr * 100, roc_auc, opt["optimal_threshold"],
+        architecture,
+        d_prime,
+        far_per_hour,
+        frr * 100,
+        roc_auc,
+        opt["optimal_threshold"],
     )
 
     return results

@@ -59,18 +59,18 @@ class _RingBuffer:
 
         if n >= self._capacity:
             # Data larger than buffer — keep only the tail.
-            self._buf[:] = data[-self._capacity:]
+            self._buf[:] = data[-self._capacity :]
             self._write_pos = 0
             self._count = self._capacity
             return
 
         end = self._write_pos + n
         if end <= self._capacity:
-            self._buf[self._write_pos:end] = data
+            self._buf[self._write_pos : end] = data
         else:
             first = self._capacity - self._write_pos
-            self._buf[self._write_pos:] = data[:first]
-            self._buf[:n - first] = data[first:]
+            self._buf[self._write_pos :] = data[:first]
+            self._buf[: n - first] = data[first:]
 
         self._write_pos = end % self._capacity
         self._count = min(self._count + n, self._capacity)
@@ -87,10 +87,10 @@ class _RingBuffer:
 
         start = (self._write_pos - n) % self._capacity
         if start + n <= self._capacity:
-            return self._buf[start:start + n].copy()
+            return self._buf[start : start + n].copy()
 
         # Wraps around — two slices.
-        return np.concatenate((self._buf[start:], self._buf[:self._write_pos]))
+        return np.concatenate((self._buf[start:], self._buf[: self._write_pos]))
 
 
 @dataclass(frozen=True)
@@ -169,7 +169,8 @@ class OpenWakeWordBackbone:
         """Reset streaming buffers and cached embeddings."""
         self._raw_data_buffer = _RingBuffer(_MAX_RAW_SAMPLES)
         self._melspectrogram_buffer = np.ones(
-            (MEL_FRAMES_PER_EMBEDDING, 32), dtype=np.float32,
+            (MEL_FRAMES_PER_EMBEDDING, 32),
+            dtype=np.float32,
         )
         self._accumulated_samples = 0
         self._raw_data_remainder = np.empty(0, dtype=np.int16)
@@ -191,7 +192,10 @@ class OpenWakeWordBackbone:
             self._raw_data_remainder = pcm_i16[-remainder:].copy()
 
         new_embeddings: list[np.ndarray] = []
-        if self._accumulated_samples >= OWW_CHUNK_SAMPLES and self._accumulated_samples % OWW_CHUNK_SAMPLES == 0:
+        if (
+            self._accumulated_samples >= OWW_CHUNK_SAMPLES
+            and self._accumulated_samples % OWW_CHUNK_SAMPLES == 0
+        ):
             self._streaming_melspectrogram(self._accumulated_samples)
 
             n_chunks = self._accumulated_samples // OWW_CHUNK_SAMPLES
@@ -202,7 +206,7 @@ class OpenWakeWordBackbone:
                 offset = -MEL_STRIDE * chunk_index
                 end_index = offset if offset != 0 else len(self._melspectrogram_buffer)
                 window = self._melspectrogram_buffer[
-                    -MEL_FRAMES_PER_EMBEDDING + end_index:end_index
+                    -MEL_FRAMES_PER_EMBEDDING + end_index : end_index
                 ]
                 if window.shape[0] == MEL_FRAMES_PER_EMBEDDING:
                     embedding = self._predict_embedding(window)
@@ -227,7 +231,9 @@ class OpenWakeWordBackbone:
     def _streaming_melspectrogram(self, n_samples: int) -> None:
         raw_window = self._raw_data_buffer.tail(n_samples + _OWW_MELSPEC_CONTEXT_SAMPLES)
         melspectrogram = self._predict_melspectrogram(raw_window)
-        self._melspectrogram_buffer = np.vstack((self._melspectrogram_buffer, melspectrogram))[-_MAX_MELSPEC_FRAMES:, :]
+        self._melspectrogram_buffer = np.vstack((self._melspectrogram_buffer, melspectrogram))[
+            -_MAX_MELSPEC_FRAMES:, :
+        ]
 
     def _predict_melspectrogram(self, pcm_i16: np.ndarray) -> np.ndarray:
         batch = pcm_i16.astype(np.float32)[None, :]

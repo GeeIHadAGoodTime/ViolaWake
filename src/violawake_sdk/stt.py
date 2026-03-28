@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 # faster-whisper model sizes and their trade-offs
 # WER measured on LibriSpeech test-clean (lower is better)
 MODEL_PROFILES = {
-    "tiny":     {"vram_mb": 75,   "wer": 14.0, "latency_ms": 120},
-    "base":     {"vram_mb": 145,  "wer": 9.0,  "latency_ms": 380},
-    "small":    {"vram_mb": 465,  "wer": 7.0,  "latency_ms": 850},
-    "medium":   {"vram_mb": 1500, "wer": 5.0,  "latency_ms": 2100},
-    "large-v3": {"vram_mb": 3000, "wer": 3.0,  "latency_ms": 5000},
+    "tiny": {"vram_mb": 75, "wer": 14.0, "latency_ms": 120},
+    "base": {"vram_mb": 145, "wer": 9.0, "latency_ms": 380},
+    "small": {"vram_mb": 465, "wer": 7.0, "latency_ms": 850},
+    "medium": {"vram_mb": 1500, "wer": 5.0, "latency_ms": 2100},
+    "large-v3": {"vram_mb": 3000, "wer": 3.0, "latency_ms": 5000},
 }
 
 DEFAULT_MODEL = "base"
@@ -116,7 +116,10 @@ class STTEngine:
         profile = MODEL_PROFILES[model]
         logger.info(
             "STTEngine created: model=%s, device=%s (WER~%.0f%%, %dMB)",
-            model, device, profile["wer"], profile["vram_mb"],
+            model,
+            device,
+            profile["wer"],
+            profile["vram_mb"],
         )
 
     def _get_model(self) -> WhisperModel:
@@ -212,7 +215,7 @@ class STTEngine:
         segments_gen, info = model.transcribe(
             audio,
             language=language,
-            vad_filter=True,          # Use Silero VAD for silence removal
+            vad_filter=True,  # Use Silero VAD for silence removal
             vad_parameters={"min_silence_duration_ms": 500},
             word_timestamps=False,
             beam_size=5,
@@ -251,7 +254,8 @@ class STTEngine:
 
         logger.debug(
             "Transcribed in %.0f ms: '%s'",
-            elapsed_ms, full_text[:60] + "..." if len(full_text) > 60 else full_text,
+            elapsed_ms,
+            full_text[:60] + "..." if len(full_text) > 60 else full_text,
         )
 
         return TranscriptResult(
