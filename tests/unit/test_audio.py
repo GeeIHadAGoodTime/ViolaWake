@@ -131,4 +131,4 @@ class TestLoadAudio:
             result = load_audio(bad_path)
 
         assert result is None
-        mock_logger.error.assert_called_once()
+        mock_logger.exception.assert_called_once()
