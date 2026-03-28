@@ -4,10 +4,14 @@ ViolaWake SDK — Open-source wake word detection + voice pipeline.
 Public API surface:
     WakeDetector      — detect a wake word in an audio stream
     AsyncWakeDetector — async wrapper for asyncio-based applications
-    VADEngine         — voice activity detection
+    DetectorConfig    — advanced configuration (ensemble, adaptive, speaker, power)
+    VADEngine         — voice activity detection (WebRTC, Silero, RMS)
     TTSEngine         — on-device text-to-speech (Kokoro-82M)
     STTEngine         — speech-to-text (faster-whisper)
     VoicePipeline     — bundled Wake→VAD→STT→TTS orchestration
+    NoiseProfiler     — noise-adaptive threshold adjustment
+    PowerManager      — battery-aware power management
+    FusionStrategy    — multi-model ensemble scoring
     list_models()     — discover available wake word models
     list_voices()     — discover available TTS voices
 
@@ -15,18 +19,18 @@ Quick start::
 
     from violawake_sdk import WakeDetector
 
-    detector = WakeDetector(threshold=0.80)
-    for chunk in detector.stream_mic():
-        if detector.detect(chunk):
-            print("Wake word detected!")
-            break
+    with WakeDetector(threshold=0.80) as detector:
+        for chunk in detector.stream_mic():
+            if detector.detect(chunk):
+                print("Wake word detected!")
+                break
 
 See README.md or https://github.com/GeeIHadAGoodTime/ViolaWake for full documentation.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "ViolaWake Contributors"
 __license__ = "Apache-2.0"
 
@@ -40,7 +44,9 @@ from violawake_sdk._exceptions import (
 from violawake_sdk.async_detector import AsyncWakeDetector
 from violawake_sdk.confidence import ConfidenceLevel, ConfidenceResult
 from violawake_sdk.ensemble import FusionStrategy
+from violawake_sdk.noise_profiler import NoiseProfiler
 from violawake_sdk.pipeline import VoicePipeline
+from violawake_sdk.power_manager import PowerManager
 from violawake_sdk.vad import VADEngine
 from violawake_sdk.wake_detector import (
     DetectorConfig,
@@ -125,6 +131,9 @@ __all__ = [
     "ConfidenceResult",
     "ConfidenceLevel",
     "FusionStrategy",
+    # Advanced features
+    "NoiseProfiler",
+    "PowerManager",
     # Pipeline components
     "VADEngine",
     "TTSEngine",
