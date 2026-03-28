@@ -70,10 +70,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      # PyAudio requires PortAudio on Linux.
+      # PyAudio requires PortAudio headers.
       - name: Install PortAudio (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
+
+      - name: Install PortAudio (macOS)
+        if: runner.os == 'macOS'
+        run: brew install portaudio
 
       - name: Install dependencies
         # openwakeword is now an optional dep [oww]. Install it --no-deps to avoid

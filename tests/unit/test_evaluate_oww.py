@@ -20,6 +20,8 @@ from unittest import mock
 import numpy as np
 import pytest
 
+pytest.importorskip("sklearn", reason="scikit-learn required for evaluation tests")
+
 from violawake_sdk.training.evaluate import compute_dprime, compute_eer
 
 
