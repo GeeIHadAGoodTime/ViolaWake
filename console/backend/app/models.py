@@ -27,6 +27,37 @@ class User(Base):
     recordings: Mapped[list[Recording]] = relationship(back_populates="user", cascade="all, delete-orphan")
     training_jobs: Mapped[list[TrainingJob]] = relationship(back_populates="user", cascade="all, delete-orphan")
     trained_models: Mapped[list[TrainedModel]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    owned_teams: Mapped[list[Team]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    team_memberships: Mapped[list[TeamMember]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    owner: Mapped[User] = relationship(back_populates="owned_teams")
+    members: Mapped[list[TeamMember]] = relationship(back_populates="team", cascade="all, delete-orphan")
+
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    __table_args__ = (
+        UniqueConstraint("team_id", "user_id", name="uq_team_member"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[int] = mapped_column(Integer, ForeignKey("teams.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")  # owner / admin / member
+    invited_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    joined_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    team: Mapped[Team] = relationship(back_populates="members")
+    user: Mapped[User] = relationship(back_populates="team_memberships")
 
 
 class Recording(Base):
@@ -34,12 +65,14 @@ class Recording(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    team_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
     wake_word: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     duration_s: Mapped[float] = mapped_column(Float, nullable=False)
     sample_rate: Mapped[int] = mapped_column(Integer, nullable=False, default=16000)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     user: Mapped[User] = relationship(back_populates="recordings")
 
@@ -52,7 +85,7 @@ class TrainingJob(Base):
     wake_word: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
     progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    epochs: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    epochs: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
     d_prime: Mapped[float | None] = mapped_column(Float, nullable=True)
     model_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("trained_models.id"), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -68,6 +101,7 @@ class TrainedModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    team_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("teams.id"), nullable=True, index=True)
     wake_word: Mapped[str] = mapped_column(String(100), nullable=False)
     file_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     config_json: Mapped[str | None] = mapped_column(Text, nullable=True)

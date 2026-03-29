@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     secret_key: str = ""
     algorithm: str = "HS256"
     access_token_expire_hours: int = 24
+    trusted_proxy_count: int = 0
 
     # CORS
     cors_origins: Annotated[list[str], NoDecode] = [
@@ -53,12 +54,23 @@ class Settings(BaseSettings):
     max_concurrent_jobs: int = 2
     negatives_corpus_dir: str = ""  # Path to curated negative audio corpus (paid tier)
 
+    # Retention cleanup (0 = disabled)
+    recording_retention_days: int = 90  # Days to keep recordings; 0 disables automatic cleanup
+    model_retention_days: int = 365  # Days to keep trained models; 0 disables automatic cleanup
+    post_training_retention_hours: int = 24  # Hours to keep recordings after training completes; 0 disables
+
+    # Admin
+    admin_token: str = ""  # When set, enables POST /api/admin/cleanup (protect with a strong secret)
+
     # Stripe billing
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_price_developer: str = ""  # Stripe Price ID for $29/mo Developer tier
     stripe_price_business: str = ""  # Stripe Price ID for $99/mo Business tier
     sentry_dsn: str = ""
+
+    # Free trial
+    trial_days: int = 14  # 0 to disable free trial for paid tiers
 
     # Console URLs (for Stripe checkout redirect)
     console_base_url: str = "http://localhost:5173"
@@ -96,13 +108,42 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_settings(self) -> Self:
         """Resolve development defaults and enforce production requirements."""
-        if not self.secret_key:
+        _MIN_SECRET_KEY_LENGTH = 32
+        _INSECURE_PLACEHOLDERS = {"changeme", "secret", "password", "test", "dev"}
+
+        key = self.secret_key.strip()
+        key_is_empty = not key
+        key_is_placeholder = key.lower() in _INSECURE_PLACEHOLDERS
+
+        if key_is_empty or key_is_placeholder:
             if self.is_production:
                 raise ValueError(
-                    "VIOLAWAKE_SECRET_KEY must be set when VIOLAWAKE_ENV=production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                    "VIOLAWAKE_SECRET_KEY must be set to a unique, random value "
+                    "when VIOLAWAKE_ENV=production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
                 )
+            import logging
+            _logger = logging.getLogger("violawake.config")
             self.secret_key = _generate_dev_secret_key()
+            _logger.warning(
+                "VIOLAWAKE_SECRET_KEY was empty or insecure — generated a random "
+                "development key. DO NOT use this in production."
+            )
+        elif len(key) < _MIN_SECRET_KEY_LENGTH:
+            if self.is_production:
+                raise ValueError(
+                    f"VIOLAWAKE_SECRET_KEY is too short ({len(key)} chars). "
+                    f"Production requires at least {_MIN_SECRET_KEY_LENGTH} characters. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(64))\""
+                )
+            import logging
+            _logger = logging.getLogger("violawake.config")
+            _logger.warning(
+                "VIOLAWAKE_SECRET_KEY is only %d characters (minimum %d recommended). "
+                "Short keys are brute-forceable. This is acceptable for development only.",
+                len(key),
+                _MIN_SECRET_KEY_LENGTH,
+            )
         return self
 
     @property

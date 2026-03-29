@@ -47,8 +47,14 @@ class TestModelRegistry:
                 f"Model '{model_name}' URL should be HTTPS: {spec.url}"
             )
 
-    def test_viola_mlp_oww_is_in_registry(self) -> None:
-        assert "viola_mlp_oww" in MODEL_REGISTRY
+    def test_viola_alias_resolves_to_temporal_cnn(self) -> None:
+        assert "viola" in MODEL_REGISTRY
+        assert MODEL_REGISTRY["viola"].name == "temporal_cnn"
+
+    def test_deprecated_models_removed_from_registry(self) -> None:
+        """viola_mlp_oww and viola_cnn_v4 were never released and are removed."""
+        assert "viola_mlp_oww" not in MODEL_REGISTRY
+        assert "viola_cnn_v4" not in MODEL_REGISTRY
 
     def test_oww_backbone_is_in_registry(self) -> None:
         assert "oww_backbone" in MODEL_REGISTRY
@@ -93,18 +99,18 @@ class TestGetModelPath:
     def test_returns_path_when_cached(self, tmp_path: Path) -> None:
         """get_model_path returns the correct path when model file exists."""
         # Create a fake model file in the cache
-        model_file = tmp_path / "viola_mlp_oww.onnx"
+        model_file = tmp_path / "temporal_cnn.onnx"
         model_file.write_bytes(b"fake model")
 
         with patch("violawake_sdk.models.get_model_dir", return_value=tmp_path):
-            path = get_model_path("viola_mlp_oww")
+            path = get_model_path("temporal_cnn")
             assert path == model_file
 
     def test_raises_file_not_found_when_not_cached(self, tmp_path: Path) -> None:
         """get_model_path raises FileNotFoundError if model not in cache and auto-download disabled."""
         with patch("violawake_sdk.models.get_model_dir", return_value=tmp_path):
-            with pytest.raises(FileNotFoundError, match="viola_mlp_oww"):
-                get_model_path("viola_mlp_oww", auto_download=False)
+            with pytest.raises(FileNotFoundError, match="temporal_cnn"):
+                get_model_path("temporal_cnn", auto_download=False)
 
     def test_raises_model_not_found_for_unknown_model(self) -> None:
         """get_model_path raises ModelNotFoundError for unregistered model names."""
@@ -117,7 +123,7 @@ class TestGetModelPath:
         """FileNotFoundError message should suggest how to fix."""
         with patch("violawake_sdk.models.get_model_dir", return_value=tmp_path):
             with pytest.raises(FileNotFoundError, match="violawake-download"):
-                get_model_path("viola_mlp_oww", auto_download=False)
+                get_model_path("temporal_cnn", auto_download=False)
 
 
 class TestVerifySHA256:
@@ -163,41 +169,62 @@ class TestListCachedModels:
 
     def test_lists_cached_models(self, tmp_path: Path) -> None:
         # Create some fake cached models
-        (tmp_path / "viola_mlp_oww.onnx").write_bytes(b"x" * 1000)
+        (tmp_path / "temporal_cnn.onnx").write_bytes(b"x" * 1000)
 
         with patch("violawake_sdk.models.get_model_dir", return_value=tmp_path):
             cached = list_cached_models()
             names = [m[0] for m in cached]
-            assert "viola_mlp_oww" in names
+            assert "temporal_cnn" in names
 
     def test_returns_size_in_mb(self, tmp_path: Path) -> None:
         # Write ~1MB file
-        (tmp_path / "viola_mlp_oww.onnx").write_bytes(b"x" * 1_000_000)
+        (tmp_path / "temporal_cnn.onnx").write_bytes(b"x" * 1_000_000)
 
         with patch("violawake_sdk.models.get_model_dir", return_value=tmp_path):
             cached = list_cached_models()
             for name, path, size_mb in cached:
-                if name == "viola_mlp_oww":
+                if name == "temporal_cnn":
                     assert abs(size_mb - 1.0) < 0.1
 
 
 class TestCheckRegistryIntegrity:
     """Test check_registry_integrity() catches placeholder hashes."""
 
-    def test_raises_on_placeholder_hashes(self) -> None:
-        """The real registry has placeholders, so this must raise."""
-        with pytest.raises(RuntimeError, match="placeholder SHA-256"):
-            check_registry_integrity()
+    def test_passes_with_current_registry(self) -> None:
+        """The real registry has no placeholders (deprecated models removed), so this passes."""
+        # Should not raise -- all remaining models have real hashes
+        result = check_registry_integrity()
+        assert result == []
 
-    def test_lists_all_placeholder_models(self) -> None:
-        """Error message should name every offending model."""
-        with pytest.raises(RuntimeError) as exc_info:
-            check_registry_integrity()
-        msg = str(exc_info.value)
-        # These deprecated models have placeholder hashes in the registry.
-        # oww_backbone, kokoro_v1_0, kokoro_voices_v1_0 now have real hashes.
-        for name in ("viola_mlp_oww", "viola_cnn_v4"):
-            assert name in msg, f"Expected '{name}' in error but got: {msg}"
+    def test_raises_on_placeholder_hashes(self) -> None:
+        """A registry with placeholder hashes should raise in strict mode."""
+        bad_registry = {
+            "bad_model": ModelSpec(
+                name="bad_model",
+                url="https://example.com/bad.onnx",
+                sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
+                size_bytes=1000,
+                description="test",
+            ),
+        }
+        with patch("violawake_sdk.models.MODEL_REGISTRY", bad_registry):
+            with pytest.raises(RuntimeError, match="placeholder SHA-256"):
+                check_registry_integrity()
+
+    def test_non_strict_returns_list(self) -> None:
+        """Non-strict mode returns placeholder model names without raising."""
+        bad_registry = {
+            "bad_model": ModelSpec(
+                name="bad_model",
+                url="https://example.com/bad.onnx",
+                sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
+                size_bytes=1000,
+                description="test",
+            ),
+        }
+        with patch("violawake_sdk.models.MODEL_REGISTRY", bad_registry):
+            result = check_registry_integrity(strict=False)
+            assert "bad_model" in result
 
     def test_passes_when_all_hashes_are_real(self) -> None:
         """Registry with only real hashes should pass."""

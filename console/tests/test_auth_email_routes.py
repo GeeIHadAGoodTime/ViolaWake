@@ -14,6 +14,7 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from app.models import User
+from app.auth import reset_download_tokens
 from app.routes import auth as auth_routes
 from app.schemas import (
     ForgotPasswordRequest,
@@ -95,6 +96,7 @@ class FakeEmailService:
 @pytest.fixture(autouse=True)
 def clear_rate_limits() -> None:
     auth_routes.reset_rate_limits()
+    reset_download_tokens()
 
 
 @pytest.fixture
@@ -129,6 +131,7 @@ async def test_register_sends_verification_email(
     )
 
     assert response.user.email == email
+    assert response.user.email_verified is False
     assert fake_db.users_by_email[email].email_verified is False
     assert len(fake_email_service.verification_emails) == 1
     assert fake_email_service.verification_emails[0]["to"] == email
@@ -194,3 +197,16 @@ async def test_forgot_password_and_reset_password_flow(
     assert reset_response.message == "Password reset successfully"
     assert len(fake_email_service.password_reset_emails) == 1
     assert login_response.user.email == email
+    assert login_response.user.email_verified is False
+
+
+def test_client_ip_ignores_x_forwarded_for_when_no_trusted_proxy(monkeypatch, fake_request) -> None:
+    fake_request.headers = {"x-forwarded-for": "203.0.113.10, 198.51.100.20"}
+    monkeypatch.setattr(auth_routes.settings, "trusted_proxy_count", 0)
+    assert auth_routes._client_ip(fake_request) == "127.0.0.1"
+
+
+def test_client_ip_uses_nth_from_right_x_forwarded_for(monkeypatch, fake_request) -> None:
+    fake_request.headers = {"x-forwarded-for": "198.51.100.10, 198.51.100.20, 198.51.100.30"}
+    monkeypatch.setattr(auth_routes.settings, "trusted_proxy_count", 2)
+    assert auth_routes._client_ip(fake_request) == "198.51.100.20"

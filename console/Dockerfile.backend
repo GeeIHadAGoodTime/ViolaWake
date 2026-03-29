@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Install ViolaWake SDK
 COPY pyproject.toml /sdk/
+COPY README.md /sdk/
 COPY src/ /sdk/src/
 RUN pip install --no-cache-dir -e "/sdk[training]"
 

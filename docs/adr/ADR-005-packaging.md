@@ -16,7 +16,7 @@ staleness-signals: PyPI removes binary uploads, model hosting moves to different
 
 ## Context
 
-ViolaWake SDK needs to be distributed to developers via standard Python packaging tooling. The primary mechanism is `pip install violawake`. However, ML models are large (2.1MB for wake word, 330MB for Kokoro TTS) and cannot be bundled into a PyPI wheel.
+ViolaWake SDK needs to be distributed to developers via standard Python packaging tooling. The primary mechanism is `pip install violawake`. However, ML models are still large enough that they should not be bundled into a PyPI wheel: the current default wake path is `102 KB` for the wake head plus `1.33 MB` for the shared OWW backbone, and Kokoro TTS is `325+ MB`.
 
 Two separate distribution problems:
 1. **Python code and deps:** How to package and distribute via PyPI
@@ -69,7 +69,7 @@ Include `.onnx` files directly in the Python package.
 - Violates PyPI's intended use (code distribution, not ML model hosting)
 - 330MB wheel downloads on every `pip install` — unacceptable for CI environments and users who don't need TTS
 - Model updates would require a new package version even if code hasn't changed
-- Separating wake word detection (2.1MB model) from TTS (330MB model) becomes impossible
+- Separating wake word detection (1.43 MB total runtime footprint across head + backbone) from TTS (325+ MB model) becomes impossible
 
 **Verdict:** Hard no. PyPI limits and philosophy both reject this.
 
@@ -113,7 +113,7 @@ Models are published as binary assets on GitHub Releases. The SDK includes a `Mo
 from violawake_sdk.models import get_model_path
 
 # Transparently downloads if not cached
-model_path = get_model_path("viola_mlp_oww")  # ~/.violawake/models/viola_mlp_oww.onnx
+model_path = get_model_path("temporal_cnn")  # ~/.violawake/models/temporal_cnn.onnx
 ```
 
 **Pros:**
@@ -140,12 +140,12 @@ All models are declared in `src/violawake_sdk/models.py`:
 
 ```python
 MODEL_REGISTRY: dict[str, ModelSpec] = {
-    "viola_mlp_oww": ModelSpec(
-        name="viola_mlp_oww",
-        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_mlp_oww.onnx",
+    "temporal_cnn": ModelSpec(
+        name="temporal_cnn",
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/temporal_cnn.onnx",
         sha256="abc123...",  # pre-computed SHA-256 of the ONNX file
-        size_bytes=2_100_000,  # 2.1 MB
-        description="ViolaWake MLP on OWW embeddings — Cohen's d 15.10 on synthetic negatives (default, recommended; speech-negative d-prime TBD)",
+        size_bytes=102_378,  # 102 KB
+        description="Temporal CNN on OWW embeddings — current default wake head",
     ),
     "viola_cnn_v4": ModelSpec(
         name="viola_cnn_v4",
@@ -165,8 +165,8 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         name="oww_backbone",
         url="...",
         sha256="...",
-        size_bytes=10_000_000,  # 10 MB
-        description="OpenWakeWord audio embedding backbone — required for MLP model",
+        size_bytes=1_326_578,  # 1.33 MB
+        description="OpenWakeWord audio embedding backbone — required shared runtime asset",
     ),
 }
 ```
@@ -189,7 +189,7 @@ The `[tts]`, `[stt]`, `[vad]`, `[training]` extras align with model size:
 
 | Extra | Installs | Required Models |
 |-------|---------|-----------------|
-| (core) | onnxruntime, numpy, pyaudio, scipy | `viola_mlp_oww.onnx`, `oww_backbone.onnx` |
+| (core) | onnxruntime, numpy, pyaudio, scipy | `temporal_cnn.onnx` plus the package-managed `oww_backbone` |
 | `[tts]` | kokoro-onnx | `kokoro_v1_0.onnx` (330MB, downloaded on demand) |
 | `[stt]` | faster-whisper | Whisper models (auto-managed by faster-whisper) |
 | `[vad]` | webrtcvad | None (no model file) |
@@ -215,7 +215,7 @@ This minimizes unexpected large downloads for users who only need wake detection
 **Mitigations for offline:**
 ```bash
 # Docker build — pre-seed cache layer
-VIOLAWAKE_MODEL_DIR=/app/models violawake-download --model viola_mlp_oww
+VIOLAWAKE_MODEL_DIR=/app/models violawake-download --model temporal_cnn
 ```
 
 ---

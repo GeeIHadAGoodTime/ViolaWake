@@ -1,21 +1,16 @@
-# Show HN: ViolaWake – Open-source wake word engine (alternative to Porcupine)
+# Show HN: ViolaWake - open-source wake words with a real browser training flow
 
-I've been building ViolaWake as an open-source wake word engine for people who want something closer to Porcupine's UX/performance tradeoff without the closed training stack or commercial licensing wall.
+ViolaWake is an open-source wake word stack that does something most OSS wake-word projects still do not: it ships both the SDK and a working web Console, so you can record samples in the browser, train a model, and download the ONNX artifact you actually ship.
 
-The repo is Apache 2.0, the training code is open, and the models run with ONNX at inference time. The main thing I wanted to make inspectable was evaluation: the SDK includes tooling for Cohen's d, FAR, FRR, and ROC-style reporting instead of "trust me, it works." One honest caveat: the headline separability number in the repo is measured against synthetic negatives, not a large adversarial speech-negative benchmark. I think that's still useful, but I don't want to oversell what it means in the real world.
-
-It also ships as more than just a detector. There is a bundled wake -> STT -> TTS pipeline in Python, so you can prototype a full local voice loop without stitching together three separate projects. If you want a lower-friction training flow, there's also a Console in the repo for browser-based training and model download.
-
-Install is just:
-
-```bash
-pip install violawake
+```python
+from violawake_sdk import WakeDetector
+detector = WakeDetector(model="my_word.onnx")
+for chunk in detector.stream_mic():
+    if detector.detect(chunk): print("wake")
 ```
 
-GitHub: https://github.com/GeeIHadAGoodTime/ViolaWake
+One number that matters: our default model hit **5.49% EER** on benchmark v2, and the wake-word runtime footprint is only **102 KB head + 1.33 MB shared backbone**.
 
-What I'd really like feedback on:
-- Accuracy testing on diverse real-world datasets, especially speech-heavy negatives
-- Platform support priorities (macOS, Raspberry Pi, Android, browser/WASM, etc.)
-- Whether the Console and training workflow are actually simpler than the current open-source alternatives
-- Any obvious gaps in the evaluation methodology or claims
+Why now: in 2026, voice UX is back in everything, but the default choices are still either closed pricing walls or DIY training setups that break. Open, inspectable wake-word tooling should be easier to ship.
+
+I’d love feedback on three things: real-world negative datasets we should benchmark against, whether the Console workflow is actually simpler than current OSS alternatives, and whether the hosted roadmap is pointed at the right features.

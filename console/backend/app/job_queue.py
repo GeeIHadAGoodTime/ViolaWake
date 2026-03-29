@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import threading
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -31,6 +31,7 @@ logger = logging.getLogger("violawake.jobs")
 QUEUE_MAX_SIZE = 50
 FAILURE_THRESHOLD = 3
 FAILURE_BACKOFF_SECONDS = 300
+ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS = 30.0
 
 
 def _utcnow() -> datetime:
@@ -62,6 +63,13 @@ class JobStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+# Priority values assigned by subscription tier.
+PRIORITY_FREE = 0
+PRIORITY_DEVELOPER = 10
+PRIORITY_BUSINESS = 20
+PRIORITY_ENTERPRISE = 30
+
+
 @dataclass(slots=True)
 class Job:
     """Persisted training job metadata."""
@@ -76,9 +84,10 @@ class Job:
     error: str | None = None
     progress_pct: float = 0.0
     recording_ids: list[int] = field(default_factory=list)
-    epochs: int = 50
+    epochs: int = 80
     model_id: int | None = None
     d_prime: float | None = None
+    priority: int = PRIORITY_FREE
 
 
 @dataclass(slots=True)
@@ -91,6 +100,28 @@ class CircuitBreakerState:
     next_attempt_at: datetime | None = None
     last_failure_at: datetime | None = None
     pause_reason: str | None = None
+
+
+_TIER_PRIORITY: dict[str, int] = {
+    "free": PRIORITY_FREE,
+    "developer": PRIORITY_DEVELOPER,
+    "business": PRIORITY_BUSINESS,
+    "enterprise": PRIORITY_ENTERPRISE,
+}
+
+
+async def _resolve_user_priority(user_id: int) -> int:
+    """Return the queue priority for a user based on their subscription tier."""
+    from app.models import Subscription
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(Subscription.tier).where(Subscription.user_id == user_id)
+        )
+        row = result.first()
+        tier = row[0] if row else "free"
+
+    return _TIER_PRIORITY.get(str(tier), PRIORITY_FREE)
 
 
 class QueueFullError(RuntimeError):
@@ -134,10 +165,8 @@ class JobQueue:
         self._closed = True
         if self._worker_task is not None:
             self._worker_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._worker_task
-            except asyncio.CancelledError:
-                pass
             self._worker_task = None
 
         for cancel_event in list(self._cancel_events.values()):
@@ -148,18 +177,14 @@ class JobQueue:
             for task in pending:
                 task.cancel()
             for task in done:
-                try:
+                with suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
         for task in list(self._retry_tasks.values()):
             task.cancel()
         for task in list(self._retry_tasks.values()):
-            try:
+            with suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
         self._retry_tasks.clear()
 
     async def submit_job(
@@ -169,10 +194,18 @@ class JobQueue:
         wake_word: str,
         recording_ids: list[int],
         epochs: int,
+        priority: int | None = None,
     ) -> int:
-        """Persist a new training job and enqueue it when capacity allows."""
+        """Persist a new training job and enqueue it when capacity allows.
+
+        When *priority* is not supplied it is resolved automatically from the
+        user's subscription tier (free=0, developer=5, business=10).
+        """
         if await self._pending_count() >= self._queue.maxsize:
             raise QueueFullError("Training queue is full. Please try again later.")
+
+        if priority is None:
+            priority = await _resolve_user_priority(user_id)
 
         created_at = _utcnow()
         payload = json.dumps(recording_ids)
@@ -192,8 +225,9 @@ class JobQueue:
                     recording_ids,
                     epochs,
                     model_id,
-                    d_prime
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    d_prime,
+                    priority
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
@@ -208,13 +242,38 @@ class JobQueue:
                     epochs,
                     None,
                     None,
+                    priority,
                 ),
             )
             await conn.commit()
             job_id = int(cursor.lastrowid)
 
-        logger.info("Queued training job %s for user %s", job_id, user_id)
+        logger.info(
+            "Queued training job %s for user %s (priority=%s)",
+            job_id,
+            user_id,
+            priority,
+        )
         await self._fill_queue_from_db()
+        # Publish an initial PENDING event so SSE subscribers immediately see
+        # their queue position after submission.
+        queue_position = await self._queue_position(job_id)
+        await self._publish(
+            job_id,
+            {
+                "status": JobStatus.PENDING.value,
+                "progress": 0.0,
+                "epoch": 0,
+                "total_epochs": epochs,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "message": "Queued for training.",
+                "error": None,
+                "d_prime": None,
+                "model_id": None,
+                "queue_position": queue_position,
+            },
+        )
         return job_id
 
     async def cancel_job(self, job_id: int) -> bool:
@@ -253,6 +312,7 @@ class JobQueue:
                 "error": "Cancelled by user",
                 "d_prime": job.d_prime,
                 "model_id": job.model_id,
+                "queue_position": None,
             },
         )
         await self._fill_queue_from_db()
@@ -260,22 +320,82 @@ class JobQueue:
 
     async def get_job(self, job_id: int) -> Job | None:
         """Return a persisted job by ID."""
-        async with self._connect() as conn:
-            async with conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)) as cursor:
-                row = await cursor.fetchone()
+        async with self._connect() as conn, conn.execute(
+            "SELECT * FROM jobs WHERE id = ?",
+            (job_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
         if row is None:
             return None
         return self._row_to_job(row)
 
     async def list_jobs(self, user_id: int) -> list[Job]:
         """List persisted jobs for a user, newest first."""
-        async with self._connect() as conn:
-            async with conn.execute(
-                "SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC, id DESC",
-                (user_id,),
-            ) as cursor:
-                rows = await cursor.fetchall()
+        async with self._connect() as conn, conn.execute(
+            "SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC, id DESC",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
         return [self._row_to_job(row) for row in rows]
+
+    async def delete_jobs_for_user(self, user_id: int) -> int:
+        """Cancel and delete all persisted jobs for a user."""
+        async with self._connect() as conn, conn.execute(
+            "SELECT id, status FROM jobs WHERE user_id = ?",
+            (user_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        if not rows:
+            async with self._connect() as conn:
+                await conn.execute(
+                    "DELETE FROM user_circuit_breakers WHERE user_id = ?",
+                    (user_id,),
+                )
+                await conn.commit()
+            return 0
+
+        job_ids = [int(row["id"]) for row in rows]
+        running_job_ids = [
+            int(row["id"])
+            for row in rows
+            if str(row["status"]) == JobStatus.RUNNING.value
+        ]
+
+        async with self._state_lock:
+            for job_id in running_job_ids:
+                cancel_event = self._cancel_events.get(job_id)
+                if cancel_event is not None:
+                    cancel_event.set()
+            self._queued_job_ids.difference_update(job_ids)
+            for job_id in job_ids:
+                self._subscribers.pop(job_id, None)
+
+        deadline = asyncio.get_running_loop().time() + ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS
+        while running_job_ids:
+            async with self._state_lock:
+                running_job_ids = [
+                    job_id for job_id in running_job_ids if job_id in self._running_job_ids
+                ]
+            if not running_job_ids:
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                logger.warning(
+                    "Timed out waiting for user %s jobs to stop during account deletion: %s",
+                    user_id,
+                    running_job_ids,
+                )
+                break
+            await asyncio.sleep(0.1)
+
+        async with self._connect() as conn:
+            await conn.execute("DELETE FROM jobs WHERE user_id = ?", (user_id,))
+            await conn.execute("DELETE FROM user_circuit_breakers WHERE user_id = ?", (user_id,))
+            await conn.commit()
+
+        logger.info("Deleted %s queued jobs for user %s", len(job_ids), user_id)
+        await self._fill_queue_from_db()
+        return len(job_ids)
 
     async def resume_user(self, user_id: int) -> None:
         """Clear the circuit breaker pause for a user and resume queued work."""
@@ -386,9 +506,10 @@ class JobQueue:
                     error TEXT,
                     progress_pct REAL NOT NULL DEFAULT 0,
                     recording_ids TEXT NOT NULL,
-                    epochs INTEGER NOT NULL DEFAULT 50,
+                    epochs INTEGER NOT NULL DEFAULT 80,
                     model_id INTEGER,
-                    d_prime REAL
+                    d_prime REAL,
+                    priority INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -410,6 +531,21 @@ class JobQueue:
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at ASC)"
             )
+
+            # Migration: add priority column to existing databases that predate
+            # this feature.  Must run BEFORE the priority index creation below.
+            async with conn.execute("PRAGMA table_info(jobs)") as cursor:
+                columns = {row["name"] async for row in cursor}
+            if "priority" not in columns:
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"
+                )
+                logger.info("Migrated jobs table: added priority column")
+
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_priority_created ON jobs(status, priority DESC, created_at ASC)"
+            )
+
             await conn.commit()
 
     async def _resume_jobs(self) -> None:
@@ -524,12 +660,13 @@ class JobQueue:
                     "error": None,
                     "d_prime": job.d_prime,
                     "model_id": job.model_id,
+                    "queue_position": None,
                 },
             )
 
             recording_paths = await self._load_recording_paths(job.user_id, job.recording_ids)
             if len(recording_paths) < 5:
-                raise RuntimeError("No valid recordings found for training job %s" % job_id)
+                raise RuntimeError(f"No valid recordings found for training job {job_id}")
 
             # Resolve negatives corpus for paid tiers
             negatives_dir = await self._resolve_negatives_dir(job.user_id)
@@ -593,6 +730,11 @@ class JobQueue:
                 d_prime=artifact.d_prime,
             )
             await self._record_success(job.user_id)
+
+            # Schedule post-training recording deletion (privacy: recordings
+            # are deleted after training per the privacy FAQ).
+            await self._schedule_recording_cleanup(job.recording_ids)
+
             await self._publish(
                 job_id,
                 {
@@ -606,6 +748,7 @@ class JobQueue:
                     "error": None,
                     "d_prime": artifact.d_prime,
                     "model_id": model_id,
+                    "queue_position": None,
                 },
             )
             logger.info("Training job %s completed for user %s", job_id, job.user_id)
@@ -632,6 +775,7 @@ class JobQueue:
                     "error": str(exc),
                     "d_prime": current_job.d_prime if current_job is not None else None,
                     "model_id": current_job.model_id if current_job is not None else None,
+                    "queue_position": None,
                 },
             )
             logger.info("Training job %s cancelled", job_id)
@@ -660,6 +804,7 @@ class JobQueue:
                     "error": str(exc),
                     "d_prime": current_job.d_prime if current_job is not None else None,
                     "model_id": current_job.model_id if current_job is not None else None,
+                    "queue_position": None,
                 },
             )
             log_exception(
@@ -678,12 +823,11 @@ class JobQueue:
             await self._fill_queue_from_db()
 
     async def _pending_count(self) -> int:
-        async with self._connect() as conn:
-            async with conn.execute(
-                "SELECT COUNT(*) AS count FROM jobs WHERE status = ?",
-                (JobStatus.PENDING.value,),
-            ) as cursor:
-                row = await cursor.fetchone()
+        async with self._connect() as conn, conn.execute(
+            "SELECT COUNT(*) AS count FROM jobs WHERE status = ?",
+            (JobStatus.PENDING.value,),
+        ) as cursor:
+            row = await cursor.fetchone()
         return int(row["count"]) if row is not None else 0
 
     async def _fill_queue_from_db(self) -> None:
@@ -699,7 +843,7 @@ class JobQueue:
                     SELECT id, user_id
                     FROM jobs
                     WHERE status = ?
-                    ORDER BY created_at ASC, id ASC
+                    ORDER BY priority DESC, created_at ASC, id ASC
                     """,
                     (JobStatus.PENDING.value,),
                 ) as cursor:
@@ -731,6 +875,25 @@ class JobQueue:
                         self._queued_job_ids.add(job_id)
                     free_slots -= 1
 
+    async def _queue_position(self, job_id: int) -> int | None:
+        """Return the 1-based queue position for a pending job, or None if not pending."""
+        async with self._connect() as conn:
+            async with conn.execute(
+                """
+                SELECT id
+                FROM jobs
+                WHERE status = ?
+                ORDER BY priority DESC, created_at ASC, id ASC
+                """,
+                (JobStatus.PENDING.value,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+
+        for position, row in enumerate(rows, start=1):
+            if int(row["id"]) == job_id:
+                return position
+        return None
+
     async def _handle_progress_event(
         self,
         job_id: int,
@@ -752,6 +915,7 @@ class JobQueue:
                 "error": event.get("error"),
                 "d_prime": event.get("d_prime"),
                 "model_id": event.get("model_id"),
+                "queue_position": None,  # running jobs have no queue position
             },
         )
 
@@ -966,6 +1130,26 @@ class JobQueue:
         logger.info("Using curated negatives corpus for user %s (tier=%s)", user_id, tier)
         return corpus
 
+    async def _schedule_recording_cleanup(self, recording_ids: list[int]) -> None:
+        """Soft-delete recordings after training completes.
+
+        The actual storage file purge happens later via the periodic
+        retention cleanup loop (``cleanup_soft_deleted_recordings``).
+        """
+        if settings.post_training_retention_hours <= 0:
+            return
+
+        try:
+            from app.retention import mark_recordings_for_deletion
+            await mark_recordings_for_deletion(recording_ids)
+        except Exception as exc:
+            # Non-fatal: recordings will still be cleaned up by the
+            # age-based retention policy even if this fails.
+            logger.warning(
+                "Failed to mark recordings for post-training deletion: %s",
+                exc,
+            )
+
     async def _load_recording_paths(self, user_id: int, recording_ids: list[int]) -> list[str]:
         async with async_session_factory() as session:
             result = await session.execute(
@@ -973,6 +1157,7 @@ class JobQueue:
                 .where(
                     Recording.id.in_(recording_ids),
                     Recording.user_id == user_id,
+                    Recording.deleted_at.is_(None),
                 )
             )
             return [str(row[0]) for row in result.all()]
@@ -1002,6 +1187,12 @@ class JobQueue:
             return int(model.id)
 
     def _row_to_job(self, row: aiosqlite.Row) -> Job:
+        # priority column was added via migration; guard against missing column
+        # in case _row_to_job is called from a test that does not run _initialize_db.
+        try:
+            priority = int(row["priority"])
+        except (IndexError, KeyError):
+            priority = PRIORITY_FREE
         return Job(
             id=int(row["id"]),
             user_id=int(row["user_id"]),
@@ -1015,7 +1206,8 @@ class JobQueue:
             recording_ids=[int(value) for value in json.loads(row["recording_ids"])],
             epochs=int(row["epochs"]),
             model_id=int(row["model_id"]) if row["model_id"] is not None else None,
-                d_prime=float(row["d_prime"]) if row["d_prime"] is not None else None,
+            d_prime=float(row["d_prime"]) if row["d_prime"] is not None else None,
+            priority=priority,
         )
 
     @asynccontextmanager

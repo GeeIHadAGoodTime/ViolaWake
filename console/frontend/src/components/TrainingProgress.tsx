@@ -20,12 +20,14 @@ function getStatusLabel(status: string): string {
   switch (status) {
     case "queued":
       return "Queued";
-    case "training":
-      return "Training";
+    case "running":
+      return "Running";
     case "completed":
       return "Completed";
     case "failed":
       return "Failed";
+    case "cancelled":
+      return "Cancelled";
     default:
       return status;
   }
@@ -53,10 +55,14 @@ export default function TrainingProgress({
 
   return (
     <div className="training-progress">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {`Training ${getStatusLabel(state.status)}. ${Math.round(state.progress)}% complete.${state.totalEpochs > 0 ? ` Epoch ${state.epoch} of ${state.totalEpochs}.` : ""} ${state.error ?? state.message}`}
+      </div>
+
       {/* Status badge */}
       <div className={`training-status-badge status-${state.status}`}>
         {getStatusLabel(state.status)}
-        {!state.connected && state.status === "training" && (
+        {!state.connected && state.status === "running" && (
           <span className="status-reconnecting">
             {" "}
             (reconnecting...)
@@ -134,7 +140,8 @@ export default function TrainingProgress({
       )}
 
       {/* Error state */}
-      {state.status === "failed" && state.error && (
+      {(state.status === "failed" || state.status === "cancelled") &&
+        state.error && (
         <div className="training-error">
           <p className="error-message">{state.error}</p>
         </div>

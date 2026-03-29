@@ -24,6 +24,7 @@ from conftest import (
     TEST_USER_EMAIL,
     TEST_USER_NAME,
     TEST_USER_PASSWORD,
+    mark_email_verified,
 )
 
 pytestmark = pytest.mark.e2e
@@ -122,6 +123,7 @@ class TestRecordingFlow:
             timeout=10,
         )
         assert resp.status_code in (200, 201), f"Register failed: {resp.text}"
+        mark_email_verified(email)
         return resp.json()["token"]
 
     def test_upload_single_recording(
@@ -210,6 +212,7 @@ class TestFullTrainingFlow:
             timeout=10,
         )
         assert resp.status_code in (200, 201), f"Register failed: {resp.text}"
+        mark_email_verified(email)
         return resp.json()["token"]
 
     def test_full_flow(

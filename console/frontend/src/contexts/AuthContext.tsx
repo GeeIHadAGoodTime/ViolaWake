@@ -6,7 +6,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { User } from "../types";
 import * as api from "../api";
 
@@ -25,11 +25,34 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function getPostAuthRedirect(search: string): string {
+  const params = new URLSearchParams(search);
+  const returnPath = params.get("return");
+
+  if (
+    !returnPath ||
+    !returnPath.startsWith("/") ||
+    returnPath.startsWith("//")
+  ) {
+    return "/dashboard";
+  }
+
+  params.delete("return");
+  const remainingQuery = params.toString();
+  if (!remainingQuery) {
+    return returnPath;
+  }
+
+  const separator = returnPath.includes("?") ? "&" : "?";
+  return `${returnPath}${separator}${remainingQuery}`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Validate existing token on mount
   useEffect(() => {
@@ -59,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { user: userData } = await api.login(email, password);
         setUser(userData);
         setIsLoading(false);
-        navigate("/dashboard");
+        navigate(getPostAuthRedirect(location.search), { replace: true });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Login failed";
@@ -67,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [navigate],
+    [location.search, navigate],
   );
 
   const register = useCallback(
@@ -78,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { user: userData } = await api.register(email, password, name);
         setUser(userData);
         setIsLoading(false);
-        navigate("/dashboard");
+        navigate(getPostAuthRedirect(location.search), { replace: true });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Registration failed";
@@ -86,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       }
     },
-    [navigate],
+    [location.search, navigate],
   );
 
   const logout = useCallback(() => {

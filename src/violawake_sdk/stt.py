@@ -1,7 +1,9 @@
 """Speech-to-Text using faster-whisper (CTranslate2-optimized Whisper).
 
 Batch-mode transcription: records audio buffer, then transcribes.
-Not streaming/real-time (see ADR-003 rationale — streaming is Phase 2).
+Streaming transcription: yields TranscriptSegments one at a time via
+``STTEngine.transcribe_streaming()``, or incrementally via
+``StreamingSTTEngine`` which buffers incoming audio chunks.
 
 Usage::
 
@@ -10,7 +12,19 @@ Usage::
     stt = STTEngine(model="base")
     text = stt.transcribe(audio_float32_16khz)
 
-Note: STTEngine requires the 'faster-whisper' package.
+    # Streaming (generator mode)
+    for segment in stt.transcribe_streaming(audio_float32_16khz):
+        print(segment.text, segment.start, segment.end)
+
+    # Incremental streaming via StreamingSTTEngine
+    from violawake_sdk.stt import StreamingSTTEngine
+    streaming = StreamingSTTEngine(model="base", min_buffer_seconds=2.0)
+    streaming.push_chunk(chunk1)
+    streaming.push_chunk(chunk2)
+    for segment in streaming.flush():
+        print(segment.text)
+
+Note: STTEngine and StreamingSTTEngine require the 'faster-whisper' package.
 Install with: pip install 'violawake[stt]'
 """
 
@@ -19,7 +33,8 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from dataclasses import dataclass
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -171,6 +186,104 @@ class STTEngine:
         result = self.transcribe_full(audio)
         return result.text
 
+    def transcribe_streaming(
+        self,
+        audio: np.ndarray,
+        channels_first: bool | None = None,
+        beam_size: int = 5,
+        best_of: int = 5,
+        temperature: list[float] | None = None,
+    ) -> Iterator[TranscriptSegment]:
+        """Stream transcription segments as they become available.
+
+        Uses faster-whisper's generator mode: ``model.transcribe()`` returns a
+        ``(segments_iterator, info)`` tuple.  This method yields each
+        ``TranscriptSegment`` one at a time as faster-whisper decodes it,
+        instead of collecting all segments first.
+
+        This is useful when:
+        - You want to display partial results before full transcription completes.
+        - You need to pipe segments to a downstream consumer (TTS, logging, etc.)
+          without waiting for the full buffer to finish.
+
+        Note:
+            Segments with ``no_speech_prob`` above ``NO_SPEECH_THRESHOLD`` are
+            silently skipped (not yielded).
+
+        Args:
+            audio: Float32 numpy array at 16kHz mono, or 2-D stereo.
+            channels_first: Layout hint for 2-D stereo audio (same semantics as
+                ``transcribe_full``).
+            beam_size: Beam search width. Default 5.
+            best_of: Number of candidates when sampling. Default 5.
+            temperature: Temperature schedule. Default ``[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]``.
+
+        Yields:
+            TranscriptSegment — one per decoded segment, in time order.
+
+        Example::
+
+            stt = STTEngine(model="base")
+            for seg in stt.transcribe_streaming(audio_np):
+                print(f"[{seg.start:.1f}s] {seg.text}")
+        """
+        if temperature is None:
+            temperature = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+        audio = np.asarray(audio, dtype=np.float32)
+        if audio.ndim > 1:
+            if channels_first is True:
+                audio = audio.mean(axis=0)
+            elif channels_first is False:
+                audio = audio.mean(axis=1)
+            else:
+                if audio.shape[0] < audio.shape[1]:
+                    audio = audio.mean(axis=0)
+                else:
+                    audio = audio.mean(axis=1)
+
+        language = self._get_language()
+        model = self._get_model()
+
+        logger.debug("transcribe_streaming: starting generator on %d samples", len(audio))
+
+        segments_gen, info = model.transcribe(
+            audio,
+            language=language,
+            vad_filter=True,
+            vad_parameters={"min_silence_duration_ms": 500},
+            word_timestamps=False,
+            beam_size=beam_size,
+            best_of=best_of,
+            temperature=temperature,
+        )
+
+        # Update language cache after model.transcribe() returns info — same
+        # logic as transcribe_full, but we must do it before consuming the
+        # generator so the cache is primed for subsequent calls.
+        if language is None and info.language_probability > 0.5:
+            with self._model_lock:
+                self._language_cache = (info.language, time.monotonic())
+
+        for seg in segments_gen:
+            if seg.no_speech_prob > NO_SPEECH_THRESHOLD:
+                logger.debug(
+                    "Skipping silent segment [%.1f-%.1f] no_speech_prob=%.2f",
+                    seg.start,
+                    seg.end,
+                    seg.no_speech_prob,
+                )
+                continue
+
+            text = seg.text.strip()
+            logger.debug("Streaming segment [%.1f-%.1f]: '%s'", seg.start, seg.end, text)
+            yield TranscriptSegment(
+                text=text,
+                start=seg.start,
+                end=seg.end,
+                no_speech_prob=seg.no_speech_prob,
+            )
+
     def transcribe_full(
         self,
         audio: np.ndarray,
@@ -305,3 +418,201 @@ class STTEngine:
     ) -> None:
         """Exit sync context manager. Releases model resources."""
         self.close()
+
+
+# ---------------------------------------------------------------------------
+# Incremental / chunk-based streaming
+# ---------------------------------------------------------------------------
+
+# Default sliding-window stride when the buffer is flushed automatically on
+# each push.  A stride of 0.0 means "keep all samples" (no overlap removal).
+_DEFAULT_STRIDE_S = 0.0
+
+
+@dataclass
+class StreamingSTTEngine:
+    """Incremental streaming STT: accepts audio chunks, yields segments.
+
+    Audio chunks are pushed one at a time via :meth:`push_chunk`.  When the
+    accumulated buffer reaches ``min_buffer_seconds``, :meth:`push_chunk`
+    transparently transcribes the buffer and yields any new segments.  You can
+    also force a transcription at any time with :meth:`flush`.
+
+    A sliding-window approach is supported via ``stride_seconds``: after each
+    transcription pass the engine retains the last ``stride_seconds`` of audio
+    so that words near the boundary are not lost on the next pass.  Set
+    ``stride_seconds=0.0`` (default) to discard all audio after each pass.
+
+    Thread safety: **not** thread-safe.  Call from a single thread or protect
+    externally with a lock.
+
+    Args:
+        model: Whisper model size. One of ``tiny``, ``base``, ``small``,
+               ``medium``, ``large-v3``. Default ``"base"``.
+        device: ``"cpu"`` or ``"cuda"``. Default ``"cpu"``.
+        compute_type: CTranslate2 compute type. Default ``"int8"``.
+        language: Force a specific language code (e.g. ``"en"``). ``None``
+                  for auto-detect.
+        min_buffer_seconds: Minimum seconds of audio to accumulate before
+                            attempting a transcription pass.  Shorter values
+                            mean lower latency but more frequent (and
+                            potentially noisier) passes.  Default ``2.0``.
+        stride_seconds: Seconds of audio overlap to retain between passes
+                        (sliding-window).  Default ``0.0`` (no overlap).
+        sample_rate: Sample rate of incoming audio chunks. Default ``16000``.
+
+    Example::
+
+        streaming = StreamingSTTEngine(model="base", min_buffer_seconds=2.0)
+        for chunk in mic_chunks:
+            for segment in streaming.push_chunk(chunk):
+                print(f"[{segment.start:.1f}s] {segment.text}")
+
+        # Force final transcription when done
+        for segment in streaming.flush():
+            print(f"[{segment.start:.1f}s] {segment.text}")
+    """
+
+    model: str = "base"
+    device: str = "cpu"
+    compute_type: str = "int8"
+    language: str | None = None
+    min_buffer_seconds: float = 2.0
+    stride_seconds: float = _DEFAULT_STRIDE_S
+    sample_rate: int = 16_000
+
+    # Internal state — populated post-init; not part of the public constructor.
+    _engine: STTEngine = field(init=False, repr=False)
+    _buffer: list[np.ndarray] = field(init=False, repr=False, default_factory=list)
+    _buffer_samples: int = field(init=False, repr=False, default=0)
+
+    def __post_init__(self) -> None:
+        self._engine = STTEngine(
+            model=self.model,
+            device=self.device,
+            compute_type=self.compute_type,
+            language=self.language,
+        )
+        self._buffer = []
+        self._buffer_samples = 0
+        logger.info(
+            "StreamingSTTEngine created: model=%s, min_buffer=%.1fs, stride=%.1fs",
+            self.model,
+            self.min_buffer_seconds,
+            self.stride_seconds,
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    @property
+    def buffer_duration_s(self) -> float:
+        """Current accumulated audio duration in seconds."""
+        return self._buffer_samples / self.sample_rate
+
+    def push_chunk(self, chunk: np.ndarray | bytes) -> Iterator[TranscriptSegment]:
+        """Push an audio chunk into the buffer.
+
+        If the buffer has accumulated at least ``min_buffer_seconds`` of audio,
+        a transcription pass is run and any yielded segments are returned.
+        Otherwise, no segments are yielded and the chunk is silently buffered.
+
+        Args:
+            chunk: Float32 numpy array (16kHz mono) **or** raw ``int16`` PCM
+                   bytes.  Bytes are automatically converted to float32.
+
+        Yields:
+            TranscriptSegment — segments decoded in this pass (may be empty).
+        """
+        arr = self._coerce_chunk(chunk)
+        self._buffer.append(arr)
+        self._buffer_samples += len(arr)
+
+        min_samples = int(self.min_buffer_seconds * self.sample_rate)
+        if self._buffer_samples >= min_samples:
+            yield from self._run_pass()
+
+    def flush(self) -> Iterator[TranscriptSegment]:
+        """Transcribe whatever remains in the buffer and clear it.
+
+        Call this when the audio stream ends to ensure trailing audio is
+        transcribed.
+
+        Yields:
+            TranscriptSegment — segments from the remaining buffer.
+        """
+        if self._buffer_samples == 0:
+            return
+
+        logger.debug("StreamingSTTEngine.flush: %.2f s buffered", self.buffer_duration_s)
+        yield from self._run_pass(force=True)
+
+    def reset(self) -> None:
+        """Discard the current buffer without transcribing."""
+        self._buffer = []
+        self._buffer_samples = 0
+        logger.debug("StreamingSTTEngine buffer reset")
+
+    def prewarm(self) -> None:
+        """Eagerly load the underlying Whisper model."""
+        self._engine.prewarm()
+
+    def close(self) -> None:
+        """Release model resources and discard the buffer."""
+        self.reset()
+        self._engine.close()
+
+    def __enter__(self) -> StreamingSTTEngine:
+        """Enter sync context manager."""
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
+        """Exit sync context manager. Releases engine resources."""
+        self.close()
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _coerce_chunk(self, chunk: np.ndarray | bytes) -> np.ndarray:
+        """Convert raw int16 bytes or ensure float32 array."""
+        if isinstance(chunk, (bytes, bytearray)):
+            arr = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) / 32768.0
+            return arr
+        arr = np.asarray(chunk, dtype=np.float32)
+        if arr.ndim > 1:
+            # Best-effort stereo → mono using the shape heuristic from STTEngine
+            if arr.shape[0] < arr.shape[1]:
+                arr = arr.mean(axis=0)
+            else:
+                arr = arr.mean(axis=1)
+        return arr
+
+    def _run_pass(self, *, force: bool = False) -> Iterator[TranscriptSegment]:
+        """Concatenate buffer, transcribe, apply sliding window, yield segments."""
+        audio = np.concatenate(self._buffer)
+
+        logger.debug(
+            "StreamingSTTEngine pass: %.2f s (force=%s)",
+            len(audio) / self.sample_rate,
+            force,
+        )
+
+        yield from self._engine.transcribe_streaming(audio)
+
+        # Sliding window: retain the last stride_seconds of audio so that
+        # words near the boundary are not cut off on the next pass.
+        stride_samples = int(self.stride_seconds * self.sample_rate)
+        if stride_samples > 0 and len(audio) > stride_samples:
+            retained = audio[-stride_samples:]
+            self._buffer = [retained]
+            self._buffer_samples = len(retained)
+        else:
+            self._buffer = []
+            self._buffer_samples = 0

@@ -20,7 +20,13 @@ import PricingPage from "./pages/Pricing";
 import BillingPage from "./pages/Billing";
 import ModelPerformancePage from "./pages/ModelPerformance";
 import PrivacyPage from "./pages/Privacy";
-import TermsPage from "./pages/Terms";
+import TermsPage from "./pages/Terms.tsx";
+import VerifyEmailPage from "./pages/VerifyEmail";
+import ResetPasswordPage from "./pages/ResetPassword";
+import ForgotPasswordPage from "./pages/ForgotPassword";
+import TeamsPage from "./pages/Teams";
+import TeamDetailPage from "./pages/TeamDetail";
+import CookieConsent from "./components/CookieConsent";
 
 export default function App() {
   return (
@@ -37,6 +43,9 @@ export default function App() {
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
 
                 {/* Protected pages */}
                 <Route
@@ -80,12 +89,29 @@ export default function App() {
                   }
                 />
                 <Route
+                  path="/teams"
+                  element={
+                    <ProtectedRoute>
+                      <TeamsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams/:teamId"
+                  element={
+                    <ProtectedRoute>
+                      <TeamDetailPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="*"
                   element={<Navigate to="/" replace />}
                 />
               </Routes>
             </Layout>
             <ToastContainer />
+            <CookieConsent />
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

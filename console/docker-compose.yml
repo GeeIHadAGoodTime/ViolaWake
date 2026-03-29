@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   backend:
     build:
@@ -13,6 +11,10 @@ services:
     environment:
       - VIOLAWAKE_SECRET_KEY=dev-secret-change-in-production
       - PYTHONPATH=/sdk/src
+      # - STRIPE_SECRET_KEY=sk_live_...
+      # - STRIPE_WEBHOOK_SECRET=whsec_...
+      # - STRIPE_PRICE_ID_PRO=price_...
+      # - STRIPE_PRICE_ID_TEAM=price_...
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
@@ -26,7 +28,8 @@ services:
     ports:
       - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8000
+      - VITE_API_URL=/api
+      - VITE_API_PROXY_TARGET=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy

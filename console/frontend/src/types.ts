@@ -2,12 +2,17 @@ export interface User {
   id: number;
   email: string;
   name: string;
-  created_at: string;
+  email_verified: boolean;
+  created_at?: string;
 }
 
 export interface AuthResponse {
   token: string;
   user: User;
+}
+
+export interface MessageResponse {
+  message: string;
 }
 
 export interface Recording {
@@ -35,9 +40,10 @@ export interface TrainingJob {
 
 export type TrainingStatus =
   | "queued"
-  | "training"
+  | "running"
   | "completed"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 export interface TrainingStartResponse {
   job_id: number;
@@ -100,4 +106,33 @@ export interface SubscriptionResponse {
 
 export interface BillingPortalResponse {
   url: string;
+}
+
+// ── Teams ──────────────────────────────────────────────────────────────────
+
+export type TeamMemberRole = "owner" | "admin" | "member";
+
+export interface TeamMember {
+  user_id: number;
+  email: string;
+  name: string;
+  role: TeamMemberRole;
+  invited_at: string;
+  joined_at: string | null;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  created_at: string;
+  owner_id: number;
+  members: TeamMember[];
+}
+
+export interface TeamListItem {
+  id: number;
+  name: string;
+  created_at: string;
+  owner_id: number;
+  member_count: number;
 }

@@ -1,345 +1,225 @@
 <!-- doc-meta
-scope: Competitive landscape — wake word engines, voice SDKs, and adjacent markets
-authority: LIVING — updated when competitors ship major changes or pricing shifts
-code-paths: docs/PRD.md, docs/adr/
-staleness-signals: Picovoice pricing change, openWakeWord major release, new entrant with >500 GitHub stars
-last-updated: 2026-03-18
+scope: Competitive landscape - wake word engines, voice SDKs, and adjacent markets
+authority: LIVING - updated when competitors ship major changes or pricing shifts
+code-paths: docs/PRD.md, console/, src/violawake_sdk/
+staleness-signals: Picovoice pricing changes, openWakeWord major workflow changes, ViolaWake hosted architecture changes
+last-updated: 2026-03-28
 -->
 
-# ViolaWake SDK — Competitive Analysis
+# ViolaWake Competitive Analysis
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Active
-**Derived from:** COMPETITIVE_AUDIT_REPORT.md (Viola repo `.viola/agents/`), full codebase audit 2026-03-17
 
 ---
 
-## 1. Competitive Landscape Overview
+## 1. Market Position
 
-The wake word / voice SDK market has three distinct segments:
+The wake-word market still breaks into three practical buckets:
 
-| Segment | Players | Our target? |
-|---------|---------|-------------|
-| **Proprietary commercial SDKs** | Picovoice, Amazon AVS, Sensory | Compete on open-core model |
-| **Open-source community projects** | openWakeWord, Mycroft Precise (archived), Snowboy (archived) | Compete on production quality |
-| **Big Tech embedded** | Google Assistant SDK, Amazon Alexa Voice Service | Not competing (ecosystem play) |
+| Segment | Main players | ViolaWake position |
+|---------|--------------|-------------------|
+| **Commercial proprietary** | Picovoice, Sensory | Compete on openness and price |
+| **Open-source tooling** | openWakeWord, archived Mycroft Precise, archived Snowboy | Compete on productization and managed workflow |
+| **Big-tech ecosystem SDKs** | Alexa / Google / Apple stacks | Not direct competitors |
 
-**Our positioning:** Fill the gap between "proprietary/expensive" and "open-source/unpolished." Production-tested accuracy + accessible training + Python-first SDK + open license.
+ViolaWake now sits in a clearer position than earlier docs suggested:
 
----
+- **The SDK is real**
+- **The Console is real**
+- **The hosted infrastructure story is still maturing**
 
-## 2. Feature Matrix
-
-> Accuracy metrics in this document are not apples-to-apples. ViolaWake's current `15.10` figure is Cohen's d measured against synthetic-only negatives, while competitor numbers below are published/community d-prime estimates or claims.
-> Picovoice does not publish d-prime; comparison uses publicly available benchmark reports and community testing.
-
-| Feature | **ViolaWake SDK** | Picovoice Porcupine | openWakeWord | Mycroft Precise | Snowboy |
-|---------|:-----------------:|:-------------------:|:------------:|:---------------:|:-------:|
-| **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 | Apache 2.0 | Apache 2.0 |
-| **Cost (commercial)** | Free | $6K+/yr Foundation | Free | Free (archived) | Free (archived) |
-| **Accuracy disclosure** | **Cohen's d 15.10 on synthetic negatives** | No published d-prime; ~10–13 in third-party estimates | ~5–8 in community/public benchmarks | ~6–10 in historical reports | ~5–8 in historical reports |
-| **FAR @ default threshold** | ≤0.5/hr | <1/hr (claimed) | ~1–3/hr (reported) | Variable | Variable |
-| **FRR @ default threshold** | ≤3% | <5% (claimed) | ~5–15% | ~5–10% | ~5–15% |
-| **Inference latency / 20ms frame** | ≤15ms | ≤20ms (Raspberry Pi 3) | ≤30ms | ≤25ms | ≤25ms |
-| **Custom wake words** | ✅ Training CLI | ✅ Console (paid for commercial) | ✅ Fine-tuning | ✅ Training required | ❌ Limited |
-| **Training code open-source** | ✅ Full pipeline | ❌ Closed | ✅ Yes | ✅ Yes | ❌ No |
-| **Training without ML expertise** | ✅ 20+ samples, CLI | ⚠️ Console (simpler UX) | ⚠️ Complex setup | ❌ Requires ML expertise | N/A |
-| **ONNX inference** | ✅ Yes | ❌ Proprietary C binary | ✅ Yes | ❌ TFLite/PyTorch | ❌ No |
-| **Python SDK** | ✅ First-class | ⚠️ C-binary wrapper | ✅ Yes | ✅ Yes | ✅ Yes (unmaintained) |
-| **Bundled VAD** | ✅ Yes (WebRTC/Silero/RMS) | ✅ Cobra (separate product) | ⚠️ Basic | ❌ Separate | ❌ No |
-| **Bundled STT** | ✅ Whisper wrapper | ✅ Cheetah/Leopard (separate) | ❌ No | ❌ No | ❌ No |
-| **Bundled TTS** | ✅ Kokoro-82M | ✅ Orca (separate, proprietary) | ❌ No | ❌ No | ❌ No |
-| **Full voice pipeline (1 import)** | ✅ VoicePipeline class | ❌ Assemble yourself | ❌ No | ❌ No | ❌ No |
-| **Windows** | ✅ Production | ✅ Yes | ⚠️ Tested | ⚠️ Partial | ❌ No (no binaries) |
-| **Linux (x64)** | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| **macOS (Intel + ARM)** | ✅ Yes | ✅ Yes | ✅ Yes | ⚠️ Intel only | ⚠️ Intel only |
-| **Raspberry Pi (ARM)** | ✅ Tested on Pi 4 | ✅ Yes | ✅ Yes | ✅ Yes | ✅ Yes |
-| **Android** | ❌ Phase 3 | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **iOS** | ❌ Phase 3 | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **MCU/embedded** | ❌ Never | ✅ Yes (Cortex-M) | ❌ No | ❌ No | ❌ No |
-| **Multi-language** | ❌ English only (Phase 2) | ✅ 9 languages | ⚠️ English primary | ❌ English only | ❌ English only |
-| **Production-tested** | ✅ Viola production | ✅ Picovoice products | ❌ Community testing only | ❌ Archived 2022 | ❌ Archived 2020 |
-| **Evaluation tool** | ✅ `violawake-eval` (Cohen's d, FAR, FRR) | ❌ No | ⚠️ Basic | ❌ No | ❌ No |
-| **REST API** | ❌ Phase 2 | ✅ Yes | ❌ No | ❌ No | ❌ No |
-| **Active maintenance** | ✅ Active | ✅ Active | ✅ Active | ❌ Archived | ❌ Archived |
+That means the right comparison is no longer "CLI-only OSS project vs polished vendors." It is "open SDK plus shipped Console MVP vs closed managed platforms."
 
 ---
 
-## 3. Competitor Deep Dives
+## 2. Current ViolaWake Offer
 
-### 3.1 Picovoice Porcupine
+### 2.1 What We Have Today
 
-**Summary:** The production gold standard for proprietary wake word detection. Best-in-class platform coverage, proven at scale, developer-friendly Console. The dominant player we are directly competing against.
+- Open-source Python SDK for wake detection, VAD, STT, and TTS
+- Local training and evaluation CLI
+- Shipped React/FastAPI Console for signup, recording, queued training, and model download
+- Local-first backend architecture: JWT auth, SQLite by default, local disk by default, CPU training queue by default
 
-**Strengths:**
-- 12+ platform SDKs (Python, iOS, Android, Web, Raspberry Pi, MCUs, Rust, Go, C, .NET)
-- 9 languages with pre-trained wake words
-- Web Console for custom wake word training (no ML expertise required)
-- Well-documented with extensive examples
-- Proven at scale in commercial products
+### 2.2 What We Do Not Have Yet
 
-**Weaknesses:**
-- **Pricing.** $6K+/year Foundation Plan for commercial use. Metered model for custom training. Personal/dev use free, but commercial requires purchase.
-- **Black-box models.** Cannot inspect, fine-tune, or adapt models to domain-specific needs (accents, environments). You are locked into what Picovoice trains.
-- **Python SDK is a wrapper.** Python code calls a C binary. You can't debug the inference, contribute to it, or use Python ML tooling (numpy, pytorch) alongside it.
-- **No standalone training pipeline.** Training goes through their Console only — not reproducible locally, not open to community improvement.
-- **Accuracy not published.** Picovoice does not publish d-prime or equivalent metrics. Third-party benchmarks suggest ~10–13 d-prime range.
-- **C-binary dependency.** Makes packaging, debugging, and customization harder for Python-first developers.
+- Cloud-hardened managed auth as the baseline
+- GPU-backed paid training lanes
+- Enterprise support/SLA operations
 
-**Our gaps vs Porcupine:**
-- Platform coverage (mobile, MCU, 9 languages) — we are Python+desktop+Pi only
-- Console UX (no code required for training) — our training requires CLI
-- Brand recognition and ecosystem
-
-**Our advantages over Porcupine:**
-- $0 vs $6K+/year commercial
-- Open training pipeline (inspectable, improvable, auditable)
-- Transparent internal benchmark disclosure: Cohen's d 15.10 on synthetic negatives; not directly comparable to Porcupine's unpublished speech-negative performance
-- First-class Python (not C-binary wrapper)
-- Complete bundled pipeline (Wake+VAD+STT+TTS in one `pip install`)
-- ONNX inference (portable, debuggable, integratable with Python ML tooling)
-
-**Takeaway for V1:** Porcupine is the "too expensive" option that sends developers looking for alternatives. We win by being the open-core alternative they find.
+This distinction matters competitively because it changes the product story from "future web UI" to "real Console with early-stage infrastructure."
 
 ---
 
-### 3.2 openWakeWord
+## 3. Feature Matrix
 
-**Summary:** The closest open-source competitor. Apache-2.0, ONNX-based, Python, growing community traction. Our approach is architecturally similar (MLP on OWW embeddings) but with more production-hardening and a stronger internal synthetic-negative benchmark score.
-
-**Strengths:**
-- Apache-2.0, fully open-source
-- ONNX inference (same as us)
-- Community of developers actively using and contributing
-- Multiple pre-trained models
-- Decent fine-tuning documentation
-
-**Weaknesses:**
-- **Accuracy ceiling appears lower in published/community benchmarks.** openWakeWord is commonly reported around ~5–8 d-prime, while our current internal number is Cohen's d 15.10 on synthetic negatives and is not directly comparable.
-- **No bundled pipeline.** Provides wake detection only. User must integrate VAD, STT, TTS separately.
-- **No standalone evaluation tool.** No standardized way to evaluate custom model quality.
-- **Complex fine-tuning.** The fine-tuning workflow requires ML expertise and isn't streamlined for "I have 20 samples of my wake word."
-- **No decision policy.** Raw score output without production-hardened false-accept mitigation (cooldown, RMS gate, listening gate).
-- **Windows support fragile.** Community reports installation issues on Windows.
-- **No active productization.** Maintained as a research/community project, not a production SDK.
-
-**Our gaps vs openWakeWord:**
-- Community size (they have more GitHub stars and community familiarity)
-- Number of pre-trained wake word models
-- Open training approach (they also have this; we need to match)
-
-**Our advantages over openWakeWord:**
-- Transparent benchmark methodology and a strong internal synthetic-negative score (Cohen's d 15.10); direct speech-negative comparison still needs to be published
-- Production-hardened decision policy (4-gate system from Viola production)
-- Bundled pipeline (Wake+VAD+STT+TTS)
-- Streamlined training CLI (20 samples → model, no ML expertise)
-- Evaluation tool (`violawake-eval`) that reports Cohen's d, FAR, FRR, and ROC data
-- Windows production-tested
-
-**Takeaway for V1:** openWakeWord users who hit training UX or production-hardening walls are our primary acquisition channel. We should publish a speech-negative benchmark before claiming an accuracy win.
+| Feature | **ViolaWake** | Picovoice Porcupine | openWakeWord | Mycroft Precise | Snowboy |
+|---------|:-------------:|:-------------------:|:------------:|:---------------:|:-------:|
+| **License** | Apache 2.0 SDK | Proprietary | Apache 2.0 | Apache 2.0 | Apache 2.0 |
+| **Commercial SDK use** | Free | Paid | Free | Archived | Archived |
+| **Training code open** | Yes | No | Yes | Yes | No |
+| **Web Console** | **Yes, shipped MVP** | Yes | No broadly adopted managed Console | No | No |
+| **Training without ML setup** | **Yes: shipped Console + CLI** | Yes | Partial / more manual | No | N/A |
+| **REST API** | **Yes, shipped for Console backend** | Yes | No | No | No |
+| **Portable ONNX output** | Yes | No | Yes | Partial | No |
+| **Bundled VAD/STT/TTS** | Yes | Separate products | No | No | No |
+| **Current default backend story** | Local-first/self-hostable | Managed commercial platform | OSS toolkit | Archived | Archived |
+| **Team features** | Yes (create, invite, roles, model sharing) | Yes / enterprise | No | No | No |
+| **Priority infra tiers** | Yes (4-tier system) | Yes | No | No | No |
 
 ---
 
-### 3.3 Mycroft Precise (Archived)
+## 4. Competitor Deep Dives
 
-**Summary:** The wake word engine from the Mycroft AI open-source voice assistant. Actively maintained until Mycroft AI shutdown (2022). Archived but still referenced as an option by home automation communities.
+### 4.1 Picovoice Porcupine
 
-**Strengths (historical):**
-- Fully open-source (Apache 2.0)
-- Designed specifically for Python voice assistants
-- Worked well integrated into Mycroft's pipeline
-- Home Assistant community used it extensively
+**What they do well**
 
-**Weaknesses:**
-- **Archived and unmaintained since 2022.** No security patches, no bug fixes, no platform updates.
-- **TFLite/PyTorch models.** Not ONNX-portable. Harder to deploy across platforms.
-- **Lower accuracy than current approaches.** Pre-dates modern embedding-based approaches like OWW.
-- **No training CLI for non-ML users.** Required understanding of the ML training process.
-- **No bundled pipeline.** Detection only.
+- Best-in-class commercial polish
+- Wide platform coverage
+- Mature managed Console
+- Strong developer onboarding
 
-**Our position vs Mycroft Precise:**
-- Precise users (typically home automation hobbyists) are natural ViolaWake targets — they want open-source, Python, on-device, and Precise no longer works on modern Python versions.
-- We offer a drop-in spiritual successor with better accuracy, active maintenance, and a bundled pipeline.
+**Why developers still look elsewhere**
 
-**Takeaway for V1:** Marketing to Home Assistant / ex-Mycroft users is a clear acquisition path. The "Mycroft Precise alternative" angle is worth a blog post.
+- Closed training stack
+- Proprietary artifacts
+- Commercial pricing and vendor lock-in
 
----
+**Our current position vs Picovoice**
 
-### 3.4 Snowboy (Archived)
+- We now have a real Console, which removes the old "CLI-only" weakness
+- Their hosted offering is still much more mature than ours
+- Our advantage remains openness, portability, and a lower-cost business model
 
-**Summary:** KITT.AI's wake word engine, widely used 2016–2020. Acquired by Baidu and eventually shut down in December 2020. Still referenced in older tutorials and Stack Overflow answers.
+**Competitive takeaway**
 
-**Strengths (historical):**
-- Extremely low latency (C library)
-- Simple Python API
-- Worked on Raspberry Pi
-- Had a training service (300 voice samples → model)
+ViolaWake should position against Picovoice as the **open, portable, developer-controlled alternative with a real browser workflow**, not as a hypothetical future Console.
 
-**Weaknesses:**
-- **Shut down December 2020.** Training service gone. Models may expire. No maintenance.
-- **Proprietary model format.** Models were tied to their service; no offline training.
-- **No open training.** Training required their server-side service.
-- **Platform binary distribution.** Pre-compiled binaries for specific platforms only.
-- **Lower accuracy** than modern embedding-based approaches.
+### 4.2 openWakeWord
 
-**Our position vs Snowboy:**
-- Snowboy users are stranded and actively looking for alternatives. Multiple GitHub issues on archived Snowboy repo request "what should I use instead?"
-- We are the answer. Open-source, active, better accuracy, trainable offline.
+**What they do well**
 
-**Takeaway for V1:** The "Snowboy alternative" search query is an acquisition channel. Explicit migration guide from Snowboy to ViolaWake is worth building.
+- Strong OSS credibility
+- ONNX-based workflow
+- Community adoption
+- Useful baseline for DIY training
 
----
+**Where ViolaWake is stronger**
 
-### 3.5 Amazon Alexa Voice Service / Google Assistant SDK / Apple Siri SDK
+- Shipped Console for a full browser workflow
+- More productized path from samples to downloaded model
+- Broader bundled voice stack around wake-word use cases
 
-**Summary:** Big Tech embedded wake word solutions. Designed for devices joining their respective voice assistant ecosystems. Not general-purpose SDKs.
+**Where openWakeWord is still strong**
 
-**Strengths:**
-- Massive investment, industry-leading accuracy for their wake words ("Alexa", "Hey Google", "Hey Siri")
-- Deeply integrated with cloud ecosystems (shopping, smart home, calendar, etc.)
+- OSS mindshare
+- Simpler expectation set: it does not pretend to be a managed SaaS
 
-**Weaknesses / Why developers avoid them:**
-- **Ecosystem lock-in.** You're building an Alexa device, a Google device, or an Apple device. Not your own product.
-- **Custom wake words not supported.** You cannot teach "Alexa" to respond to "Jarvis" — you join their ecosystem.
-- **Requires cloud connectivity.** No offline mode; all audio sent to Amazon/Google/Apple servers.
-- **Privacy concerns.** Significant regulatory scrutiny. Many users/developers explicitly avoid these for privacy-sensitive applications.
-- **Commercial licensing restrictions.** Strict certification requirements for consumer products.
-- **Data collection.** All voice data potentially used for model improvement.
+**Competitive takeaway**
 
-**Our position vs Big Tech:**
-- Completely different value proposition. We serve developers who want **their own wake word** in **their own product** with **no cloud dependency**.
-- Privacy-first positioning directly addresses the reason developers avoid Big Tech solutions.
-- ViolaWake is what you use when you don't want to give Alexa/Google/Apple access to your users' home audio.
+openWakeWord is still the closest OSS peer, but ViolaWake now competes as **open-source plus productized onboarding**, not merely as another training CLI.
 
-**Takeaway for V1:** The positioning "no cloud, no Big Tech, your wake word, your data" resonates strongly with IoT developers and privacy-conscious applications.
+### 4.3 Archived Alternatives
+
+Mycroft Precise and Snowboy still matter as search and migration channels, but they are no longer feature competitors. Their importance is strategic:
+
+- they left orphaned users behind
+- those users already want open, local, and inspectable tooling
+- ViolaWake can be their modern landing spot
 
 ---
 
-### 3.6 Sensory TrulyHandsfree
+## 5. Where ViolaWake Wins
 
-**Summary:** Commercial embedded wake word engine used in commercial IoT products. Less developer-facing than Picovoice.
+### 5.1 Open SDK Plus Real Console
 
-**Strengths:**
-- Very low power (MCU-optimized)
-- Proven in consumer products (used by various OEMs)
-- High accuracy for single wake word use cases
+This is the biggest narrative correction.
 
-**Weaknesses:**
-- Enterprise licensing only. No self-serve.
-- Not developer-accessible (no PyPI, no GitHub public SDK)
-- Proprietary, closed training
-- Primarily for MCU/embedded (not Python developer use case)
+ViolaWake is no longer forced into the weakest possible position of "great training code, but you still need the CLI." The product now includes a working browser-based recording and training flow, which materially improves its competitiveness against both Picovoice and ad-hoc OSS workflows.
 
-**Takeaway for V1:** Not a direct competitor for Python SDK market. If ViolaWake ever adds C library + MCU support, Sensory becomes relevant.
+### 5.2 Portable Ownership
 
----
+The exported model is still an ONNX artifact the user can keep. That remains a differentiator against closed managed platforms.
 
-## 4. Market Gaps We Exploit
+### 5.3 Honest Architecture Story
 
-### Gap 1: Open-core wake word with accessible training (CRITICAL)
+There is an underappreciated advantage in being explicit:
 
-**The problem:** Porcupine's training requires their Console (paid at commercial scale). openWakeWord's training requires ML expertise. No solution exists that is: (a) open-source, (b) high accuracy, (c) easy for non-ML developers to use.
+- the Console exists today
+- it currently runs on local-first infrastructure
+- managed cloud hardening is still roadmap work
 
-**Our answer:** `violawake-train --word "jarvis" --positives data/ --output models/jarvis.onnx` — 20 samples, one CLI command.
-
-### Gap 2: Bundled voice pipeline (HIGH VALUE)
-
-**The problem:** Every existing solution provides detection only. Developers must manually integrate VAD, STT, TTS, and wire together callbacks. This is the 20-line boilerplate every voice developer writes from scratch.
-
-**Our answer:** `VoicePipeline(wake_word="viola", stt_model="base", tts_voice="af_heart")` — complete pipeline in one class.
-
-### Gap 3: Production accuracy metric with evaluation tool (DIFFERENTIATOR)
-
-**The problem:** Picovoice doesn't publish accuracy metrics. openWakeWord uses informal benchmarks. Developers can't compare wake word engines on a common metric, or evaluate their custom-trained models objectively.
-
-**Our answer:** `violawake-eval` produces Cohen's d, FAR, FRR, and ROC AUC on any model + test set. We publish our current internal score (Cohen's d 15.10 on synthetic negatives) and note that speech-negative d-prime is still TBD.
-
-### Gap 4: Stranded users from deprecated projects (ACQUISITION CHANNEL)
-
-**The problem:** Snowboy (shut down 2020), Mycroft Precise (archived 2022) — thousands of developers are using dead projects that don't work on modern Python/platforms.
-
-**Our answer:** Migration guides from Snowboy and Mycroft Precise to ViolaWake. These developers are already sold on "open source, Python, offline" — they just need a maintained alternative.
+That is more credible than pretending hosted sophistication that is not yet the default.
 
 ---
 
-## 5. V1 Feature Set — Competitive Justification
+## 6. Where ViolaWake Still Lags
 
-The following features are included in V1 because competitive analysis shows they are either:
-- **Table stakes** (every competitor has them, we must match)
-- **Differentiators** (we can win on these, and they fill a real gap)
+| Area | Current gap |
+|------|-------------|
+| **Hosted maturity** | Picovoice is much more production-hardened as a managed platform |
+| **Platform coverage** | ViolaWake remains primarily Python/desktop/Pi oriented |
+| **Infra differentiation** | No dedicated GPU training lanes yet |
+| **Support operations** | No enterprise-grade support motion yet |
 
-| Feature | Competitive Justification | Priority |
-|---------|--------------------------|----------|
-| `WakeDetector` with a strong published benchmark and transparent methodology | Honest benchmark publication is required before we claim an accuracy win | **P0** |
-| `violawake-train` CLI (20 samples → ONNX) | Fills gap: open training accessible to non-ML devs | **P0** |
-| `violawake-eval` with Cohen's d / FAR / FRR metrics | Unique: no competitor provides this for custom models | **P0** |
-| `VADEngine` (WebRTC/Silero/RMS) | Table stakes: Porcupine has Cobra, we bundle ours | **P1** |
-| `STTEngine` (Whisper wrapper) | Bundled pipeline gap; Porcupine charges separately for Cheetah | **P1** |
-| `TTSEngine` (Kokoro-82M) | Unique: Apache-2.0, on-device, Porcupine charges for Orca | **P1** |
-| `VoicePipeline` (bundled Wake→VAD→STT→TTS) | Unique: no competitor provides full pipeline in one object | **P1** |
-| Windows + Linux + macOS support | Table stakes: must match Porcupine's desktop coverage | **P1** |
-| Raspberry Pi (ARM) | Table stakes: critical for IoT/home automation market | **P1** |
-| 4-gate decision policy | Production-hardened: openWakeWord has none | **P1** |
-| Python 3.10+ first-class | Table stakes for Python developer market | **P0** |
-| Apache 2.0 license | Required to compete with Porcupine's commercial pricing | **P0** |
-| PyPI package | Table stakes: `pip install violawake` | **P0** |
-
-**Explicitly out of V1 (justified by competitive landscape):**
-
-| Feature | Justification for deferral |
-|---------|---------------------------|
-| Android/iOS SDKs | Big investment; Porcupine-level platform coverage is not needed to win Python market |
-| MCU/embedded targets | Sensory territory; requires C library (ADR-003 says no) |
-| Multi-language | Porcupine has 9 languages; we start with English and win on quality |
-| Streaming STT | Cheetah architecture; batch Whisper is sufficient for voice command use case |
-| Speaker recognition | Eagle territory; different use case (transcription/call center) |
-| Web/WASM | High value but Phase 2; JavaScript SDK needs separate architecture work |
-| REST API | Phase 2; cloud deployment model, different from embedded SDK value prop |
+This is the correct gap analysis now. The gap is **not** "no Console." The gap is "Console exists, but the managed service layer is early."
 
 ---
 
-## 6. Pricing & Business Model Comparison
+## 7. Pricing And Business Comparison
 
-| Solution | Free Tier | Commercial | Enterprise |
-|----------|-----------|------------|------------|
-| **ViolaWake SDK** | Apache 2.0, unlimited | $0 (open core) | TBD — support/Console planned |
-| Porcupine | Non-commercial only | $6K+/yr Foundation | Custom |
-| openWakeWord | Apache 2.0, unlimited | $0 | N/A |
-| Mycroft Precise | Apache 2.0, unlimited | $0 (archived) | N/A |
-| Snowboy | Archived | Archived | N/A |
-| Amazon Alexa Voice | AVS ecosystem only | Royalties + certification | Custom |
-| Sensory | Not public | Enterprise licensing | Custom |
+| Solution | Free SDK / OSS use | Managed training story | Current business reality |
+|----------|--------------------|------------------------|--------------------------|
+| **ViolaWake** | Yes | Shipped Console MVP | Quotas exist; infra is still shared/local-first |
+| Picovoice | Limited free use, then paid | Mature managed Console | Fully commercialized |
+| openWakeWord | Yes | Mostly DIY | Community / OSS |
 
-**Our model:** Open core — SDK is free forever (Apache 2.0). Revenue comes from:
-1. **Custom wake word Console** (web UI for training, Phase 2) — charge per trained model or monthly subscription
-2. **Enterprise support** (SLAs, integration help, custom training services)
-3. **Managed cloud training** (users without GPU can submit samples → trained model returned)
+Important nuance for ViolaWake:
 
-This directly attacks Porcupine's model: they charge for what we give away for free, and the commercial value we charge for (Console, enterprise support) is transparent and optional.
+- The product can honestly talk about a **Console business**
+- It cannot honestly talk about **different infra classes per paid tier** yet (priority queues exist but GPU lanes do not)
+- Pricing copy should center on **convenience, quotas, and priority queues**, not on GPU lanes or support promises that do not exist
 
 ---
 
-## 7. Summary: Where We Win, Where We Lag
+## 8. Strategic Implications
 
-### We win clearly:
-1. **Benchmark transparency** — our current Cohen's d 15.10 synthetic-negative result is documented and reproducible, but we still need speech-negative benchmarking before making cross-vendor accuracy claims.
-2. **Price** — $0 commercial use beats Porcupine's $6K+/year
-3. **Open training** — full training pipeline, inspectable, reproducible, open-source
-4. **Bundled pipeline** — no competitor ships Wake+VAD+STT+TTS in one package
-5. **Evaluation tooling** — Cohen's d / FAR / FRR eval CLI is unique in this space
-6. **Production-tested** — running in Viola production, not a demo
+### 8.1 Product Strategy
 
-### We lag currently:
-1. **Platform coverage** — Porcupine has 12+ platforms; we have Python desktop + Pi
-2. **Language support** — Porcupine has 9 languages; we have English only
-3. **Brand/community** — We're new; openWakeWord has community traction
-4. **Mobile** — No Android/iOS in V1 (Phase 3)
-5. **Console UX** — Porcupine's web Console is polished; our training is CLI-only in V1
-6. **Pre-trained models** — openWakeWord ships many pre-trained words; we ship one
+ViolaWake should keep pushing the hybrid position:
 
-### The bet:
-Python developers who want a wake word SDK, don't want to pay Picovoice prices, and need better accuracy than openWakeWord are our core V1 user. We win that user. Everything else is Phase 2+.
+1. open SDK
+2. portable ONNX output
+3. shipped browser-based training flow
+4. gradual move toward a managed hosted service
+
+### 8.2 Messaging Strategy
+
+The strongest message is now:
+
+> **ViolaWake is the open alternative with a real Console, not just another wake-word training script.**
+
+### 8.3 Execution Strategy
+
+The next competitive unlock is not "invent a Console." It is:
+
+- harden hosting
+- add retention/compliance hygiene
+- validate quota-based monetization
+- add premium team/infra features only after usage proves they are needed
 
 ---
 
-*Next review: After V1 PyPI release. Update pricing data if Picovoice announces pricing changes.*
+## 9. Bottom Line
+
+Earlier docs described ViolaWake as if it were still in the gap between a CLI project and a future hosted product. That is outdated.
+
+The accurate competitive story is:
+
+- **Console shipped**
+- **SDK shipped**
+- **managed SaaS maturity still in progress**
+
+That is a much stronger position than the previous narrative because it is both more competitive and more believable.

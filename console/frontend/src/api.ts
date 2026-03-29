@@ -11,9 +11,19 @@ import type {
   SubscriptionResponse,
   UsageResponse,
   BillingPortalResponse,
+  MessageResponse,
+  Team,
+  TeamListItem,
+  TeamMemberRole,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+type DownloadTokenAction = "model_download" | "training_stream";
+
+interface DownloadTokenResponse {
+  token: string;
+  expires_in_seconds: number;
+}
 
 class ApiError extends Error {
   constructor(
@@ -74,8 +84,7 @@ function handleSessionExpiry(): void {
   clearToken();
   // Only redirect if we aren't already on the login page
   if (!window.location.pathname.startsWith("/login")) {
-    alert("Your session has expired. Please sign in again.");
-    window.location.href = "/login";
+    window.location.href = "/login?expired=1";
   }
 }
 
@@ -174,6 +183,46 @@ export function isAuthenticated(): boolean {
   return true;
 }
 
+async function createDownloadToken(
+  action: DownloadTokenAction,
+  resourceId: number,
+): Promise<string> {
+  const data = await request<DownloadTokenResponse>("/auth/download-token", {
+    method: "POST",
+    body: JSON.stringify({
+      action,
+      resource_id: resourceId,
+    }),
+  });
+  return data.token;
+}
+
+export async function verifyEmail(token: string): Promise<MessageResponse> {
+  return request<MessageResponse>("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function resetPassword(
+  token: string,
+  password: string,
+): Promise<MessageResponse> {
+  return request<MessageResponse>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password }),
+  });
+}
+
+export async function forgotPassword(
+  email: string,
+): Promise<MessageResponse> {
+  return request<MessageResponse>("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
 // --- Recordings ---
 
 export async function uploadRecording(
@@ -223,13 +272,11 @@ export async function getTrainingStatus(
   return request<TrainingJob>(`/training/status/${jobId}`);
 }
 
-export function createTrainingStream(
+export async function createTrainingStream(
   jobId: number,
-): EventSource {
-  const token = getToken();
-  const url = `${BASE_URL}/training/stream/${jobId}${
-    token ? `?token=${encodeURIComponent(token)}` : ""
-  }`;
+) : Promise<EventSource> {
+  const token = await createDownloadToken("training_stream", jobId);
+  const url = `${BASE_URL}/training/stream/${jobId}?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 }
 
@@ -239,11 +286,9 @@ export async function getModels(): Promise<Model[]> {
   return request<Model[]>("/models");
 }
 
-export function getModelDownloadUrl(modelId: number): string {
-  const token = getToken();
-  return `${BASE_URL}/models/${modelId}/download${
-    token ? `?token=${encodeURIComponent(token)}` : ""
-  }`;
+export async function getModelDownloadUrl(modelId: number): Promise<string> {
+  const token = await createDownloadToken("model_download", modelId);
+  return `${BASE_URL}/models/${modelId}/download?token=${encodeURIComponent(token)}`;
 }
 
 export async function getModelConfig(
@@ -291,6 +336,77 @@ export async function createBillingPortal(): Promise<BillingPortalResponse> {
 
 export async function getUsage(): Promise<UsageResponse> {
   return request<UsageResponse>("/billing/usage");
+}
+
+// --- Teams ---
+
+export async function createTeam(
+  name: string,
+  description?: string,
+): Promise<Team> {
+  return request<Team>("/teams", {
+    method: "POST",
+    body: JSON.stringify({ name, ...(description ? { description } : {}) }),
+  });
+}
+
+export async function listTeams(): Promise<TeamListItem[]> {
+  return request<TeamListItem[]>("/teams");
+}
+
+export async function getTeam(teamId: number): Promise<Team> {
+  return request<Team>(`/teams/${teamId}`);
+}
+
+export async function inviteMember(
+  teamId: number,
+  email: string,
+  role?: TeamMemberRole,
+): Promise<MessageResponse> {
+  return request<MessageResponse>(`/teams/${teamId}/invite`, {
+    method: "POST",
+    body: JSON.stringify({ email, ...(role ? { role } : {}) }),
+  });
+}
+
+export async function joinTeam(
+  teamId: number,
+  inviteToken: string,
+): Promise<Team> {
+  return request<Team>(
+    `/teams/${teamId}/join?token=${encodeURIComponent(inviteToken)}`,
+    { method: "POST" },
+  );
+}
+
+export async function removeTeamMember(
+  teamId: number,
+  memberId: number,
+): Promise<MessageResponse> {
+  return request<MessageResponse>(`/teams/${teamId}/members/${memberId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function shareModel(
+  teamId: number,
+  modelId: number,
+): Promise<Model> {
+  return request<Model>(`/teams/${teamId}/models/${modelId}/share`, {
+    method: "POST",
+  });
+}
+
+export async function listTeamModels(teamId: number): Promise<Model[]> {
+  return request<Model[]>(`/teams/${teamId}/models`);
+}
+
+export async function deleteTeam(
+  teamId: number,
+): Promise<MessageResponse> {
+  return request<MessageResponse>(`/teams/${teamId}`, {
+    method: "DELETE",
+  });
 }
 
 export { ApiError };

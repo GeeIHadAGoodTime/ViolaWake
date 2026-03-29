@@ -28,11 +28,11 @@ The core tension: **Free enough to win developer trust and adoption. Differentia
 
 ## Decision
 
-**Apache 2.0 for all SDK code, models, and training pipeline. Proprietary for the custom wake word training Console (when built in Phase 2).**
+**Apache 2.0 for all SDK code, models, and training pipeline. Commercial differentiation comes from the hosted managed Console service, not from reclassifying the SDK.**
 
 This is the "open core" model:
 - **Open source (Apache 2.0):** Everything that runs on the developer's machine — inference code, training code, training data pipeline, pre-trained models, documentation
-- **Commercial (Phase 2+):** The hosted web Console that provides a managed training service — upload samples, get a trained model without managing Python environments
+- **Commercial:** The hosted web Console service that provides managed training, storage, and account/billing convenience
 
 ---
 
@@ -97,8 +97,8 @@ This is the model used by HashiCorp (Terraform), Elastic (pre-2021), Confluent (
 - The Cohen's d / FAR / FRR evaluation framework
 - All GitHub-hosted tooling
 
-**What's commercial (Phase 2+, SaaS):**
-- The managed training Console: upload your positive samples via web UI, receive a trained ONNX model. No Python environment needed.
+**What's commercial (hosted SaaS layer):**
+- The managed training Console service: upload your positive samples via web UI, receive a trained ONNX model. No Python environment needed.
 - Model hosting and version management
 - Support SLAs for enterprise users
 - The "high-speed lane" for model training (GPU cluster vs local CPU)
@@ -142,8 +142,8 @@ you may not use this file except in compliance with the License.
 - Pre-trained ViolaWake models
 - The evaluation framework
 
-**May be commercial in Phase 2+:**
-- Managed training Console (UI only — the training itself uses open-source code)
+**May be commercial as hosted offerings:**
+- Managed training Console service (the training itself still uses open-source code)
 - Enterprise support tiers
 - Custom model training services
 
@@ -165,7 +165,7 @@ you may not use this file except in compliance with the License.
 
 **Negative:**
 - No protection if a well-resourced company forks and builds a better managed service
-- Revenue depends on Phase 2 Console — no revenue until Phase 2
+- Revenue depends on turning the shipped Console into a credible hosted managed service
 - Apache 2.0 attribution requirements must be tracked for all downstream model files
 
 **Risks:**

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { isAuthenticated, createCheckout } from "../api";
 
 interface FaqItem {
@@ -26,7 +26,7 @@ const faqs: FaqItem[] = [
   {
     question: "Do you store my voice recordings?",
     answer:
-      "Recordings are stored only during the training process. Once your model is built, recordings are deleted from our servers. You can also delete them manually at any time. See our Privacy Policy for full details.",
+      "Recordings are stored securely and can be deleted from your dashboard at any time. We never share your audio data. See our Privacy Policy for full details.",
   },
   {
     question: "How does this compare to Picovoice?",
@@ -41,7 +41,7 @@ const faqs: FaqItem[] = [
   {
     question: "How long does training take?",
     answer:
-      "Training typically completes in 2-5 minutes depending on your tier. Free tier uses CPU training. Developer and Business tiers get priority queue access, and Business tier includes GPU-accelerated training for faster results.",
+      "Training typically completes in 2-5 minutes depending on your tier. Free tier uses standard CPU training. Developer and Business tiers get priority queue access for faster processing.",
   },
 ];
 
@@ -74,7 +74,7 @@ const tiers: PricingTier[] = [
       { text: "Community support", included: true },
       { text: "Apache 2.0 SDK included", included: true },
       { text: "Priority training queue", included: false },
-      { text: "GPU-accelerated training", included: false },
+      { text: "Accelerated training", included: false },
     ],
     cta: "Get Started",
     ctaLink: "/register",
@@ -86,13 +86,13 @@ const tiers: PricingTier[] = [
     description: "For developers shipping real products.",
     features: [
       { text: "20 models per month", included: true },
-      { text: "Priority training queue", included: true },
+      { text: "Priority training queue (2x faster processing)", included: true },
       { text: "Email support", included: true },
       { text: "Apache 2.0 SDK included", included: true },
       { text: "Faster training times", included: true },
-      { text: "GPU-accelerated training", included: false },
+      { text: "Accelerated training", included: false },
     ],
-    cta: "Start Free Trial",
+    cta: "Get Started",
     ctaLink: "/register",
     popular: true,
   },
@@ -103,13 +103,13 @@ const tiers: PricingTier[] = [
     description: "Unlimited training for teams shipping at scale.",
     features: [
       { text: "Unlimited models", included: true },
-      { text: "GPU-accelerated training", included: true },
+      { text: "Accelerated training (up to 2x faster)", included: true },
       { text: "Priority email support", included: true },
       { text: "Apache 2.0 SDK included", included: true },
       { text: "Fastest training times", included: true },
-      { text: "Team management (coming soon)", included: true },
+      { text: "Team management", included: true },
     ],
-    cta: "Start Free Trial",
+    cta: "Get Started",
     ctaLink: "/register",
   },
   {
@@ -118,24 +118,39 @@ const tiers: PricingTier[] = [
     period: "",
     description: "For organizations with specific requirements.",
     features: [
-      { text: "Custom model limits", included: true },
-      { text: "Dedicated GPU infrastructure", included: true },
-      { text: "SLA guarantee", included: true },
-      { text: "Custom model architecture", included: true },
-      { text: "Dedicated account manager", included: true },
-      { text: "On-premise deployment option", included: true },
+      { text: "Unlimited models", included: true },
+      { text: "Unlimited team members", included: true },
+      { text: "Priority support", included: true },
+      { text: "Custom training configurations", included: true },
+      { text: "Volume licensing", included: true },
     ],
-    cta: "Contact Us",
+    cta: "Contact Sales",
     ctaLink: "mailto:enterprise@violawake.com",
     external: true,
   },
 ];
+
+function getTierKey(name: string): string {
+  return name.toLowerCase();
+}
+
+function buildPricingAuthLink(tier: string): string {
+  const params = new URLSearchParams({
+    return: "/pricing",
+    tier,
+  });
+  return `/register?${params.toString()}`;
+}
 
 export default function PricingPage() {
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedTier = searchParams.get("tier")?.toLowerCase() ?? null;
+  const selectedTierName =
+    tiers.find((tier) => getTierKey(tier.name) === selectedTier)?.name ?? null;
 
   function toggleFaq(index: number) {
     setOpenFaq(openFaq === index ? null : index);
@@ -143,8 +158,7 @@ export default function PricingPage() {
 
   async function handleCheckout(tier: string) {
     if (!isAuthenticated()) {
-      // Redirect to register with return URL so user comes back after signup
-      navigate(`/register?return=/pricing&tier=${encodeURIComponent(tier)}`);
+      navigate(buildPricingAuthLink(tier));
       return;
     }
 
@@ -188,7 +202,7 @@ export default function PricingPage() {
     }
 
     // Paid tiers (Developer, Business): checkout flow
-    const tierKey = tier.name.toLowerCase();
+    const tierKey = getTierKey(tier.name);
     const loading = checkoutLoading === tierKey;
     return (
       <button
@@ -211,6 +225,12 @@ export default function PricingPage() {
         </p>
       </div>
 
+      {selectedTierName && (
+        <div className="pricing-selection-banner" role="status">
+          Continuing with the {selectedTierName} plan.
+        </div>
+      )}
+
       {checkoutError && (
         <div className="pricing-error" role="alert">
           {checkoutError}
@@ -219,10 +239,13 @@ export default function PricingPage() {
 
       {/* Pricing Grid */}
       <div className="pricing-grid">
-        {tiers.map((tier) => (
+        {tiers.map((tier) => {
+          const tierKey = getTierKey(tier.name);
+          const isSelected = selectedTier === tierKey;
+          return (
           <div
             key={tier.name}
-            className={`pricing-card ${tier.popular ? "pricing-card-popular" : ""}`}
+            className={`pricing-card ${tier.popular ? "pricing-card-popular" : ""} ${isSelected ? "pricing-card-selected" : ""}`}
           >
             {tier.popular && (
               <div className="pricing-popular-badge">POPULAR</div>
@@ -258,7 +281,8 @@ export default function PricingPage() {
             </ul>
             {renderCtaButton(tier)}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* FAQ */}

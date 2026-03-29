@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 interface ValidationErrors {
@@ -14,6 +14,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const { register, loading, error, clearError } = useAuth();
+  const location = useLocation();
+  const loginLink = location.search ? `/login${location.search}` : "/login";
 
   function validate(): ValidationErrors {
     const errors: ValidationErrors = {};
@@ -140,7 +142,7 @@ export default function RegisterPage() {
 
         <p className="auth-footer">
           Already have an account?{" "}
-          <Link to="/login" className="auth-link">
+          <Link to={loginLink} className="auth-link">
             Sign in
           </Link>
         </p>

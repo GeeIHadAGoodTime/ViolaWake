@@ -155,8 +155,9 @@ export default function RecordingSession({
               <div className="slot-controls">
                 <button
                   className="slot-play"
+                  type="button"
                   onClick={() => playRecording(i)}
-                  title="Play"
+                  aria-label={`Play recording ${i + 1}`}
                 >
                   &#9654;
                 </button>
@@ -166,8 +167,9 @@ export default function RecordingSession({
                 {phase === "review" && (
                   <button
                     className="slot-redo"
+                    type="button"
                     onClick={() => handleReRecord(i)}
-                    title="Re-record"
+                    aria-label={`Re-record sample ${i + 1}`}
                   >
                     &#8634;
                   </button>

@@ -1,0 +1,160 @@
+.teams-page {
+  animation: fadeIn 0.3s ease;
+}
+
+.teams-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Create Form ────────────────────────────────────────────────────────── */
+
+.teams-create-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.teams-create-form h2 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+.teams-create-fields {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.teams-create-fields .form-group {
+  flex: 1;
+}
+
+.teams-create-fields .form-group label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.375rem;
+}
+
+.teams-create-fields .form-group input {
+  width: 100%;
+  padding: 0.6rem 0.875rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  transition: border-color var(--transition);
+}
+
+.teams-create-fields .form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ── Team Grid ──────────────────────────────────────────────────────────── */
+
+.teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.team-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  box-shadow: var(--shadow);
+  transition: border-color var(--transition), transform var(--transition);
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.team-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  color: inherit;
+}
+
+.team-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.team-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.team-card-meta span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* ── States ─────────────────────────────────────────────────────────────── */
+
+.teams-loading,
+.teams-error {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.teams-error {
+  color: var(--error);
+}
+
+.teams-error .btn {
+  margin-top: 1rem;
+}
+
+.teams-empty {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.teams-empty h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.teams-empty p {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  .teams-header {
+    flex-direction: column;
+  }
+
+  .teams-create-fields {
+    flex-direction: column;
+  }
+
+  .teams-grid {
+    grid-template-columns: 1fr;
+  }
+}

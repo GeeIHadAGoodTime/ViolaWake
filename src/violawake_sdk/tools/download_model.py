@@ -48,6 +48,19 @@ def main() -> None:
         action="store_true",
         help="Skip SHA-256 verification after download (not recommended)",
     )
+    parser.add_argument(
+        "--format",
+        choices=["onnx", "tflite"],
+        default="onnx",
+        help="Model format to download or convert to (default: onnx). "
+        "When 'tflite' is specified, downloads the ONNX model first then "
+        "converts it locally. Requires: pip install onnx2tf tensorflow",
+    )
+    parser.add_argument(
+        "--quantize",
+        action="store_true",
+        help="Apply dynamic-range quantization when converting to TFLite (~4x smaller)",
+    )
 
     args = parser.parse_args()
 
@@ -102,6 +115,11 @@ def main() -> None:
             spec = MODEL_REGISTRY[model_name]
             size_mb = path.stat().st_size / 1_000_000
             print(f"  {model_name}: {path} ({size_mb:.1f} MB)")
+
+            # Convert to TFLite if requested
+            if args.format == "tflite":
+                _convert_to_tflite(path, quantize=args.quantize)
+
         except Exception as e:
             print(f"ERROR downloading {model_name}: {e}", file=sys.stderr)
             success = False
@@ -111,6 +129,40 @@ def main() -> None:
         print("Done. Models cached to ~/.violawake/models/")
     else:
         sys.exit(1)
+
+
+def _convert_to_tflite(onnx_path, *, quantize: bool = False) -> None:
+    """Convert a downloaded ONNX model to TFLite format."""
+    from pathlib import Path
+
+    onnx_path = Path(onnx_path)
+    tflite_path = onnx_path.with_suffix(".tflite")
+
+    if tflite_path.exists():
+        size_mb = tflite_path.stat().st_size / 1_000_000
+        print(f"  TFLite already exists: {tflite_path} ({size_mb:.1f} MB)")
+        return
+
+    print(f"  Converting {onnx_path.name} -> TFLite...", end="", flush=True)
+    try:
+        from violawake_sdk.backends.tflite_backend import convert_onnx_to_tflite
+
+        result = convert_onnx_to_tflite(onnx_path, tflite_path, quantize=quantize)
+        size_mb = result.stat().st_size / 1_000_000
+        extra = " (quantized)" if quantize else ""
+        print(f" done: {result} ({size_mb:.1f} MB{extra})")
+    except ImportError as e:
+        print(f" FAILED", file=sys.stderr)
+        print(
+            f"  TFLite conversion requires additional dependencies:\n"
+            f"    pip install onnx2tf tensorflow\n"
+            f"  Or: pip install onnx onnx-tf tensorflow\n"
+            f"  Error: {e}",
+            file=sys.stderr,
+        )
+    except Exception as e:
+        print(f" FAILED", file=sys.stderr)
+        print(f"  Conversion error: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":

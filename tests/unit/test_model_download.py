@@ -66,7 +66,7 @@ class TestSuccessfulDownload:
         correct_sha = _sha256_of(content)
 
         # Patch the registry entry to use our known SHA
-        fake_spec = MODEL_REGISTRY["viola_mlp_oww"]
+        fake_spec = MODEL_REGISTRY["temporal_cnn"]
         patched_spec = fake_spec.__class__(
             name=fake_spec.name,
             url=fake_spec.url,
@@ -83,12 +83,12 @@ class TestSuccessfulDownload:
         mock_tqdm_cls.return_value.__exit__ = MagicMock(return_value=False)
 
         with (
-            patch("violawake_sdk.models.MODEL_REGISTRY", {"viola_mlp_oww": patched_spec, "viola": patched_spec}),
+            patch("violawake_sdk.models.MODEL_REGISTRY", {"temporal_cnn": patched_spec, "viola": patched_spec}),
             patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
             patch.dict("sys.modules", {"requests": MagicMock(get=MagicMock(return_value=mock_resp))}),
             patch.dict("sys.modules", {"tqdm": MagicMock(tqdm=mock_tqdm_cls)}),
         ):
-            path = download_model("viola_mlp_oww", force=True, verify=True)
+            path = download_model("temporal_cnn", force=True, verify=True)
 
         assert path.exists()
         assert path.read_bytes() == content
@@ -98,7 +98,7 @@ class TestSuccessfulDownload:
         content = _fake_model_content()
         correct_sha = _sha256_of(content)
 
-        fake_spec = MODEL_REGISTRY["viola_mlp_oww"]
+        fake_spec = MODEL_REGISTRY["temporal_cnn"]
         patched_spec = fake_spec.__class__(
             name=fake_spec.name,
             url=fake_spec.url,
@@ -109,17 +109,17 @@ class TestSuccessfulDownload:
         )
 
         # Pre-populate cache
-        cached_file = tmp_path / "viola_mlp_oww.onnx"
+        cached_file = tmp_path / "temporal_cnn.onnx"
         cached_file.write_bytes(content)
 
         mock_requests_mod = MagicMock()
         with (
-            patch("violawake_sdk.models.MODEL_REGISTRY", {"viola_mlp_oww": patched_spec, "viola": patched_spec}),
+            patch("violawake_sdk.models.MODEL_REGISTRY", {"temporal_cnn": patched_spec, "viola": patched_spec}),
             patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
             patch.dict("sys.modules", {"requests": mock_requests_mod}),
             patch.dict("sys.modules", {"tqdm": MagicMock()}),
         ):
-            path = download_model("viola_mlp_oww", force=False, verify=True)
+            path = download_model("temporal_cnn", force=False, verify=True)
             # Should NOT have called requests.get
             mock_requests_mod.get.assert_not_called()
 
@@ -282,12 +282,23 @@ class TestPlaceholderDownloadGuard:
 
     def test_placeholder_hash_blocks_download(self) -> None:
         """Models with placeholder hashes should raise RuntimeError by default."""
+        from violawake_sdk.models import ModelSpec
+
+        placeholder_spec = ModelSpec(
+            name="placeholder_model",
+            url="https://example.com/placeholder_model.onnx",
+            sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
+            size_bytes=1000,
+            description="test placeholder guard",
+        )
         with (
+            patch("violawake_sdk.models.MODEL_REGISTRY", {"placeholder_model": placeholder_spec}),
+            patch("violawake_sdk.models._PACKAGE_MANAGED_MODELS", set()),
             patch.dict("sys.modules", {"requests": MagicMock()}),
             patch.dict("sys.modules", {"tqdm": MagicMock()}),
         ):
             with pytest.raises(RuntimeError, match="placeholder SHA-256"):
-                download_model("viola_mlp_oww", force=True)
+                download_model("placeholder_model", force=True)
 
     def test_placeholder_hash_allowed_with_skip_verify(self, tmp_path: Path) -> None:
         """skip_verify=True should bypass the placeholder guard."""
@@ -299,25 +310,25 @@ class TestPlaceholderDownloadGuard:
         mock_tqdm_cls.return_value.__enter__ = MagicMock(return_value=mock_tqdm_ctx)
         mock_tqdm_cls.return_value.__exit__ = MagicMock(return_value=False)
 
-        # Use a spec with placeholder hash but matching size
-        spec = MODEL_REGISTRY["viola_mlp_oww"]
-        patched_spec = spec.__class__(
-            name=spec.name,
-            url=spec.url,
-            sha256=spec.sha256,  # keep the placeholder
+        # Use a synthetic spec with placeholder hash but matching size
+        from violawake_sdk.models import ModelSpec
+
+        patched_spec = ModelSpec(
+            name="temporal_cnn",
+            url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/temporal_cnn.onnx",
+            sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
             size_bytes=len(content),
-            description=spec.description,
-            version=spec.version,
+            description="test placeholder with skip_verify",
         )
 
         with (
-            patch("violawake_sdk.models.MODEL_REGISTRY", {"viola_mlp_oww": patched_spec, "viola": patched_spec}),
+            patch("violawake_sdk.models.MODEL_REGISTRY", {"temporal_cnn": patched_spec, "viola": patched_spec}),
             patch("violawake_sdk.models.get_model_dir", return_value=tmp_path),
             patch.dict("sys.modules", {"requests": MagicMock(get=MagicMock(return_value=mock_resp))}),
             patch.dict("sys.modules", {"tqdm": MagicMock(tqdm=mock_tqdm_cls)}),
         ):
             # Should NOT raise because skip_verify=True
-            path = download_model("viola_mlp_oww", force=True, verify=True, skip_verify=True)
+            path = download_model("temporal_cnn", force=True, verify=True, skip_verify=True)
         assert path.exists()
 
     def test_real_hash_model_not_blocked(self, tmp_path: Path) -> None:

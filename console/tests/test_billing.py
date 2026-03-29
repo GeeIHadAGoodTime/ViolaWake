@@ -30,9 +30,21 @@ if BACKEND_DIR not in sys.path:
 
 
 def make_wav_bytes(duration: float = 1.0, sr: int = 16000) -> bytes:
-    """Generate a valid mono WAV file as bytes."""
+    """Generate a valid mono WAV file with a 440Hz sine tone.
+
+    Previous implementation wrote all-zero PCM data which silently passed
+    validation (before the energy check existed) and polluted training data.
+    """
+    import math
+    import struct as _struct
+
     frame_count = int(duration * sr)
-    pcm = b"\x00\x00" * frame_count
+    samples = []
+    for i in range(frame_count):
+        # 440Hz sine at ~50% amplitude (16384 out of 32767)
+        value = int(16384 * math.sin(2 * math.pi * 440 * i / sr))
+        samples.append(_struct.pack("<h", value))
+    pcm = b"".join(samples)
 
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wav_file:
@@ -54,6 +66,20 @@ def register_user(client: TestClient) -> dict[str, object]:
     )
     assert response.status_code in (200, 201), response.text
     data = response.json()
+
+    import sys
+
+    if BACKEND_DIR not in sys.path:
+        sys.path.insert(0, BACKEND_DIR)
+
+    from app.auth import create_email_verification_token
+
+    verify_response = client.post(
+        "/api/auth/verify-email",
+        json={"token": create_email_verification_token(data["user"]["id"])},
+    )
+    assert verify_response.status_code == 200, verify_response.text
+
     return {
         "email": email,
         "user_id": data["user"]["id"],

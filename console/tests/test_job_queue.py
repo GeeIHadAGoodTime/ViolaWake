@@ -14,8 +14,10 @@ if BACKEND_DIR not in sys.path:
 
 try:
     from app.job_queue import (
+        PRIORITY_BUSINESS,
+        PRIORITY_DEVELOPER,
+        PRIORITY_FREE,
         CircuitBreakerState,
-        Job,
         JobQueue,
         JobStatus,
         QueueFullError,
@@ -160,6 +162,20 @@ class TestListJobs:
             jobs = await q.list_jobs(999)
             assert jobs == []
         _run_test(tmp_path, _test)
+
+    def test_delete_jobs_for_user_removes_only_owned_jobs(self, tmp_path):
+        async def _test(q):
+            await _submit(q, user_id=1, wake_word="first")
+            await _submit(q, user_id=1, wake_word="second")
+            await _submit(q, user_id=2, wake_word="other")
+
+            deleted = await q.delete_jobs_for_user(1)
+
+            assert deleted == 2
+            assert await q.list_jobs(1) == []
+            assert len(await q.list_jobs(2)) == 1
+
+        _run_test(tmp_path, _test, no_worker=True)
 
 
 class TestCancelJob:
@@ -321,3 +337,156 @@ class TestDataclasses:
         err = QueueFullError("full")
         assert isinstance(err, RuntimeError)
         assert str(err) == "full"
+
+
+class TestPriorityConstants:
+
+    def test_priority_ordering(self):
+        assert PRIORITY_FREE < PRIORITY_DEVELOPER < PRIORITY_BUSINESS
+
+    def test_priority_values(self):
+        assert PRIORITY_FREE == 0
+        assert PRIORITY_DEVELOPER == 5
+        assert PRIORITY_BUSINESS == 10
+
+
+async def _submit_with_priority(q, user_id=1, wake_word="test", priority=0):
+    return await q.submit_job(
+        user_id=user_id,
+        wake_word=wake_word,
+        recording_ids=[1, 2, 3, 4, 5],
+        epochs=10,
+        priority=priority,
+    )
+
+
+class TestPriorityQueue:
+    """Tests that higher-priority jobs are dequeued before lower-priority jobs."""
+
+    def test_submit_stores_priority(self, tmp_path):
+        """Submitted job stores the given priority value."""
+        async def _test(q):
+            job_id = await _submit_with_priority(q, priority=PRIORITY_BUSINESS)
+            job = await q.get_job(job_id)
+            assert job is not None
+            assert job.priority == PRIORITY_BUSINESS
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_default_priority_is_free(self, tmp_path):
+        """Jobs submitted without an explicit priority default to PRIORITY_FREE."""
+        async def _test(q):
+            # Bypass _resolve_user_priority (needs DB with Subscription table) by
+            # patching it to return PRIORITY_FREE directly.
+            from unittest.mock import AsyncMock, patch
+            with patch("app.job_queue._resolve_user_priority", new=AsyncMock(return_value=PRIORITY_FREE)):
+                job_id = await _submit(q)
+            job = await q.get_job(job_id)
+            assert job is not None
+            assert job.priority == PRIORITY_FREE
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_higher_priority_job_dequeued_first(self, tmp_path):
+        """A business-tier job submitted after a free-tier job is dequeued first."""
+        async def _test(q):
+            low_id = await _submit_with_priority(q, user_id=1, wake_word="low", priority=PRIORITY_FREE)
+            high_id = await _submit_with_priority(q, user_id=2, wake_word="high", priority=PRIORITY_BUSINESS)
+
+            # Directly check DB ordering — the queue uses priority DESC, created_at ASC
+            import aiosqlite
+            async with aiosqlite.connect(q._db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute(
+                    """
+                    SELECT id FROM jobs
+                    WHERE status = ?
+                    ORDER BY priority DESC, created_at ASC, id ASC
+                    """,
+                    (JobStatus.PENDING.value,),
+                ) as cursor:
+                    rows = await cursor.fetchall()
+
+            ordered_ids = [int(row["id"]) for row in rows]
+            assert ordered_ids[0] == high_id, "Business job should be first"
+            assert ordered_ids[1] == low_id, "Free job should be second"
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_same_priority_ordered_by_created_at(self, tmp_path):
+        """Jobs with equal priority are ordered FIFO (created_at ASC)."""
+        async def _test(q):
+            import asyncio
+            id1 = await _submit_with_priority(q, user_id=1, wake_word="first", priority=PRIORITY_FREE)
+            await asyncio.sleep(0.01)  # ensure distinct created_at timestamps
+            id2 = await _submit_with_priority(q, user_id=2, wake_word="second", priority=PRIORITY_FREE)
+
+            import aiosqlite
+            async with aiosqlite.connect(q._db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute(
+                    """
+                    SELECT id FROM jobs
+                    WHERE status = ?
+                    ORDER BY priority DESC, created_at ASC, id ASC
+                    """,
+                    (JobStatus.PENDING.value,),
+                ) as cursor:
+                    rows = await cursor.fetchall()
+
+            ordered_ids = [int(row["id"]) for row in rows]
+            assert ordered_ids[0] == id1
+            assert ordered_ids[1] == id2
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_queue_position_method(self, tmp_path):
+        """_queue_position returns correct 1-based position for pending jobs."""
+        async def _test(q):
+            id1 = await _submit_with_priority(q, user_id=1, wake_word="low", priority=PRIORITY_FREE)
+            id2 = await _submit_with_priority(q, user_id=2, wake_word="high", priority=PRIORITY_BUSINESS)
+
+            pos_high = await q._queue_position(id2)
+            pos_low = await q._queue_position(id1)
+
+            # High-priority job is position 1
+            assert pos_high == 1
+            assert pos_low == 2
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_queue_position_none_for_nonexistent(self, tmp_path):
+        """_queue_position returns None for jobs not in the pending queue."""
+        async def _test(q):
+            pos = await q._queue_position(9999)
+            assert pos is None
+
+        _run_test(tmp_path, _test, no_worker=True)
+
+    def test_mixed_priorities_ordering(self, tmp_path):
+        """Three jobs with distinct priorities appear in business→developer→free order."""
+        async def _test(q):
+            import asyncio
+            free_id = await _submit_with_priority(q, user_id=1, wake_word="free", priority=PRIORITY_FREE)
+            await asyncio.sleep(0.01)
+            biz_id = await _submit_with_priority(q, user_id=2, wake_word="biz", priority=PRIORITY_BUSINESS)
+            await asyncio.sleep(0.01)
+            dev_id = await _submit_with_priority(q, user_id=3, wake_word="dev", priority=PRIORITY_DEVELOPER)
+
+            import aiosqlite
+            async with aiosqlite.connect(q._db_path) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute(
+                    """
+                    SELECT id FROM jobs
+                    WHERE status = ?
+                    ORDER BY priority DESC, created_at ASC, id ASC
+                    """,
+                    (JobStatus.PENDING.value,),
+                ) as cursor:
+                    rows = await cursor.fetchall()
+
+            ordered_ids = [int(row["id"]) for row in rows]
+            assert ordered_ids == [biz_id, dev_id, free_id]
+
+        _run_test(tmp_path, _test, no_worker=True)

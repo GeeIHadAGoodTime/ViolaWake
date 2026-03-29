@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from html import escape
 from urllib.parse import urlencode, urljoin
 
-import httpx
+import resend
 
 from app.config import settings
 
 logger = logging.getLogger("violawake.email")
 
-RESEND_API_URL = "https://api.resend.com/emails"
 FROM_ADDRESS = "ViolaWake <noreply@violawake.com>"
 
 
@@ -24,7 +24,9 @@ class EmailService:
         self._console_base_url = console_base_url.rstrip("/") + "/"
         self._warned_disabled = False
 
-        if not self.enabled:
+        if self.enabled:
+            resend.api_key = self._api_key
+        else:
             self._warn_disabled()
 
     @property
@@ -77,6 +79,20 @@ class EmailService:
             footer="You can also review metrics and model history in the console.",
         )
         return await self._send_email(to, f"Your ViolaWake model {model_name} is ready", html)
+
+    async def send_team_invite(self, to_email: str, team_name: str, invite_token: str, invite_url: str) -> bool:
+        """Send a team invitation email with a join link."""
+        html = self._render_email(
+            heading="You've been invited to a team",
+            intro=(
+                f"You have been invited to join <strong>{escape(team_name)}</strong> "
+                f"on ViolaWake Console."
+            ),
+            button_label="Accept Invite",
+            button_url=invite_url,
+            footer="If you did not expect this invitation, you can ignore this email.",
+        )
+        return await self._send_email(to_email, f"Join {team_name} on ViolaWake", html)
 
     async def send_quota_warning(self, to: str, used: int, limit: int, tier: str) -> bool:
         """Send a usage warning when the user is near their tier limit."""
@@ -139,22 +155,16 @@ class EmailService:
             logger.info("Skipping email send to %s for subject %s because Resend is not configured", to, subject)
             return False
 
-        payload = {
+        params = {
             "from": FROM_ADDRESS,
             "to": [to],
             "subject": subject,
             "html": html,
         }
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-        }
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(RESEND_API_URL, json=payload, headers=headers)
-                response.raise_for_status()
-        except httpx.HTTPError:
+            await asyncio.to_thread(resend.Emails.send, params)
+        except Exception:
             logger.exception("Failed to send email to %s for subject %s", to, subject)
             return False
 

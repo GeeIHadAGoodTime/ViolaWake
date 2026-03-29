@@ -1,0 +1,72 @@
+name: Deploy Docs
+
+on:
+  push:
+    branches: [main, master]
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+# Grant the GITHUB_TOKEN the permissions needed for Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one concurrent deployment; cancel in-progress runs on new push
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build API docs
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install PortAudio (needed to import [audio] extras cleanly)
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
+
+      - name: Install dependencies
+        # Install core + docs extras. openwakeword --no-deps avoids tflite-runtime
+        # wheel problems on Python 3.12. tts/stt are optional; we install them so
+        # pdoc can document those modules too.
+        run: |
+          pip install openwakeword --no-deps
+          pip install -e ".[dev,docs]"
+
+      - name: Generate API docs
+        run: python scripts/generate_docs.py
+
+      - name: Copy landing page into docs output root
+        run: cp docs/index.html docs/api/../index.html || true
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload the entire docs/ directory so index.html + api/ are both served
+          path: docs/
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-22.04
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

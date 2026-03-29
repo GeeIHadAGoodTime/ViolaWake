@@ -1,5 +1,10 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { encodeWAV, resample } from "../utils/wavEncoder";
+import {
+  analyzeAudioQuality,
+  type AudioQualityResult,
+  type QualityIssue,
+} from "../utils/audioQuality";
 
 interface AudioRecorderProps {
   onRecordingComplete: (blob: Blob, duration: number) => void;
@@ -46,6 +51,8 @@ export default function AudioRecorder({
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const [qualityResult, setQualityResult] =
+    useState<AudioQualityResult | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -117,6 +124,7 @@ export default function AudioRecorder({
   const stopRecording = useCallback(() => {
     clearInterval(timerRef.current);
     cancelAnimationFrame(animFrameRef.current);
+    setQualityResult(null);
 
     const allSamples = samplesRef.current;
     if (allSamples.length === 0) {
@@ -147,6 +155,19 @@ export default function AudioRecorder({
     );
 
     const duration = resampled.length / TARGET_SAMPLE_RATE;
+
+    // ── Quality gate ──────────────────────────────────────────────
+    const quality = analyzeAudioQuality(resampled, TARGET_SAMPLE_RATE);
+    setQualityResult(quality);
+
+    if (quality.hasErrors) {
+      // Reject: keep state so user can re-record, don't call onRecordingComplete
+      cleanup();
+      setState("idle");
+      return;
+    }
+
+    // Passed (possibly with warnings) — encode and deliver
     const wavBlob = encodeWAV(resampled, TARGET_SAMPLE_RATE);
 
     cleanup();
@@ -156,6 +177,7 @@ export default function AudioRecorder({
 
   async function startRecording() {
     setMicError(null);
+    setQualityResult(null);
     samplesRef.current = [];
     setState("countdown");
 
@@ -178,6 +200,13 @@ export default function AudioRecorder({
 
       const ctx = new AudioContext();
       audioContextRef.current = ctx;
+
+      // The AudioContext may start suspended if created outside a user-gesture
+      // microtask (the 3-second countdown breaks the gesture chain). Explicitly
+      // resume to ensure audio actually flows through the processing graph.
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
 
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
@@ -236,6 +265,27 @@ export default function AudioRecorder({
         <div className="recorder-error" role="alert">
           <span className="recorder-error-icon">{"\u26A0"}</span>
           <span className="recorder-error-text">{micError}</span>
+        </div>
+      )}
+
+      {qualityResult && qualityResult.issues.length > 0 && (
+        <div className="quality-issues" role="alert">
+          {qualityResult.issues.map((issue: QualityIssue, i: number) => (
+            <div
+              key={i}
+              className={`quality-issue quality-issue-${issue.severity}`}
+            >
+              <span className="quality-issue-icon">
+                {issue.severity === "error" ? "\u2716" : "\u26A0"}
+              </span>
+              <span className="quality-issue-text">{issue.message}</span>
+            </div>
+          ))}
+          {qualityResult.hasErrors && (
+            <p className="quality-retry-hint">
+              Please click Record to try again.
+            </p>
+          )}
         </div>
       )}
 

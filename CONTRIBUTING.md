@@ -95,6 +95,20 @@ Documentation is not a post-implementation task. It is the product surface.
 
 ---
 
+## Generate API Docs
+
+Install the docs extra and run the generator script from the repo root:
+
+```bash
+pip install -e ".[docs]"
+python scripts/generate_docs.py
+```
+
+This writes the static API reference to `docs/api/`. CI also runs the script to
+verify that API doc generation stays healthy.
+
+---
+
 ## Code Style
 
 ### Linting and formatting

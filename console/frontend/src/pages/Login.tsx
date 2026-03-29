@@ -1,5 +1,5 @@
 import { useState, FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 interface ValidationErrors {
@@ -12,6 +12,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const { login, loading, error, clearError } = useAuth();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const sessionExpired = params.get("expired") === "1";
+  const registerLink = location.search
+    ? `/register${location.search}`
+    : "/register";
 
   function validate(): ValidationErrors {
     const errors: ValidationErrors = {};
@@ -50,6 +56,11 @@ export default function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form" aria-label="Sign in">
+          {sessionExpired && !error && (
+            <div className="auth-error">
+              Your session has expired. Please sign in again.
+            </div>
+          )}
           {error && (
             <div className="auth-error" onClick={clearError}>
               {error}
@@ -109,8 +120,13 @@ export default function LoginPage() {
         </form>
 
         <p className="auth-footer">
+          <Link to="/forgot-password" className="auth-link">
+            Forgot password?
+          </Link>
+        </p>
+        <p className="auth-footer">
           Don&apos;t have an account?{" "}
-          <Link to="/register" className="auth-link">
+          <Link to={registerLink} className="auth-link">
             Register
           </Link>
         </p>

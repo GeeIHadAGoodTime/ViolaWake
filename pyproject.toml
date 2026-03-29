@@ -189,6 +189,7 @@ markers = [
     "integration: requires model files (deselect with -m 'not integration')",
     "benchmark: performance benchmark tests",
     "hardware: requires microphone hardware",
+    "e2e: end-to-end tests that require live console servers or browsers",
 ]
 
 [tool.ruff]

@@ -2,34 +2,21 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
+import random
 import shutil
 import tempfile
-import threading
 import time
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select, update
-
-from app.config import settings
-from app.database import async_session_factory
-from app.models import Recording, TrainedModel, TrainingJob
 from app.monitoring import log_exception
-from app.storage import build_companion_config_identifier, build_model_key, get_storage
+from app.storage import get_storage
 
 logger = logging.getLogger("violawake.training")
-
-_training_semaphore = threading.Semaphore(settings.max_concurrent_jobs)
-_event_queues: dict[int, list[asyncio.Queue[dict[str, Any]]]] = {}
-_queue_lock = threading.Lock()
-_active_job_ids: set[int] = set()
-_active_jobs_lock = threading.Lock()
 
 
 class TrainingCancelledError(RuntimeError):
@@ -47,43 +34,6 @@ class TrainingArtifact:
     size_bytes: int
 
 
-def subscribe(job_id: int) -> asyncio.Queue[dict[str, Any]]:
-    """Subscribe to training events for a job."""
-    queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
-    with _queue_lock:
-        _event_queues.setdefault(job_id, []).append(queue)
-    return queue
-
-
-def unsubscribe(job_id: int, queue: asyncio.Queue[dict[str, Any]]) -> None:
-    """Remove a training event subscriber."""
-    with _queue_lock:
-        queues = _event_queues.get(job_id)
-        if queues is None:
-            return
-        try:
-            queues.remove(queue)
-        except ValueError:
-            return
-        if not queues:
-            _event_queues.pop(job_id, None)
-
-
-def get_training_worker_snapshot() -> dict[str, Any]:
-    """Return a snapshot of current worker utilization."""
-    with _active_jobs_lock:
-        active_job_ids = sorted(_active_job_ids)
-
-    active_workers = len(active_job_ids)
-    max_workers = settings.max_concurrent_jobs
-    return {
-        "active_workers": active_workers,
-        "max_workers": max_workers,
-        "available_slots": max(max_workers - active_workers, 0),
-        "active_job_ids": active_job_ids,
-    }
-
-
 def run_training_job_sync(
     *,
     job_id: int,
@@ -98,6 +48,7 @@ def run_training_job_sync(
 ) -> TrainingArtifact:
     """Run the ViolaWake SDK training pipeline synchronously."""
     positives_dir: Path | None = None
+    neg_temp_dir: Path | None = None
     storage = get_storage()
 
     def _ensure_not_cancelled() -> None:
@@ -131,18 +82,164 @@ def run_training_job_sync(
         if wav_count < 5:
             raise RuntimeError("Only %s valid WAV files found. Need at least 5." % wav_count)
 
+        pos_files = sorted(positives_dir.glob("*.wav"))
+
         progress_callback({
             "status": "running",
-            "progress": 5.0,
+            "progress": 2.0,
             "epoch": 0,
             "total_epochs": epochs,
             "train_loss": 0.0,
             "val_loss": 0.0,
-            "message": "Loaded %s recordings. Starting training..." % wav_count,
+            "message": "Loaded %s recordings. Generating TTS corpus..." % wav_count,
             "error": None,
         })
 
-        from violawake_sdk.tools.train import _train_mlp_on_oww
+        # -- Production pipeline: full auto-corpus (matching CLI train) --
+        from violawake_sdk.tools.train import (
+            _generate_confusable_negatives,
+            _generate_speech_negatives,
+            _generate_tts_positives,
+            _train_temporal_cnn,
+        )
+
+        neg_temp_dir = Path(tempfile.mkdtemp(prefix="violawake_neg_"))
+
+        # Auto-generate TTS positives when user has <100 samples (production behavior)
+        if len(pos_files) < 100:
+            tts_pos_dir = neg_temp_dir / "tts_positives"
+            try:
+                tts_pos_files = _generate_tts_positives(
+                    wake_word,
+                    tts_pos_dir,
+                    verbose=False,
+                )
+                if tts_pos_files:
+                    pos_files = list(pos_files) + tts_pos_files
+                    logger.info(
+                        "Generated %s TTS positives for job %s (total: %s)",
+                        len(tts_pos_files), job_id, len(pos_files),
+                    )
+            except Exception as exc:
+                logger.warning("TTS positive generation failed for job %s: %s", job_id, exc)
+
+            _ensure_not_cancelled()
+            progress_callback({
+                "status": "running",
+                "progress": 3.0,
+                "epoch": 0,
+                "total_epochs": epochs,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "message": "Corpus: %s positives. Generating negatives..." % len(pos_files),
+                "error": None,
+            })
+        neg_tag_map: dict[str, list[Path]] = {}
+
+        # Source 1: User/paid-tier corpus negatives
+        if negatives_dir and negatives_dir.exists():
+            user_neg = sorted(
+                list(negatives_dir.rglob("*.wav")) + list(negatives_dir.rglob("*.flac"))
+            )
+            if user_neg:
+                neg_tag_map["neg_user"] = user_neg
+                logger.info("Loaded %s corpus negatives for job %s", len(user_neg), job_id)
+
+        _ensure_not_cancelled()
+
+        # Source 2: Auto-generated confusable negatives (phonetically similar)
+        confusable_dir = neg_temp_dir / "confusables"
+        try:
+            confusable_files = _generate_confusable_negatives(
+                wake_word,
+                confusable_dir,
+                n_confusables=20,
+                voices_per_word=5,
+                verbose=False,
+            )
+            if confusable_files:
+                neg_tag_map["neg_confusable"] = confusable_files
+        except Exception as exc:
+            logger.warning("Confusable generation failed for job %s: %s", job_id, exc)
+
+        _ensure_not_cancelled()
+        progress_callback({
+            "status": "running",
+            "progress": 4.0,
+            "epoch": 0,
+            "total_epochs": epochs,
+            "train_loss": 0.0,
+            "val_loss": 0.0,
+            "message": "Generated confusables. Generating speech negatives...",
+            "error": None,
+        })
+
+        # Source 3: Auto-generated speech negatives (common phrases)
+        speech_dir = neg_temp_dir / "speech"
+        try:
+            speech_files = _generate_speech_negatives(
+                speech_dir,
+                n_voices=3,
+                verbose=False,
+            )
+            if speech_files:
+                neg_tag_map["neg_speech"] = speech_files
+        except Exception as exc:
+            logger.warning("Speech neg generation failed for job %s: %s", job_id, exc)
+
+        _ensure_not_cancelled()
+
+        # Source 4: Universal corpus (LibriSpeech, MUSAN) if available
+        _CORPUS_SEARCH_PATHS = [
+            Path.home() / ".violawake" / "corpus",
+            Path("corpus"),
+        ]
+        _CORPUS_SUBDIRS: dict[str, tuple[str, ...]] = {
+            "neg_librispeech": ("librispeech",),
+            "neg_musan_speech": ("musan/musan/speech", "musan/speech"),
+            "neg_musan_music": ("musan/musan/music", "musan/music"),
+            "neg_musan_noise": ("musan/musan/noise", "musan/noise"),
+        }
+        _rng = random.Random(42)
+        for tag, subdirs in _CORPUS_SUBDIRS.items():
+            for corpus_root in _CORPUS_SEARCH_PATHS:
+                if not corpus_root.exists():
+                    continue
+                for subdir in subdirs:
+                    candidate = corpus_root / subdir
+                    if candidate.exists():
+                        corpus_files = sorted(
+                            list(candidate.rglob("*.wav")) + list(candidate.rglob("*.flac"))
+                        )
+                        if corpus_files:
+                            if len(corpus_files) > 2000:
+                                corpus_files = sorted(_rng.sample(corpus_files, 2000))
+                            neg_tag_map[tag] = corpus_files
+                            break
+                if tag in neg_tag_map:
+                    break
+
+        all_neg_files: list[Path] = []
+        for files in neg_tag_map.values():
+            all_neg_files.extend(files)
+
+        total_neg = len(all_neg_files)
+        if total_neg < 5:
+            raise RuntimeError(
+                "Only %s negative files generated. "
+                "edge-tts may not be installed or network unavailable." % total_neg
+            )
+
+        progress_callback({
+            "status": "running",
+            "progress": 8.0,
+            "epoch": 0,
+            "total_epochs": epochs,
+            "train_loss": 0.0,
+            "val_loss": 0.0,
+            "message": "Corpus ready: %s pos, %s neg. Training TemporalCNN..." % (len(pos_files), total_neg),
+            "error": None,
+        })
 
         started_at = time.monotonic()
 
@@ -172,15 +269,17 @@ def run_training_job_sync(
                 "error": None,
             })
 
-        _train_mlp_on_oww(
-            positives_dir=positives_dir,
+        _train_temporal_cnn(
+            pos_files=pos_files,
+            neg_files=all_neg_files,
             output_path=output_path,
+            wake_word=wake_word,
             epochs=epochs,
             augment=True,
             eval_dir=None,
-            negatives_dir=negatives_dir,
             verbose=True,
             progress_callback=_on_epoch,
+            neg_tags=neg_tag_map,
         )
 
         _ensure_not_cancelled()
@@ -222,302 +321,5 @@ def run_training_job_sync(
     finally:
         if positives_dir is not None and positives_dir.exists():
             shutil.rmtree(positives_dir, ignore_errors=True)
-
-
-async def start_training_job(
-    job_id: int,
-    user_id: int,
-    wake_word: str,
-    recording_ids: list[int],
-    epochs: int,
-) -> None:
-    """Launch a training job in a background thread."""
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(Recording.file_path).where(
-                Recording.id.in_(recording_ids),
-                Recording.user_id == user_id,
-            )
-        )
-        recording_identifiers = [row[0] for row in result.all()]
-
-    if not recording_identifiers:
-        await _update_job_status(
-            job_id,
-            status="failed",
-            error="No valid recordings found",
-            completed=True,
-        )
-        return
-
-    loop = asyncio.get_running_loop()
-    worker = threading.Thread(
-        target=_run_training_worker,
-        kwargs={
-            "job_id": job_id,
-            "user_id": user_id,
-            "wake_word": wake_word,
-            "recording_identifiers": recording_identifiers,
-            "epochs": epochs,
-            "loop": loop,
-        },
-        daemon=True,
-        name=f"training-job-{job_id}",
-    )
-    worker.start()
-
-
-async def _update_job_status(
-    job_id: int,
-    *,
-    status: str | None = None,
-    progress: float | None = None,
-    d_prime: float | None = None,
-    model_id: int | None = None,
-    error: str | None = None,
-    completed: bool = False,
-) -> None:
-    """Persist training job state changes."""
-    values: dict[str, Any] = {}
-    if status is not None:
-        values["status"] = status
-    if progress is not None:
-        values["progress"] = progress
-    if d_prime is not None:
-        values["d_prime"] = d_prime
-    if model_id is not None:
-        values["model_id"] = model_id
-    if error is not None:
-        values["error"] = error
-    if completed:
-        values["completed_at"] = datetime.now(timezone.utc)
-
-    if not values:
-        return
-
-    async with async_session_factory() as session:
-        await session.execute(update(TrainingJob).where(TrainingJob.id == job_id).values(**values))
-        await session.commit()
-
-
-def _publish(job_id: int, event: dict[str, Any]) -> None:
-    """Send an event to all live SSE subscribers for a training job."""
-    with _queue_lock:
-        queues = list(_event_queues.get(job_id, []))
-    for queue in queues:
-        try:
-            queue.put_nowait(event)
-        except asyncio.QueueFull:
-            logger.warning("Dropped full training event queue for job %s", job_id)
-
-
-def _run_training_worker(
-    *,
-    job_id: int,
-    user_id: int,
-    wake_word: str,
-    recording_identifiers: list[str],
-    epochs: int,
-    loop: asyncio.AbstractEventLoop,
-) -> None:
-    """Execute one training job in a background thread."""
-    output_dir: Path | None = None
-
-    def _run_async(coro: Coroutine[Any, Any, Any]) -> Any:
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result(timeout=30)
-
-    def _emit(event: dict[str, Any]) -> None:
-        _publish(job_id, event)
-        try:
-            _run_async(_update_job_status(
-                job_id,
-                status=str(event.get("status", "running")),
-                progress=float(event.get("progress", 0.0)),
-                error=event.get("error"),
-            ))
-        except Exception:
-            logger.exception("Failed to persist progress for training job %s", job_id)
-
-    acquired = _training_semaphore.acquire(timeout=5)
-    if not acquired:
-        error_message = "Server is at maximum training capacity. Please try again later."
-        log_exception(
-            logger,
-            TimeoutError(error_message),
-            message="Training job rejected: semaphore not available",
-            source="training",
-            extra={"job_id": job_id, "user_id": user_id, "wake_word": wake_word},
-            include_traceback=False,
-        )
-        try:
-            _run_async(_update_job_status(
-                job_id,
-                status="failed",
-                progress=0.0,
-                error=error_message,
-                completed=True,
-            ))
-        finally:
-            _publish(job_id, {
-                "status": "failed",
-                "progress": 0.0,
-                "epoch": 0,
-                "train_loss": 0.0,
-                "val_loss": 0.0,
-                "message": error_message,
-                "error": error_message,
-            })
-        return
-
-    try:
-        with _active_jobs_lock:
-            _active_job_ids.add(job_id)
-
-        output_dir = Path(tempfile.mkdtemp(prefix="violawake_model_"))
-        output_filename = "%s_%s.onnx" % (wake_word, int(time.time()))
-        output_path = output_dir / output_filename
-
-        # Resolve negatives corpus for paid-tier users
-        neg_dir: Path | None = None
-        corpus_path = settings.negatives_corpus_dir
-        if corpus_path:
-            neg_candidate = Path(corpus_path)
-            if neg_candidate.is_dir():
-                try:
-                    from app.models import Subscription
-
-                    import asyncio as _aio
-
-                    async def _get_tier() -> str:
-                        async with async_session_factory() as _s:
-                            _r = await _s.execute(
-                                select(Subscription.tier).where(Subscription.user_id == user_id)
-                            )
-                            _row = _r.first()
-                            return _row[0] if _row else "free"
-
-                    tier = _run_async(_get_tier())
-                    if tier != "free":
-                        neg_dir = neg_candidate
-                        logger.info("Using curated negatives for user %s (tier=%s)", user_id, tier)
-                except Exception:
-                    logger.exception("Failed to resolve negatives corpus tier")
-
-        artifact = run_training_job_sync(
-            job_id=job_id,
-            wake_word=wake_word,
-            recording_identifiers=recording_identifiers,
-            output_path=output_path,
-            epochs=epochs,
-            timeout_seconds=settings.training_timeout,
-            progress_callback=_emit,
-            is_cancelled=lambda: False,
-            negatives_dir=neg_dir,
-        )
-
-        storage = get_storage()
-        model_key = build_model_key(user_id, output_filename)
-        storage.upload(model_key, artifact.local_path.read_bytes(), "application/octet-stream")
-        if artifact.config_bytes is not None:
-            storage.upload(
-                build_companion_config_identifier(model_key),
-                artifact.config_bytes,
-                "application/json",
-            )
-
-        model_id = _run_async(_create_model_record(
-            user_id=user_id,
-            wake_word=wake_word,
-            model_key=model_key,
-            config_json=artifact.config_json,
-            d_prime=artifact.d_prime,
-            size_bytes=artifact.size_bytes,
-        ))
-
-        _run_async(_update_job_status(
-            job_id,
-            status="completed",
-            progress=100.0,
-            d_prime=artifact.d_prime,
-            model_id=model_id,
-            error=None,
-            completed=True,
-        ))
-        _publish(job_id, {
-            "status": "completed",
-            "progress": 100.0,
-            "epoch": epochs,
-            "train_loss": 0.0,
-            "val_loss": 0.0,
-            "message": "Training complete! Model saved (%s bytes)." % artifact.size_bytes,
-            "error": None,
-        })
-    except TrainingCancelledError as exc:
-        message = str(exc)
-        _run_async(_update_job_status(
-            job_id,
-            status="failed",
-            progress=0.0,
-            error=message,
-            completed=True,
-        ))
-        _publish(job_id, {
-            "status": "failed",
-            "progress": 0.0,
-            "epoch": 0,
-            "train_loss": 0.0,
-            "val_loss": 0.0,
-            "message": message,
-            "error": message,
-        })
-    except Exception as exc:
-        message = str(exc)
-        _run_async(_update_job_status(
-            job_id,
-            status="failed",
-            progress=0.0,
-            error=message,
-            completed=True,
-        ))
-        _publish(job_id, {
-            "status": "failed",
-            "progress": 0.0,
-            "epoch": 0,
-            "train_loss": 0.0,
-            "val_loss": 0.0,
-            "message": "Training failed: %s" % message,
-            "error": message,
-        })
-    finally:
-        with _active_jobs_lock:
-            _active_job_ids.discard(job_id)
-        _training_semaphore.release()
-        if output_dir is not None and output_dir.exists():
-            shutil.rmtree(output_dir, ignore_errors=True)
-
-
-async def _create_model_record(
-    *,
-    user_id: int,
-    wake_word: str,
-    model_key: str,
-    config_json: str | None,
-    d_prime: float | None,
-    size_bytes: int,
-) -> int:
-    """Persist a trained model row and return its ID."""
-    async with async_session_factory() as session:
-        model = TrainedModel(
-            user_id=user_id,
-            wake_word=wake_word,
-            file_path=model_key,
-            config_json=config_json,
-            d_prime=d_prime,
-            size_bytes=size_bytes,
-        )
-        session.add(model)
-        await session.flush()
-        model_id = model.id
-        await session.commit()
-        return model_id
+        if neg_temp_dir is not None and neg_temp_dir.exists():
+            shutil.rmtree(neg_temp_dir, ignore_errors=True)

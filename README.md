@@ -7,16 +7,20 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
+**API Docs:** https://geeihadagoodtime.github.io/ViolaWake/
+
 ---
 
 ## Why ViolaWake?
+
+Feature comparison below is a public-docs snapshot plus current ViolaWake SDK capabilities as of 2026-03-28. See [`docs/COMPETITIVE_ANALYSIS.md`](docs/COMPETITIVE_ANALYSIS.md) for sources and caveats; benchmark numbers are called out separately below.
 
 | | ViolaWake | Porcupine (Picovoice) | openWakeWord |
 |---|---|---|---|
 | **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 |
 | **Training code open** | Yes | No (closed) | Yes |
 | **Custom wake words** | Yes (training CLI) | Yes (paid Console) | Yes (fine-tune) |
-| **Evaluation tooling** | `violawake-eval` (Cohen's d, EER, FAR/FRR, ROC AUC) | None published | Basic |
+| **Evaluation tooling** | `violawake-eval` (Cohen's d, EER, FAR/FRR, ROC AUC) | No public evaluation tooling documented | Basic |
 | **On-device** | Yes (ONNX + TFLite) | Yes (proprietary C lib) | Yes (ONNX) |
 | **Integrated TTS** | Yes (Kokoro-82M, streaming) | No | No |
 | **Integrated STT** | Yes (faster-whisper, with segments) | No | No |
@@ -25,20 +29,29 @@
 | **Power management** | Yes (duty cycling, battery-aware) | No | No |
 | **Audio source abstraction** | Yes (mic, file, network, callback) | No | No |
 | **Python SDK** | First-class | C wrapper | First-class |
-| **Price at scale** | Free | Paid (free tier available) | Free |
+| **Commercial licensing** | Free SDK | Commercial plans | Free |
 
-**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing, pink noise, synthetic RIR), and a 4-gate decision policy that suppresses false positives during music playback. On a fair head-to-head benchmark against openWakeWord (same corpus, same pipeline, adversarial negatives for both systems), ViolaWake achieves **EER 5.49%** vs OWW's 8.24% -- each system tested on its own best wake word. Running in production, not a demo.
+**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing, pink noise, synthetic RIR), and a 4-gate decision policy that suppresses false positives during music playback. In our [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md) run on a shared 700-file negative corpus and 180 TTS positives per system, ViolaWake's `temporal_cnn` model reached **EER 5.49%** vs openWakeWord `alexa` at **8.24%**; both systems were evaluated on their own wake word and on synthetic/TTS audio rather than real-speaker recordings.
 
-> **A note on accuracy claims:** Our benchmark uses TTS-generated audio with adversarial confusables, not real-speaker recordings. Real-world accuracy depends on your deployment environment. We publish our benchmark scripts so you can reproduce and extend them. Run `violawake-eval` on your own test data.
+> **A note on accuracy claims:** Benchmark v2 uses 20 Edge TTS voices, 3 augmentations (clean, noisy, reverb), 1280-sample streaming inference, and a shared negative set spanning adversarial confusables, speech, and noise. Real-world accuracy depends on your microphones, speakers, and background audio. Reproduce or extend the benchmark via [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md), then run `violawake-eval` on your own data.
 
 ---
 
 ## Quick Start
 
+### Prerequisites
+
+`[audio]` uses PyAudio, which needs PortAudio at the system level:
+- Linux: `sudo apt-get install portaudio19-dev`
+- macOS: `brew install portaudio`
+- Windows: install a prebuilt `pyaudio` wheel (PortAudio is not built automatically)
+
 ```bash
-pip install "violawake[audio,download]"
+pip install "violawake[audio,download,oww]"
 violawake-download --model temporal_cnn
 ```
+
+If you are evaluating from WAV files, network audio, or callbacks instead of a microphone, you can omit `[audio]` and skip the PortAudio prerequisite.
 
 ### Wake Word Detection (5 lines)
 
@@ -92,21 +105,21 @@ print(f"Total detections: {count}")
 
 **Minimum install (wake word + VAD only):**
 ```bash
-pip install violawake
+pip install "violawake[oww]"
 ```
 
-> **Note:** Both `import violawake` and `import violawake_sdk` work. The canonical import is `violawake_sdk` (e.g., `from violawake_sdk import WakeDetector`), but `from violawake import WakeDetector` is also supported for convenience. The legacy `WakewordDetector` alias is available for backward compatibility.
+> **Note:** `WakeDetector` requires the OpenWakeWord runtime backbone, so install the `[oww]` extra (or `openwakeword`) unless you already have it in your environment. Both `import violawake` and `import violawake_sdk` work. The canonical import is `violawake_sdk` (e.g., `from violawake_sdk import WakeDetector`), but `from violawake import WakeDetector` is also supported for convenience. The legacy `WakewordDetector` alias is available for backward compatibility.
 
 ### Extras
 
 | Extra | Install | What it adds |
 |-------|---------|-------------|
-| `audio` | `pip install "violawake[audio]"` | Microphone capture (`pyaudio`, `soundfile`) |
+| `audio` | `pip install "violawake[audio]"` | Microphone capture (`pyaudio`, `soundfile`) -- requires PortAudio |
 | `download` | `pip install "violawake[download]"` | Model downloading with progress bars (`requests`, `tqdm`) |
 | `tts` | `pip install "violawake[tts]"` | Kokoro-82M text-to-speech (`kokoro-onnx`, `sounddevice`) |
 | `stt` | `pip install "violawake[stt]"` | faster-whisper speech-to-text |
 | `vad` | `pip install "violawake[vad]"` | WebRTC VAD backend (`webrtcvad`) |
-| `oww` | `pip install "violawake[oww]"` | OpenWakeWord backbone (skip if already installed) |
+| `oww` | `pip install "violawake[oww]"` | OpenWakeWord runtime backbone -- required for wake word detection |
 | `tflite` | `pip install "violawake[tflite]"` | TFLite inference backend (alternative to ONNX) |
 | `training` | `pip install "violawake[training]"` | Full training pipeline (`torch`, `librosa`, `scikit-learn`, `edge-tts`, etc.) |
 | `generate` | `pip install "violawake[generate]"` | TTS sample generation without torch (`edge-tts`, `pydub`) |
@@ -168,7 +181,7 @@ Start at 0.80 and adjust based on your false accept rate. Use `violawake-streami
 
 ## Voice Pipeline (Wake -> STT -> TTS)
 
-> Requires: `pip install "violawake[audio,stt,tts]"`
+> Requires: `pip install "violawake[audio,stt,tts,oww]"`
 
 ```python
 from violawake_sdk import VoicePipeline
@@ -238,7 +251,7 @@ voices = list_voices()  # ['af_heart', 'af_bella', 'af_sarah', ...]
 ```python
 from violawake_sdk import STTEngine
 
-with STTEngine(model_size="base") as stt:
+with STTEngine(model="base") as stt:
     # Simple transcription (returns text string)
     text = stt.transcribe(audio_numpy_array)
 
@@ -264,6 +277,51 @@ with STTEngine(model_size="base") as stt:
 | `medium` | Slow | Best | ~5 GB |
 
 Language detection is cached with a configurable TTL to avoid repeated detection on consecutive utterances in the same language.
+
+### Streaming STT
+
+``transcribe_streaming()`` uses faster-whisper's generator mode to yield ``TranscriptSegment`` objects one at a time instead of waiting for the full buffer to finish:
+
+```python
+from violawake_sdk import STTEngine
+
+stt = STTEngine(model="base")
+
+for seg in stt.transcribe_streaming(audio_numpy_array):
+    print(f"[{seg.start:.1f}s–{seg.end:.1f}s] {seg.text}")
+    # Each segment is yielded as faster-whisper decodes it
+```
+
+For incremental chunk-based streaming (e.g. from a live microphone), use ``StreamingSTTEngine``:
+
+```python
+from violawake_sdk import StreamingSTTEngine
+
+# Buffer audio until 2 s accumulated, then transcribe (sliding window)
+streaming = StreamingSTTEngine(
+    model="base",
+    min_buffer_seconds=2.0,   # Minimum buffer before transcribing (seconds)
+    stride_seconds=0.25,      # Overlap retained between passes (0.0 = no overlap)
+)
+
+# Push chunks as they arrive — yields segments whenever the buffer crosses the threshold
+for chunk in mic_chunks:
+    for seg in streaming.push_chunk(chunk):
+        print(f"[{seg.start:.1f}s] {seg.text}")
+
+# Flush remaining audio when done
+for seg in streaming.flush():
+    print(f"[{seg.start:.1f}s] {seg.text}")
+```
+
+``push_chunk()`` accepts either ``float32`` numpy arrays or raw ``int16`` PCM bytes. Context-manager usage is supported:
+
+```python
+with StreamingSTTEngine(model="base") as streaming:
+    for chunk in audio_source:
+        for seg in streaming.push_chunk(chunk):
+            handle(seg)
+```
 
 ### File-Based Transcription
 
@@ -594,7 +652,7 @@ detector = WakeDetector(
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    VoicePipeline                            │
 │                                                             │
@@ -606,7 +664,7 @@ detector = WakeDetector(
 
 | Module | Engine | Size | Latency |
 |--------|--------|------|---------|
-| Wake word | Temporal CNN on OWW embeddings (ONNX) | ~100 KB head (+OWW backbone via `openwakeword`) | ~8ms/frame |
+| Wake word | Temporal CNN on OWW embeddings (ONNX) | 102 KB wake head + 1.33 MB shared OWW backbone = 1.43 MB total runtime footprint | ~8ms/frame |
 | VAD | WebRTC VAD / Silero / RMS heuristic | <1 MB | <1ms/frame |
 | STT | faster-whisper `base` | 145 MB | 0.5-2s |
 | TTS | Kokoro-82M (ONNX) | 326 MB | 0.3-0.8s/sentence |
@@ -689,7 +747,7 @@ Three architectures are available for training:
 
 ### Data Augmentation
 
-Eight augmentation types are applied during training (configurable probabilities):
+Seven augmentation types are applied during training (configurable probabilities):
 
 | Augmentation | Default Probability | Range |
 |-------------|-------------------|-------|
@@ -733,14 +791,77 @@ from violawake_sdk.training.evaluate import (
 results = evaluate_onnx_model("model.onnx", "test_dir/", threshold=0.80)
 print(results["roc_auc"], results["cohens_d"], results["false_reject_rate"])
 
-# Confusion matrix
-cm = compute_confusion_matrix(scores, labels, threshold=0.80)
+# Confusion matrix (separate positive and negative score arrays)
+cm = compute_confusion_matrix(pos_scores, neg_scores, threshold=0.80)
 print(cm["precision"], cm["recall"], cm["f1"])
 
 # Optimal threshold sweep
-optimal = find_optimal_threshold(scores, labels)
+optimal = find_optimal_threshold(pos_scores, neg_scores)
 print(optimal["threshold"], optimal["eer"])
 ```
+
+---
+
+## Web Console (Browser-Based Training)
+
+ViolaWake also ships a full browser-based alternative to the CLI training flow. The Console lives in [`console/`](console/) and pairs a React+Vite SPA with a FastAPI backend for account management, recording, training, billing, and model downloads.
+
+### Workflow
+
+1. **Register** and verify your email
+2. **Record** 10 voice samples in the browser
+3. **Train** — the server trains a model and streams progress via SSE
+4. **Download** the finished `.onnx` model from the training page or dashboard
+
+### Running Locally
+
+```bash
+# Backend
+cd console/backend
+pip install -r requirements.txt
+pip install -e "../..[training]"
+uvicorn app.main:app --reload
+
+# Frontend (separate terminal)
+cd console/frontend
+npm install
+npm run dev
+```
+
+The frontend runs at `http://localhost:5173`, the backend at `http://localhost:8000`, and FastAPI docs are available at `http://localhost:8000/docs`.
+
+### Docker
+
+```bash
+cd console
+docker-compose up
+```
+
+This uses [`console/docker-compose.yml`](console/docker-compose.yml) to start the frontend and backend together.
+
+### Current Architecture
+
+| Component | Implementation |
+|-----------|---------------|
+| Auth | Local email/password auth, email verification, password reset, JWTs |
+| Database | SQLite by default (SQLAlchemy async) |
+| Storage | Local filesystem by default for recordings and models |
+| Training | Local persistent job queue, CPU training |
+| Billing | Stripe checkout / portal / usage tracking when `VIOLAWAKE_STRIPE_SECRET_KEY` is configured |
+| Email | Resend-backed transactional email when `VIOLAWAKE_RESEND_API_KEY` is configured |
+
+The current reference deployment is self-hosted and local-first. Optional hooks exist for external databases and object storage, but the shipped default is local JWT auth + SQLite + filesystem storage + CPU training.
+
+### Shipped Features
+
+- Registration, login, email verification, password reset, and account deletion
+- Browser recording and WAV upload validation / normalization for wake-word samples
+- Queued server-side training with live SSE progress streaming, cancellation, and resume support
+- Dashboard model management: list, inspect metrics, view performance, download `.onnx`, and delete models
+- Pricing and billing pages for Free / Developer / Business tiers with Stripe checkout and billing portal integration
+- Public landing, privacy policy, and terms of service pages
+
+See [`console/README.md`](console/README.md) for the full Console API, test commands, and deployment details.
 
 ---
 
@@ -762,8 +883,8 @@ ViolaWake ships 9 CLI tools:
 | Command | Key Flags | Purpose |
 |---------|-----------|---------|
 | `violawake-streaming-eval` | `--model`, `--audio` | Measure FAPH on continuous audio |
-| `violawake-test-confusables` | `--model`, `--word` | Test against phonetically similar words |
-| `violawake-contamination-check` | `--train-dir`, `--eval-dir`, `--cosine-threshold` | Detect train/eval overlap (filename, hash, embedding) |
+| `violawake-test-confusables` | `--model`, `--wake-word` | Test against phonetically similar words |
+| `violawake-contamination-check` | `--train`, `--eval`, `--cosine-threshold` | Detect train/eval overlap (filename, hash, embedding) |
 
 ### Data & Corpus
 
@@ -793,7 +914,7 @@ violawake-eval --model model.onnx --test-dir data/test/ --report --dump-scores s
 violawake-streaming-eval --model model.onnx --audio test_audio.wav
 
 # Check for train/eval contamination
-violawake-contamination-check --train-dir data/train/ --eval-dir data/test/ --cosine-threshold 0.99
+violawake-contamination-check --train data/train/ --eval data/test/ --cosine-threshold 0.99
 ```
 
 ---
@@ -802,20 +923,22 @@ violawake-contamination-check --train-dir data/train/ --eval-dir data/test/ --co
 
 Models are versioned and published to GitHub Releases. Download separately (too large for PyPI):
 
+For wake detection, `violawake-download` fetches the ViolaWake head only. `WakeDetector` also depends on the shared OpenWakeWord backbone runtime managed by the installed `openwakeword` package. In product docs, use the current registry-backed footprint: **102 KB wake head + 1.33 MB shared backbone = 1.43 MB total runtime footprint**.
+
 ```bash
-violawake-download --model temporal_cnn           # default, ~100 KB
+violawake-download --model temporal_cnn           # default wake head, 102 KB
 violawake-download --model kokoro_v1_0             # TTS model, 326 MB
 violawake-download --model kokoro_voices_v1_0      # TTS voices, 28 MB
 ```
 
 | Model | Type | Size | EER* | Notes |
 |-------|------|------|------|-------|
-| `temporal_cnn.onnx` | Temporal CNN on OWW embeddings | ~100 KB | 5.49% | Production default |
+| `temporal_cnn.onnx` | Temporal CNN on OWW embeddings | 102 KB | 5.49% | Production default; pairs with 1.33 MB shared OWW backbone for 1.43 MB total runtime footprint |
 | `temporal_convgru.onnx` | Temporal Conv-GRU on OWW embeddings | ~81 KB | -- | Reserve model |
 | ~~`r3_10x_s42.onnx`~~ | MLP on OWW embeddings | ~34 KB | -- | **Deprecated** |
 | `kokoro-v1.0.onnx` | Kokoro-82M TTS | ~326 MB | -- | Apache 2.0 |
 
-*EER from benchmark v2: 700 negatives (incl. adversarial confusables), 180 TTS positives, streaming inference. See `benchmark_v2/`.
+*EER from [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md): shared 700-file negative corpus, 180 TTS positives per system, same 20 voices, same 3 augmentations, 1280-sample streaming inference.
 
 ### Model Discovery and Cache Management
 
@@ -832,7 +955,8 @@ for name, path, size_mb in list_cached_models():
     print(f"{name}: {path} ({size_mb:.1f} MB)")
 
 # Validate registry integrity (for CI pipelines)
-errors = check_registry_integrity(strict=True)
+# Note: use strict=False to skip SHA256 checks for unreleased models
+errors = check_registry_integrity(strict=False)
 assert not errors, f"Registry issues: {errors}"
 
 # List TTS voices
@@ -922,7 +1046,7 @@ Safe to share a `WakeDetector` across threads. For asyncio, use `AsyncWakeDetect
 | Linux (x64) | Yes | Yes | Yes | CI-tested |
 | macOS (arm64/x64) | Yes | Yes | Yes | CI-tested |
 | Raspberry Pi 4 (ARM64) | Yes | Slow | Yes | Supported |
-| Browser/WASM | Planned | Planned | No | Phase 2 (Q3 2026) |
+| Browser/WASM | **Yes** (onnxruntime-web) | No | No | Available — see [`wasm/`](wasm/) |
 
 ---
 
@@ -937,11 +1061,11 @@ Measured on i7-12700H, Windows 11, RTX 3060 (CPU inference):
 | STT (Whisper base, 3s audio) | 680 ms | 1.2s |
 | TTS first audio (Kokoro, 1 sentence) | 310 ms | 580 ms |
 
-**Wake word accuracy** (benchmark v2 -- TTS corpus, 700 negatives incl. adversarial confusables):
-- Temporal CNN: **EER 5.49%**, ROC AUC 0.9877
-- FAR @ FRR=5%: **5.43%** (vs OWW's 8.86%)
-- Live mic tested: 100% recall on direct speech, 0 false positives on podcast/music
-- Run `violawake-eval` or `violawake-streaming-eval` on your own data.
+**Wake word accuracy** ([`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md)):
+- In benchmark v2, `temporal_cnn` scored **EER 5.49%** and **ROC AUC 0.9877** on a shared 700-file negative corpus and 180 TTS positives.
+- In the same benchmark, **FAR @ FRR=5% was 5.43%** for ViolaWake vs **8.86%** for openWakeWord `alexa`.
+- Methodology: same 20 Edge TTS voices, same 3 augmentations (clean, noisy, reverb), 1280-sample streaming inference, and a shared negative set of adversarial confusables, speech, and noise.
+- Real-world microphone performance depends on environment; use `violawake-eval` or `violawake-streaming-eval` on your own data before making production threshold decisions.
 
 ---
 
@@ -1012,12 +1136,16 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 ### Top-Level Exports (`from violawake_sdk import ...`)
 
 **Core Detection:**
-- `WakeDetector` -- synchronous detector (`.detect()`, `.process()`, `.from_source()` classmethod, `.stream_mic()`, `.reset_cooldown()`, `.get_confidence()`, `.last_scores`)
+- `WakeDetector` -- synchronous detector (`.detect()`, `.process()`, `.from_source()` classmethod, `.stream_mic()`, `.reset_cooldown()`, `.get_confidence()`, `.last_scores`, `.reset()`, `.close()`)
 - `AsyncWakeDetector` -- async wrapper (`.detect()`, `.process()`, `.stream()`, `.reset_cooldown()`)
 - `DetectorConfig` -- bundled config (`.build()`)
 - `WakeDecisionPolicy` -- 4-gate decision pipeline
 - `validate_audio_chunk` -- input validation
 - `WakewordDetector` -- backward-compat alias for `WakeDetector`
+
+**Lifecycle:**
+- `reset()` -- Clears all internal state (cooldown, confirmation buffer, scores, temporal buffers). Call between files in batch processing.
+- `close()` -- Releases inference sessions and resets internal state. Called automatically when using `with` statement.
 
 **Confidence & Scoring:**
 - `ConfidenceResult` -- `.raw_score`, `.confidence`, `.confirm_count`, `.score_history`
@@ -1032,7 +1160,8 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 - `VoicePipeline` -- `.run()`, `.stop()`, `.speak()`, `@on_command`
 - `VADEngine` -- `.process_frame()`, `.is_speech()`, `.backend_name`, `.reset()`
 - `TTSEngine` -- `.synthesize()`, `.synthesize_chunked()`, `.play()`, `.play_async()`
-- `STTEngine` -- `.transcribe()`, `.transcribe_full()`, `.prewarm()`
+- `STTEngine` -- `.transcribe()`, `.transcribe_full()`, `.transcribe_streaming()`, `.prewarm()`
+- `StreamingSTTEngine` -- `.push_chunk()`, `.flush()`, `.reset()`, `.prewarm()`, `.buffer_duration_s`
 
 **Exceptions:**
 - `ViolaWakeError` -- base exception
@@ -1054,7 +1183,7 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 | `violawake_sdk.models` | `ModelSpec`, `MODEL_REGISTRY`, `download_model()`, `get_model_path()`, `list_cached_models()`, `check_registry_integrity()` |
 | `violawake_sdk.backends` | `get_backend()`, `InferenceBackend`, `BackendSession` |
 | `violawake_sdk.stt_engine` | `STTFileEngine`, `transcribe_wav_file()` |
-| `violawake_sdk.stt` | `TranscriptResult`, `TranscriptSegment`, `MODEL_PROFILES` |
+| `violawake_sdk.stt` | `TranscriptResult`, `TranscriptSegment`, `StreamingSTTEngine`, `MODEL_PROFILES` |
 | `violawake_sdk.security` | `add_pins()`, `fetch_live_spki_pins()`, `verify_certificate_pin()`, `CertPinError`, `PinSet` |
 | `violawake_sdk.audio` | `load_audio()`, `normalize_audio()`, `compute_rms()`, `is_silent()` |
 | `violawake_sdk.training.augment` | `AugmentConfig`, `AugmentationPipeline`, `generate_synthetic_rir()` |
@@ -1076,11 +1205,15 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 - [x] Speaker verification, noise-adaptive, power management
 - [x] Audio source abstraction, multi-model ensemble
 - [x] Streaming TTS, structured STT, ONNX-to-TFLite converter
-- [ ] Documentation site
+- [x] Web Console (browser-based training, React+FastAPI)
+- [x] Documentation site
+- [x] Automatic retention cleanup (recordings: 90 days, models: 365 days)
+- [x] Priority job queues (tier-based: free=0, developer=10, business=20, enterprise=30)
 
-**v1.1 (Q3 2026) -- Streaming + Web:**
-- [ ] Streaming STT (faster-whisper generator mode)
-- [ ] WASM build for ViolaWake
+**v1.1 (Q3 2026) -- Hosted Console + Streaming:**
+- [ ] Hosted Console infrastructure (Modal GPU training, R2 storage, Supabase auth)
+- [x] Streaming STT (faster-whisper generator mode)
+- [ ] WASM build for ViolaWake (source ready, dist not built) (see [`wasm/`](wasm/))
 - [ ] JavaScript/Node SDK wrapper
 
 **v2.0 (Q1 2027) -- Multi-platform:**
@@ -1099,6 +1232,13 @@ cd ViolaWake
 pip install -e ".[dev]"
 pre-commit install
 pytest tests/
+```
+
+### Generate API Docs
+
+```bash
+pip install -e ".[docs]"
+python scripts/generate_docs.py   # Outputs to docs/api/
 ```
 
 See `CONTRIBUTING.md` for guidelines.

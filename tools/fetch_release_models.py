@@ -1,47 +1,40 @@
-"""Fetch release model assets for GitHub Releases.
+"""Fetch release model assets from the model registry.
 
-Current MVP behavior:
-  - Reports the secure artifact-store download actions it would perform.
-  - Checks whether MODEL_STORE_TOKEN is available.
-  - Falls back to local files in the repository's ``models/`` directory.
-
-The secure model-store implementation is intentionally left as a TODO until
-the backing S3/GCS artifact store contract is finalized.
+Downloads all non-deprecated, non-package-managed models from MODEL_REGISTRY,
+verifies SHA-256 integrity, and saves them to an output directory.
+Skips files that already exist with the correct hash.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
-import os
-import shutil
 import sys
 from collections import OrderedDict
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_LOCAL_MODELS_DIR = REPO_ROOT / "models"
+DEFAULT_OUTPUT_DIR = REPO_ROOT / "models"
 MODELS_MODULE_PATH = REPO_ROOT / "src" / "violawake_sdk" / "models.py"
+
+DEPRECATED_MARKER = "DEPRECATED"
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fetch release model assets for a GitHub Release.",
+        description="Fetch release model assets from the ViolaWake model registry.",
     )
     parser.add_argument(
-        "--version",
-        required=True,
-        help="Release version without the leading 'v' (example: 0.1.0).",
-    )
-    parser.add_argument(
-        "--output",
-        required=True,
-        help="Directory where fetched model files should be written.",
+        "--output-dir",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help="Directory where fetched model files should be written (default: models/).",
     )
     return parser.parse_args()
 
 
 def load_model_registry() -> OrderedDict[str, object]:
+    """Load MODEL_REGISTRY and _PACKAGE_MANAGED_MODELS from the SDK module."""
     spec = importlib.util.spec_from_file_location("violawake_release_models", MODELS_MODULE_PATH)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load model registry from {MODELS_MODULE_PATH}")
@@ -50,87 +43,162 @@ def load_model_registry() -> OrderedDict[str, object]:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
 
+    package_managed = getattr(module, "_PACKAGE_MANAGED_MODELS", set())
     registry = OrderedDict()
-    for model_name, model_spec in module.MODEL_REGISTRY.items():
-        if getattr(model_spec, "name", None) in registry:
+    seen_names: set[str] = set()
+
+    for key, model_spec in module.MODEL_REGISTRY.items():
+        name = getattr(model_spec, "name", key)
+
+        # Skip aliases (duplicate name entries)
+        if name in seen_names:
             continue
-        registry[model_spec.name] = model_spec
+        seen_names.add(name)
+
+        # Skip package-managed models (e.g. oww_backbone)
+        if key in package_managed or name in package_managed:
+            continue
+
+        # Skip deprecated models
+        description = getattr(model_spec, "description", "")
+        if DEPRECATED_MARKER in description.upper():
+            continue
+
+        registry[name] = model_spec
+
     return registry
 
 
-def expected_assets() -> list[tuple[str, str]]:
-    assets: list[tuple[str, str]] = []
-    for model_name, model_spec in load_model_registry().items():
-        filename = Path(model_spec.url).name
-        assets.append((model_name, filename))
-    return assets
+def sha256_file(path: Path) -> str:
+    """Compute SHA-256 hex digest of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
-def prepare_local_fallback(output_dir: Path) -> int:
-    copied = 0
-    missing: list[str] = []
+def download_model(name: str, url: str, expected_sha256: str, output_path: Path) -> bool:
+    """Download a single model with progress bar and SHA-256 verification.
 
-    print(f"Falling back to local model directory: {DEFAULT_LOCAL_MODELS_DIR}")
-    if not DEFAULT_LOCAL_MODELS_DIR.exists():
-        print(
-            "ERROR: local fallback directory does not exist. "
-            "Create repository-local model assets or implement the artifact-store download."
-        )
-        return 1
+    Returns True if the file was downloaded (or already existed with correct hash),
+    False on failure.
+    """
+    try:
+        import requests
+    except ImportError:
+        print("ERROR: 'requests' is required. Install with: pip install requests")
+        return False
 
-    same_directory = output_dir.resolve() == DEFAULT_LOCAL_MODELS_DIR.resolve()
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        print("ERROR: 'tqdm' is required. Install with: pip install tqdm")
+        return False
 
-    for model_name, filename in expected_assets():
-        source_path = DEFAULT_LOCAL_MODELS_DIR / filename
-        target_path = output_dir / filename
+    # Check if file already exists with correct hash
+    if output_path.exists():
+        existing_hash = sha256_file(output_path)
+        if existing_hash == expected_sha256:
+            print(f"  SKIP {name}: already exists with correct hash")
+            return True
+        print(f"  REDOWNLOAD {name}: hash mismatch (expected {expected_sha256[:12]}..., got {existing_hash[:12]}...)")
 
-        print(f"Checking local fallback for {model_name}: {filename}")
-        if not source_path.exists():
-            missing.append(filename)
-            continue
+    # Reject non-HTTPS URLs
+    if not url.startswith("https://"):
+        print(f"  ERROR {name}: refusing non-HTTPS URL: {url}")
+        return False
 
-        if same_directory:
-            print(f"  Using existing file in-place: {target_path}")
-            copied += 1
-            continue
+    print(f"  DOWNLOAD {name} from {url}")
 
-        shutil.copy2(source_path, target_path)
-        print(f"  Copied {source_path} -> {target_path}")
-        copied += 1
+    try:
+        response = requests.get(url, stream=True, timeout=60)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  ERROR {name}: download failed: {e}")
+        return False
 
-    if missing:
-        print("ERROR: missing local fallback assets:")
-        for filename in missing:
-            print(f"  - {filename}")
-        return 1
+    total_bytes = int(response.headers.get("content-length", 0))
 
-    print(f"Prepared {copied} model asset(s) in {output_dir}")
-    return 0
+    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+    try:
+        with (
+            open(tmp_path, "wb") as f,
+            tqdm(
+                total=total_bytes or None,
+                unit="B",
+                unit_scale=True,
+                desc=f"    {name}",
+            ) as progress,
+        ):
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    progress.update(len(chunk))
+
+        # Verify SHA-256
+        actual_hash = sha256_file(tmp_path)
+        if actual_hash != expected_sha256:
+            tmp_path.unlink(missing_ok=True)
+            print(
+                f"  ERROR {name}: SHA-256 mismatch! "
+                f"Expected {expected_sha256[:16]}..., got {actual_hash[:16]}..."
+            )
+            return False
+
+        # Atomic rename
+        tmp_path.replace(output_path)
+        print(f"  OK {name}: verified and saved to {output_path}")
+        return True
+
+    except Exception as e:
+        tmp_path.unlink(missing_ok=True)
+        print(f"  ERROR {name}: {e}")
+        return False
 
 
 def main() -> int:
     args = parse_args()
-    output_dir = Path(args.output).resolve()
+    output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    token = os.getenv("MODEL_STORE_TOKEN")
-    if token:
-        print("MODEL_STORE_TOKEN detected.")
-    else:
-        print("MODEL_STORE_TOKEN is not set.")
+    print(f"Output directory: {output_dir}")
+    print("Loading model registry...")
 
-    print(f"Preparing release models for v{args.version}")
-    for model_name, filename in expected_assets():
-        print(
-            f"TODO: would fetch {filename} for model '{model_name}' "
-            f"from the secure artifact store for release v{args.version}."
-        )
+    registry = load_model_registry()
+    print(f"Found {len(registry)} downloadable model(s)\n")
 
-    print(
-        "TODO: implement artifact-store download support for S3/GCS with MODEL_STORE_TOKEN; "
-        "using local fallback for now."
-    )
-    return prepare_local_fallback(output_dir)
+    if not registry:
+        print("No models to fetch.")
+        return 0
+
+    ok = 0
+    failed = 0
+
+    for name, spec in registry.items():
+        url = getattr(spec, "url", "")
+        sha256 = getattr(spec, "sha256", "")
+        filename = Path(url).name
+
+        if not url or not sha256:
+            print(f"  SKIP {name}: missing URL or SHA-256")
+            failed += 1
+            continue
+
+        if "placeholder" in sha256.lower():
+            print(f"  SKIP {name}: placeholder SHA-256 hash")
+            failed += 1
+            continue
+
+        output_path = output_dir / filename
+
+        if download_model(name, url, sha256, output_path):
+            ok += 1
+        else:
+            failed += 1
+
+    print(f"\nDone: {ok} succeeded, {failed} failed out of {len(registry)} model(s)")
+    return 1 if failed > 0 else 0
 
 
 if __name__ == "__main__":

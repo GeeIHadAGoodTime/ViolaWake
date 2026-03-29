@@ -1,19 +1,17 @@
 """Trained model routes: list, download, config."""
 
-from __future__ import annotations
-
 import json
 import logging
 from numbers import Real
+from pathlib import PurePosixPath
 from typing import Annotated
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import decode_token, get_current_user
+from app.auth import decode_download_token, decode_token, get_current_user
 from app.database import get_db
 from app.models import TrainedModel, User
 from app.schemas import (
@@ -163,20 +161,23 @@ async def _resolve_download_user(
     request: Request,
     token: str | None,
     db: AsyncSession,
+    *,
+    model_id: int,
 ) -> User:
     """Resolve the authenticated user for download/config endpoints.
 
     Browser downloads via <a href> cannot set Authorization headers, so the
-    frontend appends the JWT as a ``?token=`` query parameter. This helper
-    accepts both the query-param path and the standard Authorization header.
+    frontend uses a short-lived one-time download token in the query string.
     """
     user_id: int | None = None
 
-    # 1. Try query parameter first (browser download path)
     if token:
-        user_id = decode_token(token)
+        user_id = decode_download_token(
+            token,
+            expected_action="model_download",
+            expected_resource_id=model_id,
+        )
     else:
-        # 2. Fall back to Authorization header
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             user_id = decode_token(auth_header.removeprefix("Bearer ").strip())
@@ -228,13 +229,13 @@ async def download_model(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     token: str | None = Query(default=None),
-) -> RedirectResponse:
+) -> Response:
     """Download a trained ONNX model file.
 
-    Accepts JWT via ``?token=`` query parameter (for browser downloads) or
-    the standard ``Authorization: Bearer <token>`` header.
+    Accepts a one-time query token for browser downloads or a standard
+    ``Authorization: Bearer <token>`` header for API clients.
     """
-    current_user = await _resolve_download_user(request, token, db)
+    current_user = await _resolve_download_user(request, token, db, model_id=model_id)
 
     result = await db.execute(
         select(TrainedModel).where(
@@ -253,31 +254,27 @@ async def download_model(
             detail="Model file missing from storage",
         )
 
-    download_url = storage.presigned_url(model.file_path)
-    if isinstance(storage, LocalStorageBackend) and token:
-        separator = "&" if "?" in download_url else "?"
-        download_url = f"{download_url}{separator}token={quote(token, safe='')}"
+    if isinstance(storage, LocalStorageBackend):
+        filename = PurePosixPath(model.file_path).name or f"{model.wake_word}.onnx"
+        return Response(
+            content=storage.download(model.file_path),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
-    return RedirectResponse(
-        url=download_url,
-        status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-    )
+    return RedirectResponse(url=storage.presigned_url(model.file_path), status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 @router.get("/{model_id}/config", response_model=ModelConfigResponse)
 async def get_model_config(
     model_id: int,
-    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: str | None = Query(default=None),
 ) -> ModelConfigResponse:
     """Get training config and metrics for a trained model.
 
-    Accepts JWT via ``?token=`` query parameter or the standard
-    ``Authorization: Bearer <token>`` header.
+    Requires the standard ``Authorization: Bearer <token>`` header.
     """
-    current_user = await _resolve_download_user(request, token, db)
-
     result = await db.execute(
         select(TrainedModel).where(
             TrainedModel.id == model_id,

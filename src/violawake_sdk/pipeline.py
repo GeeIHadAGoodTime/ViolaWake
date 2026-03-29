@@ -109,6 +109,7 @@ class VoicePipeline:
         enable_tts: bool = True,
         device_index: int | None = None,
         on_wake: WakeCallback | None = None,
+        streaming_stt: bool = False,
     ) -> None:
         """Initialize the voice pipeline.
 
@@ -123,6 +124,13 @@ class VoicePipeline:
             device_index: Microphone device index. None = system default.
             on_wake: Optional callback fired after wake-word detection and
                      before command transcription begins.
+            streaming_stt: If True, use ``STTEngine.transcribe_streaming()``
+                           to yield segments incrementally instead of waiting
+                           for the full transcription.  The command text passed
+                           to handlers is the concatenation of all yielded
+                           segment texts (identical to non-streaming behaviour),
+                           but each segment is logged as it arrives.
+                           Default False.
         """
         self._wake_detector = WakeDetector(model=wake_word, threshold=threshold)
         self._vad = VADEngine(backend=vad_backend)
@@ -132,6 +140,7 @@ class VoicePipeline:
         self._stt_model = stt_model
         self._tts_voice = tts_voice
         self._on_wake = on_wake
+        self._streaming_stt = streaming_stt
 
         # Typed as Any because STTEngine/TTSEngine are lazily imported to avoid
         # hard dependencies on optional extras (violawake[stt], violawake[tts]).
@@ -147,10 +156,11 @@ class VoicePipeline:
         self._command_handlers: list[CommandHandler] = []
 
         logger.info(
-            "VoicePipeline initialized: wake=%s, stt=%s, tts=%s",
+            "VoicePipeline initialized: wake=%s, stt=%s, tts=%s, streaming_stt=%s",
             wake_word,
             stt_model,
             tts_voice,
+            streaming_stt,
         )
 
     def on_command(self, handler: CommandHandler) -> CommandHandler:
@@ -313,7 +323,19 @@ class VoicePipeline:
                 logger.warning("Empty audio buffer — skipping transcription")
                 return
             pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-            text = stt.transcribe(pcm)
+
+            if self._streaming_stt:
+                # Streaming mode: consume the generator and log each segment as it arrives.
+                segment_texts: list[str] = []
+                for seg in stt.transcribe_streaming(pcm):
+                    if self._stop_event.is_set():
+                        logger.debug("Pipeline stopping; aborting streaming transcription")
+                        return
+                    logger.debug("Streaming segment [%.1f-%.1f]: '%s'", seg.start, seg.end, seg.text)
+                    segment_texts.append(seg.text)
+                text = " ".join(segment_texts).strip()
+            else:
+                text = stt.transcribe(pcm)
 
             if self._stop_event.is_set():
                 logger.debug("Pipeline stopping; dropping transcription result")

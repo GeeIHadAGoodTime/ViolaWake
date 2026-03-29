@@ -42,6 +42,23 @@ def _ensure_schema_updates(connection: Connection) -> None:
             text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE")
         )
 
+    # Team FK columns on recordings and trained_models (nullable, so no default needed)
+    if "recordings" in table_names:
+        recording_columns = {col["name"] for col in inspector.get_columns("recordings")}
+        if "team_id" not in recording_columns:
+            connection.execute(text("ALTER TABLE recordings ADD COLUMN team_id INTEGER REFERENCES teams(id)"))
+
+    if "trained_models" in table_names:
+        model_columns = {col["name"] for col in inspector.get_columns("trained_models")}
+        if "team_id" not in model_columns:
+            connection.execute(text("ALTER TABLE trained_models ADD COLUMN team_id INTEGER REFERENCES teams(id)"))
+
+    # Soft-delete support: recordings are marked deleted_at after training completes
+    if "recordings" in table_names:
+        recording_columns = {col["name"] for col in inspector.get_columns("recordings")}
+        if "deleted_at" not in recording_columns:
+            connection.execute(text("ALTER TABLE recordings ADD COLUMN deleted_at TIMESTAMP"))
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that yields a database session."""

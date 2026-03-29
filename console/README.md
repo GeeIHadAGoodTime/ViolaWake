@@ -86,6 +86,20 @@ python console/run_e2e.py
 python tools/quality_gate.py --all
 ```
 
+### Trusted Proxy Configuration
+
+Auth rate limiting uses the direct connection IP by default. If you deploy behind
+trusted reverse proxies, set `VIOLAWAKE_TRUSTED_PROXY_COUNT` to the number of
+trusted proxies in front of the app. When set to a value greater than `0`, the
+backend uses the Nth-from-right `X-Forwarded-For` entry for rate limiting; when
+set to `0`, `X-Forwarded-For` is ignored entirely.
+
+Examples:
+
+- `VIOLAWAKE_TRUSTED_PROXY_COUNT=0`: trust only the socket peer IP
+- `VIOLAWAKE_TRUSTED_PROXY_COUNT=1`: trust one reverse proxy and use the rightmost forwarded IP
+- `VIOLAWAKE_TRUSTED_PROXY_COUNT=2`: trust two reverse proxies and use the second IP from the right
+
 ## API Endpoints
 
 | Method | Endpoint | Auth | Description |

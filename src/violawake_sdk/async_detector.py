@@ -127,10 +127,19 @@ class AsyncWakeDetector:
         """Return the recent score history (most recent last)."""
         return self._detector.last_scores
 
+    async def aclose(self) -> None:
+        """Async shutdown — shuts down executor in a thread to avoid blocking."""
+        loop = asyncio.get_running_loop()
+        if self._executor is not None:
+            executor = self._executor
+            self._executor = None
+            await loop.run_in_executor(None, lambda: executor.shutdown(wait=True))
+        self._detector.close()
+
     def close(self) -> None:
         """Shut down the background executor and release detector resources.
 
-        Safe to call multiple times.
+        Safe to call multiple times.  For async contexts prefer ``aclose()``.
         """
         if self._executor is not None:
             self._executor.shutdown(wait=True)

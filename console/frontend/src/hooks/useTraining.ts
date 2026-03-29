@@ -32,8 +32,29 @@ const INITIAL_STATE: TrainingState = {
 
 const POLL_INTERVAL_MS = 3000;
 
+function getStatusMessage(status: TrainingStatus, error: string | null): string {
+  switch (status) {
+    case "queued":
+      return "Waiting for training to start...";
+    case "running":
+      return "Training is in progress.";
+    case "completed":
+      return "Training complete.";
+    case "failed":
+      return error || "Training failed.";
+    case "cancelled":
+      return error || "Training cancelled.";
+    default:
+      return "Training status updated.";
+  }
+}
+
 function isTerminal(status: TrainingStatus): boolean {
-  return status === "completed" || status === "failed";
+  return (
+    status === "completed" ||
+    status === "failed" ||
+    status === "cancelled"
+  );
 }
 
 export function useTraining(jobId: number) {
@@ -58,6 +79,7 @@ export function useTraining(jobId: number) {
         dPrime: job.d_prime ?? prev.dPrime,
         modelId: job.model_id ?? prev.modelId,
         error: job.error,
+        message: getStatusMessage(job.status, job.error),
       }));
 
       // Stop polling on terminal states
@@ -76,65 +98,73 @@ export function useTraining(jobId: number) {
     pollIntervalRef.current = setInterval(pollStatus, POLL_INTERVAL_MS);
   }, [pollStatus, clearPolling]);
 
-  const connect = useCallback(() => {
+  useEffect(() => {
+    let disposed = false;
+
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
 
-    const es = api.createTrainingStream(jobId);
-    eventSourceRef.current = es;
-
-    es.onopen = () => {
-      setState((prev) => ({ ...prev, connected: true }));
-    };
-
-    es.onmessage = (event) => {
-      try {
-        const data: TrainingEvent = JSON.parse(event.data);
-        setState((prev) => ({
-          ...prev,
-          status: data.status,
-          progress: data.progress,
-          epoch: data.epoch,
-          totalEpochs: data.total_epochs,
-          trainLoss: data.train_loss ?? prev.trainLoss,
-          valLoss: data.val_loss ?? prev.valLoss,
-          dPrime: data.d_prime ?? prev.dPrime,
-          modelId: data.model_id ?? prev.modelId,
-          message: data.message || prev.message,
-          error: data.error,
-          connected: true,
-        }));
-
-        // Close connection on terminal states
-        if (isTerminal(data.status)) {
+    void api
+      .createTrainingStream(jobId)
+      .then((es) => {
+        if (disposed) {
           es.close();
+          return;
         }
-      } catch {
-        // ignore malformed events
-      }
-    };
 
-    es.onerror = () => {
-      setState((prev) => ({ ...prev, connected: false }));
-      es.close();
+        eventSourceRef.current = es;
 
-      // Fall back to recurring polling if SSE fails
-      startPolling();
-    };
-  }, [jobId, startPolling]);
+        es.onopen = () => {
+          setState((prev) => ({ ...prev, connected: true }));
+        };
 
-  useEffect(() => {
-    connect();
+        es.onmessage = (event) => {
+          try {
+            const data: TrainingEvent = JSON.parse(event.data);
+            setState((prev) => ({
+              ...prev,
+              status: data.status,
+              progress: data.progress,
+              epoch: data.epoch,
+              totalEpochs: data.total_epochs,
+              trainLoss: data.train_loss ?? prev.trainLoss,
+              valLoss: data.val_loss ?? prev.valLoss,
+              dPrime: data.d_prime ?? prev.dPrime,
+              modelId: data.model_id ?? prev.modelId,
+              message: data.message || prev.message,
+              error: data.error,
+              connected: true,
+            }));
+
+            if (isTerminal(data.status)) {
+              es.close();
+            }
+          } catch {
+            // ignore malformed events
+          }
+        };
+
+        es.onerror = () => {
+          setState((prev) => ({ ...prev, connected: false }));
+          es.close();
+          startPolling();
+        };
+      })
+      .catch(() => {
+        startPolling();
+      });
 
     return () => {
+      disposed = true;
       if (eventSourceRef.current) {
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
       clearPolling();
     };
-  }, [connect, clearPolling]);
+  }, [jobId, startPolling, clearPolling]);
 
   return state;
 }

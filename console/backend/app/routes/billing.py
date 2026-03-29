@@ -1,7 +1,5 @@
 """Billing routes: Stripe checkout, webhook, subscription management, usage."""
 
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
@@ -10,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_verified_user
 from app.config import settings
 from app.database import get_db
 from app.models import Subscription, UsageRecord, User
@@ -178,7 +176,7 @@ async def record_usage(db: AsyncSession, user_id: int, action: str = "training_j
 # ---------------------------------------------------------------------------
 
 async def check_training_quota(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> User:
     """FastAPI dependency that enforces the training quota for the current user.
@@ -222,7 +220,7 @@ async def check_training_quota(
 @router.post("/checkout", response_model=CheckoutResponse)
 async def create_checkout_session(
     body: CheckoutRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CheckoutResponse:
     """Create a Stripe Checkout Session for upgrading to a paid tier."""
@@ -241,6 +239,21 @@ async def create_checkout_session(
             detail=f"You are already on the {sub.tier} plan (or higher).",
         )
 
+    subscription_data: dict = {
+        "metadata": {
+            "violawake_user_id": str(current_user.id),
+            "tier": body.tier,
+        },
+    }
+
+    # Add free trial period if configured (VIOLAWAKE_TRIAL_DAYS, default 14, 0 to disable)
+    if settings.trial_days > 0:
+        subscription_data["trial_period_days"] = settings.trial_days
+        logger.info(
+            "Adding %d-day free trial to checkout for user %d, tier=%s",
+            settings.trial_days, current_user.id, body.tier,
+        )
+
     session = stripe.checkout.Session.create(
         customer=customer_id,
         mode="subscription",
@@ -251,12 +264,7 @@ async def create_checkout_session(
             "violawake_user_id": str(current_user.id),
             "tier": body.tier,
         },
-        subscription_data={
-            "metadata": {
-                "violawake_user_id": str(current_user.id),
-                "tier": body.tier,
-            },
-        },
+        subscription_data=subscription_data,
     )
 
     logger.info(
@@ -328,7 +336,7 @@ async def stripe_webhook(
 
 @router.get("/subscription", response_model=SubscriptionResponse)
 async def get_subscription(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> SubscriptionResponse:
     """Return the current user's subscription tier, status, and usage."""
@@ -336,10 +344,28 @@ async def get_subscription(
     used = await _get_usage_count(db, current_user.id)
     limit = TIER_LIMITS.get(sub.tier)
 
+    # Fetch trial status from Stripe if subscription exists
+    trial_active = False
+    trial_end = None
+    if sub.stripe_subscription_id and settings.billing_enabled:
+        try:
+            stripe = _get_stripe()
+            stripe_sub = stripe.Subscription.retrieve(sub.stripe_subscription_id)
+            if stripe_sub.status == "trialing" and stripe_sub.trial_end:
+                trial_active = True
+                trial_end = datetime.fromtimestamp(stripe_sub.trial_end, tz=timezone.utc)
+        except Exception:
+            logger.exception(
+                "Failed to fetch trial status for subscription %s",
+                sub.stripe_subscription_id,
+            )
+
     return SubscriptionResponse(
         tier=sub.tier,
         status=sub.status,
         current_period_end=sub.current_period_end,
+        trial_active=trial_active,
+        trial_end=trial_end,
         usage=UsageResponse(
             models_used=used,
             models_limit=limit,
@@ -351,7 +377,7 @@ async def get_subscription(
 
 @router.post("/portal", response_model=BillingPortalResponse)
 async def create_billing_portal(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BillingPortalResponse:
     """Create a Stripe Billing Portal session for managing the subscription."""
@@ -375,7 +401,7 @@ async def create_billing_portal(
 
 @router.get("/usage", response_model=UsageResponse)
 async def get_usage(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UsageResponse:
     """Return the current month's usage vs the tier limit."""

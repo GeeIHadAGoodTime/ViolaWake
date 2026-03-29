@@ -9,11 +9,12 @@ from __future__ import annotations
 import os
 import signal
 import socket
+import sqlite3
 import subprocess
 import sys
 import time
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 
@@ -31,6 +32,15 @@ FRONTEND_URL = f"http://localhost:{FRONTEND_PORT}"
 TEST_USER_EMAIL = "test@violawake.dev"
 TEST_USER_PASSWORD = "TestPass123!"
 TEST_USER_NAME = "Test User"
+TEST_DB_PATH = BACKEND_DIR / "data" / "test.db"
+RUN_E2E = os.getenv("VIOLAWAKE_RUN_E2E") == "1"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def require_explicit_e2e_opt_in() -> None:
+    """Skip browser/API end-to-end tests unless explicitly enabled."""
+    if not RUN_E2E:
+        pytest.skip("Set VIOLAWAKE_RUN_E2E=1 to run console end-to-end tests.")
 
 
 def _port_in_use(port: int) -> bool:
@@ -53,6 +63,24 @@ def _wait_for_port(port: int, timeout: float = 30.0) -> bool:
             return True
         time.sleep(0.5)
     return False
+
+
+def mark_email_verified(email: str, db_path: Path | None = None) -> None:
+    """Mark a registered test user as email-verified in the test database."""
+    target_db = db_path or TEST_DB_PATH
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        if target_db.exists():
+            with sqlite3.connect(target_db) as conn:
+                cursor = conn.execute(
+                    "UPDATE users SET email_verified = 1 WHERE email = ?",
+                    (email,),
+                )
+                conn.commit()
+                if cursor.rowcount > 0:
+                    return
+        time.sleep(0.1)
+    raise AssertionError(f"Failed to mark {email} as verified in {target_db}")
 
 
 @pytest.fixture(scope="session")

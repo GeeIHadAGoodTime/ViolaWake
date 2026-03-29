@@ -1,19 +1,32 @@
 """Recording upload and listing routes."""
 
-from __future__ import annotations
-
+import io
 import re
 import struct
 import wave
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+import numpy as np
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_verified_user
 from app.database import get_db
 from app.models import Recording, User
+from app.rate_limit import RECORDING_UPLOAD_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.schemas import RecordingResponse, RecordingUploadResponse
 from app.storage import build_recording_key, get_storage
 
@@ -24,6 +37,16 @@ MIN_DURATION_S = 0.5
 MAX_DURATION_S = 5.0
 TARGET_SAMPLE_RATE = 16000
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MIN_RMS_ENERGY = 10.0  # ~-70dBFS — any real speech is well above this
+
+
+async def _verified_user_with_rate_key(
+    request: Request,
+    current_user: Annotated[User, Depends(get_verified_user)],
+) -> User:
+    """Resolve the user *and* stash the ID on ``request.state`` for rate limiting."""
+    set_rate_limit_user(request, current_user.id)
+    return current_user
 
 
 def _validate_wav(file_bytes: bytes) -> tuple[int, int, int, float]:
@@ -98,36 +121,35 @@ def _validate_wav(file_bytes: bytes) -> tuple[int, int, int, float]:
     return sample_rate, channels, sample_width, duration_s
 
 
-def _ensure_mono_16k(file_bytes: bytes, orig_sr: int, channels: int) -> tuple[bytes, float]:
+def _ensure_mono_16k(file_bytes: bytes, _orig_sr: int, _channels: int) -> tuple[bytes, float]:
     """Convert WAV to mono 16kHz if needed. Returns (wav_bytes, duration_s)."""
     import io
 
     import numpy as np
+    from scipy.io import wavfile
 
-    # Read raw audio data
     with io.BytesIO(file_bytes) as buf:
-        with wave.open(buf, "rb") as wf:
-            raw = wf.readframes(wf.getnframes())
-            sw = wf.getsampwidth()
-            sr = wf.getframerate()
-            ch = wf.getnchannels()
+        sr, data = wavfile.read(buf)
 
-    # Decode to float32
-    if sw == 2:
-        samples = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-    elif sw == 4:
-        samples = np.frombuffer(raw, dtype=np.int32).astype(np.float32) / 2147483648.0
-    elif sw == 1:
-        samples = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    if data.ndim > 1:
+        data = data.mean(axis=1)
+
+    if np.issubdtype(data.dtype, np.floating):
+        samples = np.clip(data.astype(np.float32), -1.0, 1.0)
+    elif np.issubdtype(data.dtype, np.signedinteger):
+        info = np.iinfo(data.dtype)
+        scale = float(max(abs(info.min), info.max))
+        samples = data.astype(np.float32) / scale
+    elif np.issubdtype(data.dtype, np.unsignedinteger):
+        info = np.iinfo(data.dtype)
+        midpoint = (info.max + 1) / 2.0
+        samples = (data.astype(np.float32) - midpoint) / midpoint
     else:
-        # Fallback: return as-is
-        return file_bytes, len(raw) / (sw * ch * sr)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported WAV data type: {data.dtype}",
+        )
 
-    # Convert to mono if stereo
-    if ch > 1:
-        samples = samples.reshape(-1, ch).mean(axis=1)
-
-    # Resample if not 16kHz
     if sr != TARGET_SAMPLE_RATE:
         from scipy.signal import resample
 
@@ -136,8 +158,7 @@ def _ensure_mono_16k(file_bytes: bytes, orig_sr: int, channels: int) -> tuple[by
 
     duration_s = len(samples) / TARGET_SAMPLE_RATE
 
-    # Encode back to 16-bit PCM WAV
-    samples_int16 = np.clip(samples * 32767, -32768, 32767).astype(np.int16)
+    samples_int16 = (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16)
     out_buf = io.BytesIO()
     with wave.open(out_buf, "wb") as wf:
         wf.setnchannels(1)
@@ -149,13 +170,16 @@ def _ensure_mono_16k(file_bytes: bytes, orig_sr: int, channels: int) -> tuple[by
 
 
 @router.post("/upload", response_model=RecordingUploadResponse)
+@limiter.limit(RECORDING_UPLOAD_LIMIT, key_func=key_by_user)
 async def upload_recording(
-    current_user: Annotated[User, Depends(get_current_user)],
+    request: Request,
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     wake_word: str = Form(...),
 ) -> RecordingUploadResponse:
     """Upload a WAV recording for a wake word."""
+
     if not wake_word.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="wake_word is required")
 
@@ -181,9 +205,24 @@ async def upload_recording(
     sample_rate, channels, sample_width, duration_s = _validate_wav(content)
 
     # Convert to mono 16kHz if necessary
-    needs_conversion = sample_rate != TARGET_SAMPLE_RATE or channels != 1
+    needs_conversion = sample_rate != TARGET_SAMPLE_RATE or channels != 1 or sample_width != 2
     if needs_conversion:
         content, duration_s = _ensure_mono_16k(content, sample_rate, channels)
+
+    # Energy check: reject silent/zero-audio recordings.
+    # This prevents corrupted recordings (all zeros) from entering training data.
+    # The "big chungus" incident: all-zero positives taught the model silence = wake word.
+    # NOTE: Existing recordings uploaded before this check should be audited —
+    # scan for zero-energy WAVs in storage and flag/remove them.
+    with wave.open(io.BytesIO(content), "rb") as _wf:
+        raw_pcm = _wf.readframes(_wf.getnframes())
+    pcm_data = np.frombuffer(raw_pcm, dtype=np.int16)
+    rms = float(np.sqrt(np.mean(pcm_data.astype(np.float32) ** 2)))
+    if rms < MIN_RMS_ENERGY:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recording appears to be silent. Please check your microphone and try again.",
+        )
 
     storage = get_storage()
     count_result = await db.execute(
@@ -228,12 +267,15 @@ async def upload_recording(
 
 @router.get("", response_model=list[RecordingResponse])
 async def list_recordings(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     wake_word: str | None = Query(default=None),
 ) -> list[RecordingResponse]:
     """List all recordings for the current user, optionally filtered by wake word."""
-    stmt = select(Recording).where(Recording.user_id == current_user.id)
+    stmt = select(Recording).where(
+        Recording.user_id == current_user.id,
+        Recording.deleted_at.is_(None),
+    )
     if wake_word:
         stmt = stmt.where(Recording.wake_word == wake_word.strip().lower())
     stmt = stmt.order_by(Recording.created_at.desc())
@@ -260,7 +302,7 @@ async def list_recordings(
 )
 async def delete_recording(
     recording_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
     """Delete a recording. Only the owner may delete their recordings."""
@@ -268,6 +310,7 @@ async def delete_recording(
         select(Recording).where(
             Recording.id == recording_id,
             Recording.user_id == current_user.id,
+            Recording.deleted_at.is_(None),
         )
     )
     recording = result.scalar_one_or_none()

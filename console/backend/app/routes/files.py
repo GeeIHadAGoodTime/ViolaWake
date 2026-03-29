@@ -1,7 +1,5 @@
 """Authenticated local file serving routes."""
 
-from __future__ import annotations
-
 import logging
 import mimetypes
 from pathlib import PurePosixPath

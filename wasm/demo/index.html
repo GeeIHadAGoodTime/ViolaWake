@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ViolaWake — Browser Demo</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --accent: #7c6ef5;
+      --accent-glow: #7c6ef533;
+      --text: #e2e4ef;
+      --muted: #6b7280;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 40px 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    header h1 { font-size: 2rem; font-weight: 700; }
+    header p { color: var(--muted); margin-top: 8px; }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 28px;
+      width: 100%;
+      max-width: 560px;
+      margin-bottom: 20px;
+      border: 1px solid #2a2d3e;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* Status indicator */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .dot.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    .dot.red   { background: var(--red);   box-shadow: 0 0 8px var(--red); }
+
+    /* Score bar */
+    .score-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .bar-bg {
+      background: #2a2d3e;
+      border-radius: 6px;
+      height: 18px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      width: 0%;
+      transition: width 0.15s, background 0.15s;
+      background: var(--accent);
+    }
+    .bar-fill.detected { background: var(--green); }
+    .score-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Detection flash */
+    .detection-banner {
+      display: none;
+      background: var(--green);
+      color: #000;
+      font-weight: 700;
+      font-size: 1.1rem;
+      text-align: center;
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 16px;
+      animation: flash 0.4s ease-out;
+    }
+    @keyframes flash {
+      0%   { opacity: 1; transform: scale(1.04); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    /* Controls */
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid #2a2d3e;
+      color: var(--text);
+    }
+    button.danger { background: var(--red); }
+
+    /* Config */
+    label { font-size: 0.9rem; color: var(--muted); display: block; margin-bottom: 4px; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    .config-row { margin-bottom: 14px; }
+    .config-val { font-weight: 700; color: var(--text); }
+
+    /* Log */
+    #log {
+      background: #0a0c12;
+      border: 1px solid #2a2d3e;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #9ca3af;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .log-detect { color: var(--green); font-weight: bold; }
+    .log-warn { color: var(--amber); }
+    .log-err { color: var(--red); }
+
+    footer { color: var(--muted); font-size: 0.8rem; margin-top: 20px; text-align: center; }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ViolaWake</h1>
+    <p>Browser wake word detection &mdash; say <strong>"Viola"</strong> to test</p>
+  </header>
+
+  <!-- Status -->
+  <div class="card">
+    <h2>Status</h2>
+    <div class="status-row">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Idle — click Start to load models</span>
+    </div>
+
+    <div class="score-label">Detection score</div>
+    <div class="bar-bg"><div class="bar-fill" id="barFill"></div></div>
+    <div class="score-value" id="scoreValue">0.000</div>
+
+    <div class="detection-banner" id="detectionBanner">Wake word detected!</div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card">
+    <h2>Controls</h2>
+    <div class="controls">
+      <button id="btnStart">Start</button>
+      <button id="btnStop" class="secondary" disabled>Stop</button>
+    </div>
+  </div>
+
+  <!-- Configuration -->
+  <div class="card">
+    <h2>Configuration</h2>
+
+    <div class="config-row">
+      <label>Threshold: <span class="config-val" id="thresholdVal">0.80</span></label>
+      <input type="range" id="thresholdSlider" min="0.50" max="0.99" step="0.01" value="0.80" />
+    </div>
+
+    <div class="config-row">
+      <label>Confirm count (consecutive frames required): <span class="config-val" id="confirmVal">1</span></label>
+      <input type="range" id="confirmSlider" min="1" max="5" step="1" value="1" />
+    </div>
+
+    <div class="config-row">
+      <label>Cooldown (seconds): <span class="config-val" id="cooldownVal">2.0</span></label>
+      <input type="range" id="cooldownSlider" min="0.5" max="5.0" step="0.5" value="2.0" />
+    </div>
+
+    <div class="config-row">
+      <label>Model base URL (directory containing *.onnx files)</label>
+      <input type="text" id="modelBaseUrl" value="./models"
+        style="width:100%;background:#0a0c12;border:1px solid #2a2d3e;color:var(--text);padding:6px 10px;border-radius:6px;font-size:0.9rem;" />
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log">Ready.\n</div>
+  </div>
+
+  <footer>
+    <a href="https://github.com/GeeIHadAGoodTime/ViolaWake" target="_blank">ViolaWake on GitHub</a>
+    &mdash; Apache 2.0
+  </footer>
+
+  <!--
+    Load onnxruntime-web from CDN so we don't need to bundle its WASM assets.
+    The violawake module is loaded as an ES module from the built dist/.
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+  <script type="module">
+    // When loaded via npm build, import from the dist bundle.
+    // When running the demo directly (npx serve), we use the pre-built dist.
+    // Adjust the path to point at your build output.
+    import { WakeDetector } from "../dist/violawake.js";
+
+    // ---------------------------------------------------------------------------
+    // UI helpers
+    // ---------------------------------------------------------------------------
+    const $ = (id) => document.getElementById(id);
+    const log = (msg, cls = "") => {
+      const el = $("log");
+      const line = document.createElement("div");
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      if (cls) line.className = cls;
+      el.appendChild(line);
+      el.scrollTop = el.scrollHeight;
+    };
+    const setStatus = (text, dotClass = "") => {
+      $("statusText").textContent = text;
+      const dot = $("statusDot");
+      dot.className = "dot " + dotClass;
+    };
+
+    // ---------------------------------------------------------------------------
+    // Sliders
+    // ---------------------------------------------------------------------------
+    $("thresholdSlider").addEventListener("input", (e) => {
+      $("thresholdVal").textContent = parseFloat(e.target.value).toFixed(2);
+    });
+    $("confirmSlider").addEventListener("input", (e) => {
+      $("confirmVal").textContent = e.target.value;
+    });
+    $("cooldownSlider").addEventListener("input", (e) => {
+      $("cooldownVal").textContent = parseFloat(e.target.value).toFixed(1);
+    });
+
+    // ---------------------------------------------------------------------------
+    // Detection session
+    // ---------------------------------------------------------------------------
+    const FRAME_SAMPLES = 320; // 20ms at 16kHz
+    const TARGET_SAMPLE_RATE = 16000;
+
+    let detector = null;
+    let audioCtx = null;
+    let sourceNode = null;
+    let processorNode = null;
+    let stream = null;
+    let running = false;
+    let detectionCount = 0;
+
+    $("btnStart").addEventListener("click", async () => {
+      $("btnStart").disabled = true;
+      setStatus("Loading models…", "amber");
+      log("Loading models…");
+
+      const baseUrl = $("modelBaseUrl").value.replace(/\/$/, "");
+      const threshold = parseFloat($("thresholdSlider").value);
+      const confirmCount = parseInt($("confirmSlider").value, 10);
+      const cooldownS = parseFloat($("cooldownSlider").value);
+
+      try {
+        // Configure ort WASM paths (CDN loaded ort sets this globally)
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+
+        detector = new WakeDetector({
+          threshold,
+          cooldownS,
+          confirmCount,
+          melspecModelUrl:   `${baseUrl}/melspectrogram.onnx`,
+          embeddingModelUrl: `${baseUrl}/embedding_model.onnx`,
+          classifierModelUrl:`${baseUrl}/temporal_cnn.onnx`,
+        });
+
+        await detector.load();
+        log("Models loaded.");
+
+        // Request microphone
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: TARGET_SAMPLE_RATE,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        });
+        log("Microphone access granted.");
+
+        audioCtx = new AudioContext({ sampleRate: TARGET_SAMPLE_RATE });
+        sourceNode = audioCtx.createMediaStreamSource(stream);
+
+        // Use ScriptProcessorNode for broad browser support.
+        // bufferSize 512 gives ~32ms — we accumulate to 320 samples (20ms).
+        const bufferSize = 512;
+        processorNode = audioCtx.createScriptProcessor(bufferSize, 1, 1);
+
+        let sampleBuf = new Float32Array(0);
+
+        processorNode.onaudioprocess = async (evt) => {
+          if (!running) return;
+          const input = evt.inputBuffer.getChannelData(0);
+          // Accumulate
+          const merged = new Float32Array(sampleBuf.length + input.length);
+          merged.set(sampleBuf);
+          merged.set(input, sampleBuf.length);
+          sampleBuf = merged;
+
+          // Process all complete 320-sample frames
+          while (sampleBuf.length >= FRAME_SAMPLES) {
+            const frame = sampleBuf.subarray(0, FRAME_SAMPLES);
+            sampleBuf = sampleBuf.slice(FRAME_SAMPLES);
+
+            try {
+              const detected = await detector.detect(frame);
+              const score = detector.lastScore;
+
+              // Update score bar
+              const pct = Math.min(100, score * 100).toFixed(1);
+              const fill = $("barFill");
+              fill.style.width = pct + "%";
+              fill.classList.toggle("detected", detected);
+              $("scoreValue").textContent = score.toFixed(3);
+
+              if (detected) {
+                detectionCount++;
+                log(`Wake word detected! score=${score.toFixed(3)}  (detection #${detectionCount})`, "log-detect");
+                const banner = $("detectionBanner");
+                banner.style.display = "block";
+                setTimeout(() => { banner.style.display = "none"; }, 1500);
+              }
+            } catch (err) {
+              log("Inference error: " + err.message, "log-err");
+            }
+          }
+        };
+
+        sourceNode.connect(processorNode);
+        processorNode.connect(audioCtx.destination);
+        running = true;
+        $("btnStop").disabled = false;
+        setStatus("Listening… say \"Viola\"", "green");
+        log("Detection running.");
+
+      } catch (err) {
+        log("Error: " + err.message, "log-err");
+        setStatus("Error — see log", "red");
+        $("btnStart").disabled = false;
+      }
+    });
+
+    $("btnStop").addEventListener("click", () => {
+      running = false;
+      if (processorNode) { processorNode.disconnect(); processorNode = null; }
+      if (sourceNode)    { sourceNode.disconnect();    sourceNode = null; }
+      if (audioCtx)      { audioCtx.close();           audioCtx = null; }
+      if (stream)        { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+      if (detector)      { detector.dispose();          detector = null; }
+      $("btnStart").disabled = false;
+      $("btnStop").disabled = true;
+      setStatus("Stopped", "");
+      log("Stopped.");
+    });
+  </script>
+</body>
+</html>

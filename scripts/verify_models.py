@@ -22,14 +22,8 @@ from pathlib import Path
 # Keys are model names from MODEL_REGISTRY.
 # Shapes use None for dynamic/batch dimensions.
 EXPECTED_SHAPES: dict[str, dict[str, list[list[int | None]]]] = {
-    "viola_mlp_oww": {
-        "inputs": [[1, 32]],
-        "outputs": [[1, 1]],
-    },
-    "viola_cnn_v4": {
-        "inputs": [[1, 1, 49, 40]],
-        "outputs": [[1, 1]],
-    },
+    # viola_mlp_oww and viola_cnn_v4 removed — never uploaded to GitHub Releases.
+    # Add expected shapes for new models as needed.
 }
 
 

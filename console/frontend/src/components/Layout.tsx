@@ -6,7 +6,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, logout, user } = useAuth();
 
   return (
     <div className="layout">
@@ -24,6 +24,9 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
               <Link to="/record" className="nav-link">
                 Record
+              </Link>
+              <Link to="/teams" className="nav-link">
+                Teams
               </Link>
               <button
                 onClick={logout}
@@ -47,6 +50,13 @@ export default function Layout({ children }: LayoutProps) {
           )}
         </div>
       </nav>
+
+      {isAuthenticated && user && !user.email_verified && (
+        <div className="verification-banner" role="status">
+          Verify your email to unlock recording, training, and billing features.
+          Check your inbox for the verification link.
+        </div>
+      )}
 
       <main className="main-content">{children}</main>
     </div>

@@ -49,7 +49,7 @@ export default function LandingPage() {
 
 detector = WakeDetector(model="my_word.onnx")
 for frame in mic_stream():
-    if detector.process(frame):
+    if detector.detect(frame):
         print("Wake word detected!")`}</code>
             </pre>
           </div>
@@ -94,7 +94,7 @@ for frame in mic_stream():
               </tr>
               <tr>
                 <td>Accuracy disclosure</td>
-                <td className="comparison-highlight">Cohen&apos;s d &gt; 15 (synthetic negatives)</td>
+                <td className="comparison-highlight">5.49% EER (adversarial benchmark v2); Cohen&apos;s d 15.10 (synthetic negatives)</td>
                 <td>No published d-prime</td>
               </tr>
               <tr>
@@ -145,7 +145,7 @@ for frame in mic_stream():
             <div className="step-number">2</div>
             <h3 className="step-title">Train</h3>
             <p className="step-desc">
-              Our ML pipeline trains a custom MLP on OpenWakeWord embeddings.
+              Our ML pipeline trains a custom temporal head on OpenWakeWord embeddings.
               Real-time progress via SSE.
             </p>
           </div>
@@ -160,8 +160,8 @@ for frame in mic_stream():
             <div className="step-number">3</div>
             <h3 className="step-title">Deploy</h3>
             <p className="step-desc">
-              Download your .onnx model. 8ms inference. 2.1MB footprint. Runs
-              anywhere Python runs.
+              Download your 102KB wake head. About 2.5MB total runtime with the
+              shared OpenWakeWord backbone. Runs anywhere Python runs.
             </p>
           </div>
         </div>
@@ -171,6 +171,10 @@ for frame in mic_stream():
       <section className="section proof-section">
         <div className="proof-card">
           <div className="proof-stats">
+            <div className="proof-stat">
+              <span className="proof-stat-value">5.49%</span>
+              <span className="proof-stat-label">EER (adversarial benchmark v2)</span>
+            </div>
             <div className="proof-stat">
               <span className="proof-stat-value">15.10</span>
               <span className="proof-stat-label">Cohen&apos;s d (synthetic negatives)</span>
@@ -184,8 +188,8 @@ for frame in mic_stream():
               <span className="proof-stat-label">samples to train</span>
             </div>
             <div className="proof-stat">
-              <span className="proof-stat-value">2.1MB</span>
-              <span className="proof-stat-label">model size</span>
+              <span className="proof-stat-value">102KB</span>
+              <span className="proof-stat-label">wake head</span>
             </div>
           </div>
           <p className="proof-text">
@@ -217,7 +221,7 @@ for frame in mic_stream():
           <div className="pricing-preview-card">
             <h3>Business</h3>
             <p className="pricing-preview-price">$99<span>/mo</span></p>
-            <p className="pricing-preview-desc">Unlimited models, GPU training. Ship at scale.</p>
+            <p className="pricing-preview-desc">Unlimited models, accelerated training. Ship at scale.</p>
           </div>
         </div>
         <div className="pricing-preview-cta">

@@ -53,17 +53,7 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         description="Temporal CNN on OWW embeddings — production default, best live recall + lowest FP",
         version="0.1.0",
     ),
-    # DEPRECATED: viola_mlp_oww was never uploaded to GitHub Releases.
-    # Kept in registry for backward compatibility (tests reference it).
-    # Do NOT list in user-facing documentation.
-    "viola_mlp_oww": ModelSpec(
-        name="viola_mlp_oww",
-        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_mlp_oww.onnx",
-        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
-        size_bytes=2_100_000,
-        description="DEPRECATED — MLP on OWW embeddings, never released. Use temporal_cnn instead.",
-        version="0.1.0",
-    ),
+    # viola_mlp_oww removed — was never uploaded to GitHub Releases.
     "oww_backbone": ModelSpec(
         name="oww_backbone",
         # Not directly downloadable — bundled inside the openwakeword package.
@@ -74,16 +64,7 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         description="OpenWakeWord embedding backbone — installed with openwakeword package, not separately downloadable",
         version="0.6.0",
     ),
-    # DEPRECATED: viola_cnn_v4 was never uploaded to GitHub Releases.
-    # Kept in registry for backward compatibility.
-    "viola_cnn_v4": ModelSpec(
-        name="viola_cnn_v4",
-        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/viola_cnn_v4.onnx",
-        sha256="PLACEHOLDER_SHA256_FILLED_BY_RELEASE_SCRIPT",
-        size_bytes=1_800_000,
-        description="DEPRECATED — CNN v4, never released. Use temporal_cnn instead.",
-        version="0.1.0",
-    ),
+    # viola_cnn_v4 removed — was never uploaded to GitHub Releases.
     # Kokoro TTS models hosted upstream at thewh1teagle/kokoro-onnx (Apache 2.0).
     # These are large (325MB + 28MB) so they're not bundled in the PyPI package —
     # they auto-download on first TTSEngine use.
@@ -102,6 +83,16 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         size_bytes=28_214_398,
         description="Kokoro voice embeddings — required for TTS",
         version="1.0",
+    ),
+    "temporal_cnn_tflite": ModelSpec(
+        name="temporal_cnn",
+        # TODO: Upload .tflite to GitHub Releases once conversion is validated.
+        # For now, users convert locally via: violawake-download --model temporal_cnn --format tflite
+        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/temporal_cnn.tflite",
+        sha256="PLACEHOLDER_PENDING_TFLITE_UPLOAD",
+        size_bytes=102378,  # approximate; actual TFLite size may differ after conversion
+        description="Temporal CNN on OWW embeddings — TFLite format for edge/mobile devices",
+        version="0.1.0",
     ),
     "temporal_convgru": ModelSpec(
         name="temporal_convgru",
@@ -309,7 +300,12 @@ def _auto_download_model(model_name: str, spec: ModelSpec) -> Path:
     return model_path
 
 
-def get_model_path(model_name: str, *, auto_download: bool = True) -> Path:
+def get_model_path(
+    model_name: str,
+    *,
+    auto_download: bool = True,
+    format: str | None = None,
+) -> Path:
     """Return the local path for a model, optionally downloading on first use.
 
     When the model is not cached and ``auto_download`` is True (the default),
@@ -318,9 +314,15 @@ def get_model_path(model_name: str, *, auto_download: bool = True) -> Path:
     environment variable, or per-call with ``auto_download=False``.
 
     Args:
-        model_name: Name from MODEL_REGISTRY (without .onnx extension).
+        model_name: Name from MODEL_REGISTRY (without extension).
         auto_download: If True (default), download the model if not cached.
             Set to False to get the old raise-on-missing behavior.
+        format: Desired model format (``"onnx"`` or ``"tflite"``).
+            When ``"tflite"`` is requested, the function first checks for
+            a ``<model_name>_tflite`` entry in the registry, then falls back
+            to looking for a locally converted ``.tflite`` file next to the
+            ONNX model.  Defaults to ``None`` (use the registry's native
+            format, typically ONNX).
 
     Returns:
         Path to the cached model file.
@@ -330,34 +332,56 @@ def get_model_path(model_name: str, *, auto_download: bool = True) -> Path:
             disabled or unavailable.
         ModelNotFoundError: If model_name is not in MODEL_REGISTRY.
     """
-    if model_name not in MODEL_REGISTRY:
-        available = ", ".join(MODEL_REGISTRY.keys())
-        raise ModelNotFoundError(f"Unknown model '{model_name}'. Available: {available}")
+    # Handle format-based lookup: resolve "temporal_cnn" + format="tflite"
+    # to the "temporal_cnn_tflite" registry entry if it exists.
+    effective_name = model_name
+    if format == "tflite" and not model_name.endswith("_tflite"):
+        tflite_name = f"{model_name}_tflite"
+        if tflite_name in MODEL_REGISTRY:
+            effective_name = tflite_name
+        else:
+            # No registry entry; check for a locally converted .tflite file
+            if model_name in MODEL_REGISTRY:
+                spec = MODEL_REGISTRY[model_name]
+                tflite_path = get_model_dir() / f"{spec.name}.tflite"
+                if tflite_path.exists():
+                    return tflite_path
+                raise FileNotFoundError(
+                    f"TFLite version of '{model_name}' not found at {tflite_path}. "
+                    f"Convert with: violawake-download --model {model_name} --format tflite"
+                )
+            raise ModelNotFoundError(
+                f"Unknown model '{model_name}'. No TFLite variant found."
+            )
 
-    if model_name in _PACKAGE_MANAGED_MODELS:
+    if effective_name not in MODEL_REGISTRY:
+        available = ", ".join(MODEL_REGISTRY.keys())
+        raise ModelNotFoundError(f"Unknown model '{effective_name}'. Available: {available}")
+
+    if effective_name in _PACKAGE_MANAGED_MODELS:
         raise FileNotFoundError(
-            f"Model '{model_name}' is provided by the openwakeword package, not the ViolaWake "
+            f"Model '{effective_name}' is provided by the openwakeword package, not the ViolaWake "
             "model cache. Install with: pip install openwakeword"
         )
 
-    spec = MODEL_REGISTRY[model_name]
+    spec = MODEL_REGISTRY[effective_name]
     # Determine file extension from URL
     url_suffix = Path(spec.url).suffix
     if not url_suffix:
         logger.warning(
             "URL for model '%s' has no file extension; defaulting to .onnx",
-            model_name,
+            effective_name,
         )
     ext = url_suffix or ".onnx"
     model_path = get_model_dir() / f"{spec.name}{ext}"
 
     if not model_path.exists():
         if auto_download and not _is_auto_download_disabled():
-            return _auto_download_model(model_name, spec)
+            return _auto_download_model(effective_name, spec)
 
         raise FileNotFoundError(
-            f"Model '{model_name}' not found in cache at {model_path}. "
-            f"Run: violawake-download --model {model_name}"
+            f"Model '{effective_name}' not found in cache at {model_path}. "
+            f"Run: violawake-download --model {effective_name}"
         )
 
     return model_path

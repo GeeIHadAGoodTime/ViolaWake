@@ -1,17 +1,16 @@
 """Async training job queue routes."""
 
-from __future__ import annotations
-
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_verified_user
 from app.database import get_db
 from app.job_queue import Job, QueueFullError, init_job_queue
 from app.models import Recording, User
+from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.routes.billing import check_training_quota, record_usage
 from app.schemas import (
     JobCircuitBreakerResponse,
@@ -22,6 +21,15 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+
+async def _quota_user_with_rate_key(
+    request: Request,
+    current_user: Annotated[User, Depends(check_training_quota)],
+) -> User:
+    """Resolve the user via training-quota check and stash ID for rate limiting."""
+    set_rate_limit_user(request, current_user.id)
+    return current_user
 
 
 def serialize_job(job: Job) -> JobResponse:
@@ -52,6 +60,7 @@ async def validate_training_request(
         select(Recording).where(
             Recording.id.in_(body.recording_ids),
             Recording.user_id == current_user.id,
+            Recording.deleted_at.is_(None),
         )
     )
     recordings = result.scalars().all()
@@ -61,20 +70,20 @@ async def validate_training_request(
         missing = [recording_id for recording_id in body.recording_ids if recording_id not in found_ids]
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Recordings not found or not owned by you: %s" % missing,
+            detail=f"Recordings not found or not owned by you: {missing}",
         )
 
     wrong_word = [recording.id for recording in recordings if recording.wake_word != wake_word]
     if wrong_word:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Recordings %s do not match wake word '%s'" % (wrong_word, body.wake_word),
+            detail=f"Recordings {wrong_word} do not match wake word '{body.wake_word}'",
         )
 
     if len(recordings) < 5:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Need at least 5 recordings. Got %s." % len(recordings),
+            detail=f"Need at least 5 recordings. Got {len(recordings)}.",
         )
 
     return wake_word, list(body.recording_ids), body.epochs
@@ -115,9 +124,11 @@ async def get_owned_job_or_404(job_id: int, current_user: User) -> Job:
 
 
 @router.post("", response_model=JobSubmitResponse, status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(TRAINING_SUBMIT_LIMIT, key_func=key_by_user)
 async def create_job(
+    request: Request,
     body: JobSubmitRequest,
-    current_user: Annotated[User, Depends(check_training_quota)],
+    current_user: Annotated[User, Depends(_quota_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobSubmitResponse:
     """Submit a new training job."""
@@ -126,7 +137,7 @@ async def create_job(
 
 @router.get("", response_model=list[JobResponse])
 async def list_jobs(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
 ) -> list[JobResponse]:
     """List the current user's training jobs."""
     jobs = await (await init_job_queue()).list_jobs(current_user.id)
@@ -135,7 +146,7 @@ async def list_jobs(
 
 @router.post("/resume", response_model=MessageResponse)
 async def resume_jobs(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
 ) -> MessageResponse:
     """Manually resume a user's paused queue after circuit breaker activation."""
     await (await init_job_queue()).resume_user(current_user.id)
@@ -144,7 +155,7 @@ async def resume_jobs(
 
 @router.get("/circuit-breaker/state", response_model=JobCircuitBreakerResponse)
 async def get_circuit_breaker_state(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
 ) -> JobCircuitBreakerResponse:
     """Return the current user's circuit breaker state."""
     breaker = await (await init_job_queue()).get_circuit_breaker(current_user.id)
@@ -160,7 +171,7 @@ async def get_circuit_breaker_state(
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(
     job_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
 ) -> JobResponse:
     """Return one training job."""
     job = await get_owned_job_or_404(job_id, current_user)
@@ -170,7 +181,7 @@ async def get_job(
 @router.delete("/{job_id}", response_model=MessageResponse)
 async def cancel_job(
     job_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_verified_user)],
 ) -> MessageResponse:
     """Cancel a pending or running training job."""
     await get_owned_job_or_404(job_id, current_user)

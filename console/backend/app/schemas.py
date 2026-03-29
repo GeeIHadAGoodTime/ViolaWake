@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import Enum
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -35,10 +35,16 @@ class ResetPasswordRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
     name: str
+    email_verified: bool
 
     model_config = {"from_attributes": True}
 
@@ -50,6 +56,16 @@ class UserDetailResponse(UserResponse):
 class AuthResponse(BaseModel):
     token: str
     user: UserResponse
+
+
+class DownloadTokenRequest(BaseModel):
+    action: Literal["model_download", "training_stream"]
+    resource_id: int = Field(ge=1)
+
+
+class DownloadTokenResponse(BaseModel):
+    token: str
+    expires_in_seconds: int
 
 
 class MessageResponse(BaseModel):
@@ -80,7 +96,7 @@ class RecordingUploadResponse(BaseModel):
 class TrainingStartRequest(BaseModel):
     wake_word: str = Field(min_length=1, max_length=100)
     recording_ids: list[int] = Field(min_length=1)
-    epochs: int = Field(default=50, ge=5, le=500)
+    epochs: int = Field(default=80, ge=5, le=500)
 
 
 class TrainingStartResponse(BaseModel):
@@ -176,6 +192,54 @@ class ModelPerformanceResponse(BaseModel):
     evaluation_data: dict[str, Any] = Field(default_factory=dict)
 
 
+# ── Teams ────────────────────────────────────────────────────────────────────
+
+class TeamMemberRole(str, Enum):
+    owner = "owner"
+    admin = "admin"
+    member = "member"
+
+
+class TeamCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class TeamInviteRequest(BaseModel):
+    email: EmailStr
+    role: TeamMemberRole = TeamMemberRole.member
+
+
+class TeamMemberResponse(BaseModel):
+    user_id: int
+    email: str
+    name: str
+    role: str
+    invited_at: datetime
+    joined_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TeamResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    owner_id: int
+    members: list[TeamMemberResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class TeamListItemResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    owner_id: int
+    member_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
 # ── Billing ─────────────────────────────────────────────────────────────────
 
 class BillingTier(str, Enum):
@@ -204,6 +268,8 @@ class SubscriptionResponse(BaseModel):
     tier: str
     status: str
     current_period_end: datetime | None = None
+    trial_active: bool = False
+    trial_end: datetime | None = None
     usage: UsageResponse
 
     model_config = {"from_attributes": True}

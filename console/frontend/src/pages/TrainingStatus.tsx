@@ -30,9 +30,9 @@ export default function TrainingStatusPage() {
     setCompletedModel({ modelId, dPrime });
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     if (!completedModel) return;
-    const url = getModelDownloadUrl(completedModel.modelId);
+    const url = await getModelDownloadUrl(completedModel.modelId);
     const a = document.createElement("a");
     a.href = url;
     a.download = "model.onnx";

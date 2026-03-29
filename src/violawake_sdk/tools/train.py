@@ -662,6 +662,16 @@ def _extract_temporal_embeddings(
             failures += 1
             continue
 
+        # Guard against zero-energy files (corrupted or silent recordings).
+        # If these slip through upload validation, they corrupt training:
+        # the model learns silence = wake word.
+        audio_rms = float(np.sqrt(np.mean(audio ** 2)))
+        if audio_rms < 1e-6:
+            if verbose and failures == 0:
+                print(f"    WARNING: Skipping zero-energy file: {wav_path.name}")
+            failures += 1
+            continue
+
         audio = center_crop(audio, CLIP_SAMPLES)
         audio_i16 = np.clip(audio, -1.0, 1.0)
         audio_i16 = (audio_i16 * 32767).astype(np.int16)
@@ -754,6 +764,16 @@ def _extract_mlp_embeddings(
     for file_idx, wav_path in enumerate(audio_files):
         audio = load_audio(wav_path)
         if audio is None:
+            failures += 1
+            continue
+
+        # Guard against zero-energy files (corrupted or silent recordings).
+        # If these slip through upload validation, they corrupt training:
+        # the model learns silence = wake word.
+        audio_rms = float(np.sqrt(np.mean(audio ** 2)))
+        if audio_rms < 1e-6:
+            if verbose and failures == 0:
+                print(f"    WARNING: Skipping zero-energy file: {wav_path.name}")
             failures += 1
             continue
 

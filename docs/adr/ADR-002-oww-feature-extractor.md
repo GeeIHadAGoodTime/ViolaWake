@@ -22,9 +22,11 @@ The ViolaWake wake word detector has two architectural layers:
 
 For feature extraction, we have three options: train a custom feature extractor from scratch, use mel spectrograms with hand-crafted features (PCEN), or use a pre-trained audio embedding model as a frozen backbone.
 
-The production Viola deployment uses **two model families**:
+The original decision compared **two model families**:
 - `viola_v1–v4.onnx`: Custom CNN (3 conv layers, 28K params) trained on mel+PCEN features — in-house
-- `viola_mlp_oww.onnx`: MLP head on frozen OpenWakeWord (OWW) 96-dim audio embeddings — **current production default**
+- `viola_mlp_oww.onnx`: Early MLP head on frozen OpenWakeWord (OWW) 96-dim audio embeddings
+
+The architectural decision remains current even though the shipped default wake head later moved to `temporal_cnn`. The core choice is unchanged: **ViolaWake uses a frozen OWW backbone plus a ViolaWake-owned wake head.**
 
 On our current synthetic-negative benchmark, the MLP+OWW approach achieves **Cohen's d 15.10** vs **Cohen's d 3.07** for the CNN model. This is a large internal separability improvement, but it is not the same as a real-world speech-negative d-prime comparison. This ADR documents why we adopt OWW as the standard backbone for the SDK.
 
@@ -34,7 +36,7 @@ On our current synthetic-negative benchmark, the MLP+OWW approach achieves **Coh
 
 **Use OpenWakeWord (OWW) as the fixed audio feature extractor backbone for wake word detection. Train only the MLP classification head, not the feature extractor.**
 
-The OWW backbone is frozen at inference time. The ViolaWake SDK ships the OWW feature extractor as an ONNX model and the Viola-specific MLP head as a separate ONNX model. Both are required for detection.
+The OWW backbone is frozen at inference time. The ViolaWake SDK uses the OWW feature extractor plus a separate ViolaWake wake head. Both are required for detection.
 
 ---
 
@@ -68,7 +70,7 @@ Large pre-trained speech models (Wav2Vec2, HuBERT) produce high-quality audio em
 - Well-understood and widely used in research
 
 **Cons:**
-- Model size: Wav2Vec2-base is 360MB+. OWW is ~10MB. Not appropriate for an SDK targeting Pi-class devices.
+- Model size: Wav2Vec2-base is 360MB+. The current shared OWW backbone runtime asset is about 1.33 MB. Wav2Vec2 is not appropriate for an SDK targeting Pi-class devices.
 - License: Wav2Vec2 is Apache 2.0 (acceptable), but inference overhead is prohibitive
 - Overkill for binary wake word classification — we don't need full speech understanding, just keyword fingerprint
 
@@ -78,7 +80,7 @@ OpenWakeWord is itself a pre-trained audio embedding model designed specifically
 
 **Pros:**
 - Specifically designed for wake word detection — the embeddings encode acoustically-relevant features for short-duration keyword detection
-- Small: OWW feature extractor ONNX is ~10MB
+- Small: the current shared OWW backbone runtime asset is about 1.33 MB
 - Apache 2.0 license — compatible with our own Apache 2.0 SDK
 - We have production validation of the architecture in Viola, and the current reference model scores Cohen's d 15.10 on the synthetic-negative benchmark
 - Training overhead is minimal: we only train the small MLP head (~50K params) instead of the full model
@@ -111,9 +113,9 @@ if score >= threshold and not in_cooldown and not is_playing:
     trigger_wake_word_callback()
 ```
 
-**Two ONNX sessions, loaded at init:**
-- `oww_audio_backbone.onnx` (~10MB) — OWW feature extractor (frozen)
-- `viola_mlp_oww.onnx` (~2.1MB) — Viola MLP classification head
+**Two runtime model assets are loaded:**
+- `oww_backbone` (`1.33 MB`) — OWW feature extractor (frozen)
+- ViolaWake wake head — current default `temporal_cnn` is `102 KB`, for a combined runtime footprint of **1.43 MB**
 
 ---
 

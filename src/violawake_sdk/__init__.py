@@ -57,16 +57,33 @@ from violawake_sdk.wake_detector import (
     validate_audio_chunk,
 )
 
-# Conditional imports for optional extras
+# Conditional imports for optional extras — provide helpful error on use if missing
+
+
+def _make_missing_extra_class(name: str, extra: str):
+    """Return a placeholder class that raises ImportError on instantiation."""
+
+    class _Missing:
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                f"{name} requires extra dependencies. "
+                f'Install them with: pip install "violawake[{extra}]"'
+            )
+
+    _Missing.__name__ = _Missing.__qualname__ = name
+    return _Missing
+
+
 try:
     from violawake_sdk.tts import TTSEngine
 except ImportError:
-    TTSEngine = None  # type: ignore[assignment,misc]
+    TTSEngine = _make_missing_extra_class("TTSEngine", "tts")  # type: ignore[assignment,misc]
 
 try:
-    from violawake_sdk.stt import STTEngine
+    from violawake_sdk.stt import STTEngine, StreamingSTTEngine
 except ImportError:
-    STTEngine = None  # type: ignore[assignment,misc]
+    STTEngine = _make_missing_extra_class("STTEngine", "stt")  # type: ignore[assignment,misc]
+    StreamingSTTEngine = _make_missing_extra_class("StreamingSTTEngine", "stt")  # type: ignore[assignment,misc]
 
 
 def list_models() -> list[dict[str, str]]:
@@ -139,6 +156,7 @@ __all__ = [
     "VADEngine",
     "TTSEngine",
     "STTEngine",
+    "StreamingSTTEngine",
     "VoicePipeline",
     # Exceptions
     "ViolaWakeError",
