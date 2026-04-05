@@ -46,7 +46,7 @@ from violawake_sdk.async_detector import AsyncWakeDetector
 from violawake_sdk.confidence import ConfidenceLevel, ConfidenceResult
 from violawake_sdk.ensemble import FusionStrategy
 from violawake_sdk.noise_profiler import NoiseProfiler
-from violawake_sdk.pipeline import VoicePipeline
+from violawake_sdk.pipeline import AsyncVoicePipeline, VoicePipeline
 from violawake_sdk.power_manager import PowerManager
 from violawake_sdk.vad import VADEngine
 from violawake_sdk.wake_detector import (
@@ -158,6 +158,7 @@ __all__ = [
     "STTEngine",
     "StreamingSTTEngine",
     "VoicePipeline",
+    "AsyncVoicePipeline",
     # Exceptions
     "ViolaWakeError",
     "ModelNotFoundError",

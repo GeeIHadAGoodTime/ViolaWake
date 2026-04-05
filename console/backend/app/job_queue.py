@@ -671,7 +671,7 @@ class JobQueue:
             # Resolve negatives corpus for paid tiers
             negatives_dir = await self._resolve_negatives_dir(job.user_id)
 
-            output_dir = Path(tempfile.mkdtemp(prefix=f"violawake_job_{job.id}_"))
+            output_dir = Path(tempfile.mkdtemp(prefix=f"violawake_job_{job.id}_", dir=str(settings.tmp_dir)))
             output_path = output_dir / f"{job.wake_word}_{job.id}_{int(now.timestamp())}.onnx"
 
             loop = asyncio.get_running_loop()

@@ -53,6 +53,7 @@ MEL_STRIDE = 8  # Mel frame stride between embeddings
 _MAX_AUDIO_SAMPLES = SAMPLE_RATE * 2  # 2s ring buffer (32000 samples)
 _MAX_CHUNK_SAMPLES = SAMPLE_RATE * 10  # Maximum accepted chunk: 10s
 _MAX_PROCESS_FRAME_SAMPLES = FRAME_SAMPLES * 10  # Largest non-pathological frame for process()
+_ALLOWED_AUDIO_DTYPES = (np.int16, np.float32, np.float64)
 
 # Temporal model constants
 _TEMPORAL_SEQ_LEN_DEFAULT = 9  # Default sequence length for temporal models
@@ -189,16 +190,18 @@ def validate_audio_chunk(data: bytes | np.ndarray) -> np.ndarray:
             raise ValueError(
                 f"Audio chunk must be 1-D, got {data.ndim}-D array with shape {data.shape}"
             )
-        _ALLOWED_DTYPES = (np.int16, np.float32, np.float64)
-        if data.dtype not in _ALLOWED_DTYPES:
+        original_dtype = data.dtype
+        if original_dtype not in _ALLOWED_AUDIO_DTYPES:
             raise ValueError(
-                f"Audio chunk dtype must be one of {[str(d) for d in _ALLOWED_DTYPES]}, "
-                f"got {data.dtype}"
+                f"Audio chunk dtype must be one of {[str(d) for d in _ALLOWED_AUDIO_DTYPES]}, "
+                f"got {original_dtype}"
             )
-        if np.issubdtype(data.dtype, np.floating) and not np.all(np.isfinite(data)):
-            data = np.where(np.isfinite(data), data, 0.0)
-            logger.warning("Audio chunk contained non-finite values (NaN/inf); replaced with 0")
         pcm = data.astype(np.float32)
+        # Check the pre-cast dtype here; after astype(float32) every ndarray looks floating,
+        # which made the old post-cast dtype branch in the process() path effectively dead.
+        if original_dtype != np.int16 and not np.all(np.isfinite(pcm)):
+            pcm = np.where(np.isfinite(pcm), pcm, 0.0).astype(np.float32, copy=False)
+            logger.warning("Audio chunk contained non-finite values (NaN/inf); replaced with 0")
     else:
         raise TypeError(f"Audio chunk must be bytes or numpy ndarray, got {type(data).__name__}")
 

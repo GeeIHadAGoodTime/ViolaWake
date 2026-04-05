@@ -24,6 +24,11 @@ from collections.abc import Generator
 
 import numpy as np
 
+try:
+    import pysbd
+except ImportError:
+    pysbd = None
+
 from violawake_sdk._exceptions import ModelLoadError, ModelNotFoundError
 from violawake_sdk.models import get_model_path
 
@@ -277,14 +282,23 @@ class TTSEngine:
     def _split_sentences(text: str) -> list[str]:
         """Split text at sentence boundaries for chunked synthesis.
 
-        Uses a regex that splits on sentence-ending punctuation followed by
-        whitespace and an uppercase letter (or end of string). This avoids
-        false splits on abbreviations ("Dr. Smith"), decimals ("3.14"),
-        and URLs.
+        Uses ``pysbd`` when available for robust sentence boundary
+        disambiguation, with a regex fallback if the dependency is missing.
         """
+        if not text:
+            return []
+
+        if pysbd is not None:
+            segmenter = pysbd.Segmenter(language="en", clean=False)
+            return [s.strip() for s in segmenter.segment(text) if s and s.strip()]
+
+        return TTSEngine._split_sentences_fallback(text)
+
+    @staticmethod
+    def _split_sentences_fallback(text: str) -> list[str]:
+        """Fallback regex sentence splitter used when ``pysbd`` is unavailable."""
         import re
 
-        # Split on sentence-ending punctuation followed by space+uppercase or end of string
         pattern = r"(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$"
         parts = re.split(pattern, text)
         return [s.strip() for s in parts if s and s.strip()]

@@ -1,28 +1,10 @@
 """
-ViolaWake Evaluation
-=====================
+ViolaWake evaluation helpers.
 
-Wake word evaluation using a Cohen's d-style separability score plus FAR/FRR.
-
-Supports two model architectures:
-  - **MLP-on-OWW** (primary): MLP classifier on OpenWakeWord embeddings (96-dim).
-    Auto-detected via .config.json or ONNX input shape.
-  - **CNN** (legacy): CNN on mel spectrograms. Used only for old viola_v2/v3 models.
-
-Copied and adapted from Viola's violawake/training/evaluate_real.py
-and violawake/training/trainer.py::evaluate_real_samples.
-
-Usage::
-
-    from violawake_sdk.training.evaluate import evaluate_onnx_model, compute_dprime
-
-    results = evaluate_onnx_model(
-        model_path="models/viola_mlp_oww.onnx",
-        test_dir="data/test/",  # must contain positives/ and negatives/
-    )
-    print(f"Cohen's d: {results['d_prime']:.2f}")
-    print(f"FAR: {results['far_per_hour']:.2f}/hr")
-    print(f"Optimal threshold: {results['optimal_threshold']:.2f}")
+Supports:
+  - ``mlp_on_oww`` models with input shape ``(batch, 96)``
+  - ``temporal_oww`` models with input shape ``(batch, seq_len, 96)``
+  - legacy mel/CNN models
 """
 
 from __future__ import annotations
@@ -37,125 +19,80 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# ── Architecture detection ────────────────────────────────────────────────────
+_OWW_EMBEDDING_DIM = 96
+_DEFAULT_TEMPORAL_SEQ_LEN = 9
 
-# Input dimensions that indicate MLP-on-OWW architecture.
-# OWW embeddings are typically 96-dim, but allow some variation.
-_OWW_EMBEDDING_DIM_RANGE = (32, 256)
+
+def _get_feature_dims(input_shape: list | tuple) -> list:
+    """Return non-batch input dimensions from an ONNX input shape."""
+    dims = list(input_shape)
+    return dims[1:] if len(dims) >= 2 else dims
+
+
+def _detect_architecture_from_input_shape(input_shape: list | tuple, input_name: str) -> str:
+    """Detect evaluation path from ONNX input shape."""
+    feature_dims = _get_feature_dims(input_shape)
+
+    if len(feature_dims) == 1 and feature_dims[0] == _OWW_EMBEDDING_DIM:
+        logger.info("Architecture detected from input shape %s: mlp_on_oww", input_shape)
+        return "mlp_on_oww"
+
+    if len(feature_dims) == 2 and feature_dims[-1] == _OWW_EMBEDDING_DIM:
+        logger.info("Architecture detected from input shape %s: temporal_oww", input_shape)
+        return "temporal_oww"
+
+    if input_name == "embeddings":
+        logger.info(
+            "Architecture detected from input name %s with shape %s: temporal_oww",
+            input_name,
+            input_shape,
+        )
+        return "temporal_oww"
+
+    logger.info("Architecture detected from input shape %s: cnn", input_shape)
+    return "cnn"
+
+
+def _infer_temporal_seq_len(input_shape: list | tuple) -> int:
+    """Infer ``seq_len`` from a temporal OWW ONNX input shape."""
+    feature_dims = _get_feature_dims(input_shape)
+    if len(feature_dims) >= 2 and isinstance(feature_dims[0], int) and feature_dims[0] > 0:
+        return int(feature_dims[0])
+    return _DEFAULT_TEMPORAL_SEQ_LEN
 
 
 def detect_architecture(model_path: Path, session) -> str:
     """
-    Auto-detect model architecture from config file or ONNX input shape.
+    Auto-detect model architecture from config or ONNX input shape.
 
-    Detection order:
-      1. Check for .config.json alongside the .onnx file
-      2. Fall back to ONNX input shape heuristic
-
-    Args:
-        model_path: Path to the .onnx model file.
-        session: An onnxruntime InferenceSession for the model.
-
-    Returns:
-        "mlp_on_oww", "temporal_oww", or "cnn"
+    Returns one of ``mlp_on_oww``, ``temporal_oww``, or ``cnn``.
     """
-    # 1. Check for .config.json
     config_path = model_path.with_suffix(".config.json")
     if config_path.exists():
         try:
             with open(config_path) as f:
                 config = json.load(f)
-            arch = config.get("architecture", "")
-            if arch in ("mlp_on_oww", "temporal_cnn", "temporal_oww"):
-                # Normalize temporal_cnn → temporal_oww for scorer routing
-                result = "temporal_oww" if arch == "temporal_cnn" else arch
-                logger.info("Architecture detected from config: %s", result)
-                return result
-            elif arch == "cnn":
-                logger.info("Architecture detected from config: cnn")
-                return "cnn"
-            # If architecture key is missing or unrecognized, fall through
         except (json.JSONDecodeError, OSError):
-            pass  # Fall through to shape heuristic
+            config = {}
 
-    # 2. ONNX input shape heuristic
-    input_info = session.get_inputs()[0]
-    input_shape = input_info.shape  # e.g. [1, 96] for MLP or [1, 40, N] for CNN
-    input_name = input_info.name
-
-    # Filter out dynamic/string dims, keep only integer dims
-    numeric_dims = [d for d in input_shape if isinstance(d, int)]
-
-    if len(numeric_dims) >= 1:
-        if len(input_shape) == 2:
-            # 2D input: (batch, embedding_dim) — MLP-on-OWW
-            last_dim = numeric_dims[-1] if numeric_dims else None
-            if last_dim and _OWW_EMBEDDING_DIM_RANGE[0] <= last_dim <= _OWW_EMBEDDING_DIM_RANGE[1]:
-                logger.info(
-                    "Architecture detected from input shape %s: mlp_on_oww (dim=%d)",
-                    input_shape,
-                    last_dim,
-                )
-                return "mlp_on_oww"
-        elif len(input_shape) >= 3:
-            # 3D input: could be temporal OWW (batch, seq, 96) or CNN (batch, mels, time)
-            # Temporal OWW: (batch, seq_len=5-15, embedding_dim=96), input named "embeddings"
-            # CNN: (batch, n_mels=32-40, time_steps=50-200+)
-            last_dim = numeric_dims[-1] if numeric_dims else None
-            seq_dim = numeric_dims[0] if len(numeric_dims) >= 2 else None
-            is_temporal_oww = (
-                last_dim == 96 and seq_dim is not None and seq_dim <= 20
-            ) or input_name == "embeddings"
-            if is_temporal_oww:
-                logger.info(
-                    "Architecture detected from input shape %s: temporal_oww (dim=%s, seq=%s)",
-                    input_shape,
-                    last_dim,
-                    seq_dim,
-                )
-                return "temporal_oww"
-            logger.info(
-                "Architecture detected from input shape %s: cnn (3D+ input)",
-                input_shape,
-            )
+        arch = config.get("architecture", "")
+        if arch in ("mlp_on_oww", "temporal_oww", "temporal_cnn"):
+            result = "temporal_oww" if arch == "temporal_cnn" else arch
+            logger.info("Architecture detected from config: %s", result)
+            return result
+        if arch == "cnn":
+            logger.info("Architecture detected from config: cnn")
             return "cnn"
 
-    # Default: assume CNN (legacy behavior)
-    logger.warning(
-        "Could not determine architecture from shape %s; defaulting to cnn",
-        input_shape,
-    )
-    return "cnn"
-
-
-# ── Core metrics ──────────────────────────────────────────────────────────────
+    input_info = session.get_inputs()[0]
+    return _detect_architecture_from_input_shape(input_info.shape, input_info.name)
 
 
 def compute_dprime(
-    pos_scores: list[float] | np.ndarray, neg_scores: list[float] | np.ndarray
+    pos_scores: list[float] | np.ndarray,
+    neg_scores: list[float] | np.ndarray,
 ) -> float:
-    """
-    Compute the repo's historical "d-prime" metric.
-
-    This is Cohen's d:
-
-        (mean_pos - mean_neg) / sqrt(0.5 * (var_pos + var_neg))
-
-    It is not the standard signal-detection d-prime metric often reported in
-    wake word benchmarks. The score can be materially inflated when negatives
-    are synthetic-only noise/silence instead of real speech/background audio.
-
-    Higher is better. In this repo, values around 10-15 have historically been
-    used as internal synthetic-benchmark targets, not as real-world accuracy
-    guarantees.
-
-    Args:
-        pos_scores: Model scores on positive (wake word) samples.
-        neg_scores: Model scores on negative (background) samples.
-
-    Returns:
-        Cohen's d value. Returns 0.0 if either list is empty.
-    """
+    """Compute the repo's historical Cohen's d-style separation metric."""
     pos = np.asarray(pos_scores, dtype=np.float64)
     neg = np.asarray(neg_scores, dtype=np.float64)
 
@@ -170,16 +107,7 @@ def compute_dprime(
 
 
 def compute_eer(fpr: np.ndarray, tpr: np.ndarray) -> tuple[float, int]:
-    """
-    Compute Equal Error Rate (EER) from ROC curve.
-
-    Args:
-        fpr: False positive rates (from sklearn roc_curve).
-        tpr: True positive rates (from sklearn roc_curve).
-
-    Returns:
-        (eer, threshold_index) tuple.
-    """
+    """Compute Equal Error Rate from ROC arrays."""
     fnr = 1.0 - tpr
     idx = int(np.nanargmin(np.abs(fnr - fpr)))
     eer = float((fpr[idx] + fnr[idx]) / 2.0)
@@ -191,28 +119,7 @@ def find_optimal_threshold(
     neg_scores: np.ndarray,
     step: float = 0.01,
 ) -> dict:
-    """
-    Find the optimal classification threshold by sweeping from 0.0 to 1.0.
-
-    For each candidate threshold, computes:
-      - FAR (False Accept Rate): fraction of negatives scoring >= threshold
-      - FRR (False Reject Rate): fraction of positives scoring < threshold
-
-    Returns the threshold that minimizes (FAR + FRR), which approximates
-    the Equal Error Rate (EER) operating point.
-
-    Args:
-        pos_scores: Model scores on positive samples.
-        neg_scores: Model scores on negative samples.
-        step: Threshold increment (default 0.01 for 101 steps).
-
-    Returns:
-        dict with keys:
-          - optimal_threshold: float
-          - optimal_far: float (FAR at optimal threshold)
-          - optimal_frr: float (FRR at optimal threshold)
-          - eer_approx: float (approximate EER = (FAR + FRR) / 2 at optimal)
-    """
+    """Sweep thresholds and minimize ``FPR + FNR``."""
     thresholds = np.arange(0.0, 1.0 + step, step)
     best_thresh = 0.5
     best_cost = float("inf")
@@ -221,7 +128,6 @@ def find_optimal_threshold(
 
     n_pos = len(pos_scores)
     n_neg = len(neg_scores)
-
     if n_pos == 0 or n_neg == 0:
         return {
             "optimal_threshold": 0.5,
@@ -230,13 +136,13 @@ def find_optimal_threshold(
             "eer_approx": 1.0,
         }
 
-    for t in thresholds:
-        far = float(np.sum(neg_scores >= t) / n_neg)
-        frr = float(np.sum(pos_scores < t) / n_pos)
+    for threshold in thresholds:
+        far = float(np.sum(neg_scores >= threshold) / n_neg)
+        frr = float(np.sum(pos_scores < threshold) / n_pos)
         cost = far + frr
         if cost < best_cost:
             best_cost = cost
-            best_thresh = float(t)
+            best_thresh = float(threshold)
             best_far = far
             best_frr = frr
 
@@ -253,17 +159,7 @@ def compute_confusion_matrix(
     neg_scores: np.ndarray,
     threshold: float,
 ) -> dict:
-    """
-    Compute confusion matrix metrics at a given threshold.
-
-    Args:
-        pos_scores: Model scores on positive (wake word) samples.
-        neg_scores: Model scores on negative (background) samples.
-        threshold: Classification threshold (score >= threshold = positive).
-
-    Returns:
-        dict with keys: tp, fp, tn, fn, precision, recall, f1
-    """
+    """Compute confusion-matrix counts and precision/recall/F1."""
     tp = int(np.sum(pos_scores >= threshold))
     fn = int(np.sum(pos_scores < threshold))
     fp = int(np.sum(neg_scores >= threshold))
@@ -284,9 +180,6 @@ def compute_confusion_matrix(
     }
 
 
-# ── Per-file score dumping ────────────────────────────────────────────────────
-
-
 def _dump_scores_csv(
     pos_files: list[Path],
     pos_scores: list[float],
@@ -295,19 +188,7 @@ def _dump_scores_csv(
     threshold: float,
     csv_path: Path,
 ) -> None:
-    """
-    Write per-file scores to a CSV for debugging false rejects/accepts.
-
-    Columns: file, label, score, threshold_pass
-
-    Args:
-        pos_files: List of positive file paths (aligned with pos_scores).
-        pos_scores: Scores for positive files.
-        neg_files: List of negative file paths (aligned with neg_scores).
-        neg_scores: Scores for negative files.
-        threshold: Classification threshold.
-        csv_path: Output CSV path.
-    """
+    """Write per-file scores using the active analysis threshold."""
     csv_path = Path(csv_path)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -318,36 +199,58 @@ def _dump_scores_csv(
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["file", "label", "score", "threshold_pass"])
+        writer.writerow(["file", "label", "score", "correct"])
         for fpath, score in zip(pos_files, pos_scores, strict=True):
             writer.writerow([str(fpath), "positive", f"{score:.6f}", score >= threshold])
         for fpath, score in zip(neg_files, neg_scores, strict=True):
-            writer.writerow([str(fpath), "negative", f"{score:.6f}", score >= threshold])
+            writer.writerow([str(fpath), "negative", f"{score:.6f}", score < threshold])
 
     logger.info(
         "Score dump written to %s (%d entries)", csv_path, len(pos_scores) + len(neg_scores)
     )
 
 
-# ── Scoring backends ──────────────────────────────────────────────────────────
+def _extract_oww_frame_embeddings(
+    wav_path: Path,
+    *,
+    preprocessor,
+    load_audio,
+    center_crop,
+    clip_samples: int,
+) -> np.ndarray | None:
+    """Extract frame embeddings with the same OpenWakeWord path used in training."""
+    audio = load_audio(wav_path)
+    if audio is None:
+        return None
+
+    audio_rms = float(np.sqrt(np.mean(audio**2)))
+    if audio_rms < 1e-6:
+        logger.warning("Skipping zero-energy file: %s", wav_path)
+        return None
+
+    audio = center_crop(audio, clip_samples)
+    audio_i16 = np.clip(audio, -1.0, 1.0)
+    audio_i16 = (audio_i16 * 32767).astype(np.int16)
+
+    if len(audio_i16) < clip_samples:
+        audio_i16 = np.pad(audio_i16, (0, clip_samples - len(audio_i16)))
+    else:
+        audio_i16 = audio_i16[:clip_samples]
+
+    frame_embeddings = np.asarray(preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1))
+    if frame_embeddings.ndim == 3:
+        frame_embeddings = frame_embeddings[0]
+    else:
+        frame_embeddings = np.squeeze(frame_embeddings)
+
+    if frame_embeddings.ndim == 1:
+        frame_embeddings = frame_embeddings.reshape(1, -1)
+
+    return frame_embeddings.astype(np.float32, copy=False)
 
 
 def _build_oww_scorer(session, input_name: str):
-    """
-    Build a scoring function for MLP-on-OWW models.
-
-    Loads the OpenWakeWord preprocessor once and returns a closure that
-    extracts OWW embeddings and runs the MLP classifier.
-
-    This MUST match the embedding extraction in train.py::_extract_embedding exactly.
-
-    Args:
-        session: ONNX InferenceSession for the MLP model.
-        input_name: Name of the model's input tensor.
-
-    Returns:
-        Callable that takes a wav Path and returns a float score (or None on failure).
-    """
+    """Build a scorer for mean-pooled OpenWakeWord embedding models."""
     try:
         from openwakeword.model import Model as OWWModel  # type: ignore[import]
     except ImportError as e:
@@ -364,22 +267,18 @@ def _build_oww_scorer(session, input_name: str):
         preprocessor.onnx_execution_provider = "CPUExecutionProvider"
 
     def _score_file_oww(wav_path: Path) -> float | None:
-        audio = load_audio(wav_path)
-        if audio is None:
-            return None
-        audio = center_crop(audio, CLIP_SAMPLES)
-        # Convert to int16 — matches train.py::_extract_embedding exactly
-        audio_int16 = np.clip(audio, -1.0, 1.0)
-        audio_int16 = (audio_int16 * 32767).astype(np.int16)
-        if len(audio_int16) < CLIP_SAMPLES:
-            audio_int16 = np.pad(audio_int16, (0, CLIP_SAMPLES - len(audio_int16)))
-        else:
-            audio_int16 = audio_int16[:CLIP_SAMPLES]
         try:
-            embeddings = preprocessor.embed_clips(audio_int16.reshape(1, -1), ncpu=1)
-            # Mean-pool across time axis (production Viola approach used for the
-            # synthetic-benchmark Cohen's d reference model).
-            embedding = embeddings.mean(axis=1)[0].astype(np.float32)
+            embeddings = _extract_oww_frame_embeddings(
+                wav_path,
+                preprocessor=preprocessor,
+                load_audio=load_audio,
+                center_crop=center_crop,
+                clip_samples=CLIP_SAMPLES,
+            )
+            if embeddings is None:
+                return None
+
+            embedding = embeddings.mean(axis=0).astype(np.float32)
             score = session.run(None, {input_name: embedding.reshape(1, -1)})[0]
             return float(np.asarray(score).flatten()[0])
         except Exception:
@@ -390,16 +289,7 @@ def _build_oww_scorer(session, input_name: str):
 
 
 def _build_cnn_scorer(session, input_name: str):
-    """
-    Build a scoring function for legacy CNN models (mel spectrogram input).
-
-    Args:
-        session: ONNX InferenceSession for the CNN model.
-        input_name: Name of the model's input tensor.
-
-    Returns:
-        Callable that takes a wav Path and returns a float score (or None on failure).
-    """
+    """Build a scorer for legacy mel/CNN models."""
     from violawake_sdk._constants import CLIP_SAMPLES
     from violawake_sdk.audio import center_crop, compute_features, load_audio
 
@@ -407,9 +297,11 @@ def _build_cnn_scorer(session, input_name: str):
         audio = load_audio(wav_path)
         if audio is None:
             return None
+
         audio = center_crop(audio, CLIP_SAMPLES)
         features = compute_features(audio)
         feat_input = features[np.newaxis, :, :].astype(np.float32)
+
         try:
             outputs = session.run(None, {input_name: feat_input})
             return float(np.asarray(outputs[0]).flatten()[0])
@@ -421,20 +313,7 @@ def _build_cnn_scorer(session, input_name: str):
 
 
 def _build_temporal_oww_scorer(session, input_name: str):
-    """
-    Build a scoring function for temporal OWW models (e.g. TemporalCNN).
-
-    These models expect input shape (batch, seq_len, 96) — a sliding window
-    of OWW embeddings.  For each file, extract all embeddings, build all
-    possible windows, score each, and return the max score.
-
-    Args:
-        session: ONNX InferenceSession for the temporal model.
-        input_name: Name of the model's input tensor.
-
-    Returns:
-        Callable that takes a wav Path and returns a float score (or None on failure).
-    """
+    """Build a scorer for temporal OpenWakeWord embedding models."""
     try:
         from openwakeword.model import Model as OWWModel  # type: ignore[import]
     except ImportError as e:
@@ -450,46 +329,35 @@ def _build_temporal_oww_scorer(session, input_name: str):
     if not hasattr(preprocessor, "onnx_execution_provider"):
         preprocessor.onnx_execution_provider = "CPUExecutionProvider"
 
-    # Read seq_len from model input shape
-    model_shape = session.get_inputs()[0].shape
-    numeric_dims = [d for d in model_shape if isinstance(d, int)]
-    seq_len = numeric_dims[0] if len(numeric_dims) >= 2 else 9  # default 9
+    seq_len = _infer_temporal_seq_len(session.get_inputs()[0].shape)
 
     def _score_file_temporal(wav_path: Path) -> float | None:
-        audio = load_audio(wav_path)
-        if audio is None:
-            return None
-        audio = center_crop(audio, CLIP_SAMPLES)
-        audio_int16 = np.clip(audio, -1.0, 1.0)
-        audio_int16 = (audio_int16 * 32767).astype(np.int16)
-        if len(audio_int16) < CLIP_SAMPLES:
-            audio_int16 = np.pad(audio_int16, (0, CLIP_SAMPLES - len(audio_int16)))
-        else:
-            audio_int16 = audio_int16[:CLIP_SAMPLES]
         try:
-            embeddings = preprocessor.embed_clips(audio_int16.reshape(1, -1), ncpu=1)
-            # embeddings shape: (1, n_frames, 96) or (n_frames, 96)
-            emb = np.squeeze(embeddings)
-            if emb.ndim == 1:
-                emb = emb.reshape(1, -1)
-            n_frames = emb.shape[0]
+            emb = _extract_oww_frame_embeddings(
+                wav_path,
+                preprocessor=preprocessor,
+                load_audio=load_audio,
+                center_crop=center_crop,
+                clip_samples=CLIP_SAMPLES,
+            )
+            if emb is None:
+                return None
 
+            n_frames = emb.shape[0]
             if n_frames < seq_len:
-                # Pad with zeros if not enough frames
                 padded = np.zeros((seq_len, emb.shape[1]), dtype=np.float32)
                 padded[:n_frames] = emb
+                for idx in range(n_frames, seq_len):
+                    padded[idx] = emb[-1]
                 window = padded[np.newaxis, :, :].astype(np.float32)
                 score = session.run(None, {input_name: window})[0]
                 return float(np.asarray(score).flatten()[0])
 
-            # Slide window and take max score
             max_score = -1.0
-            for i in range(n_frames - seq_len + 1):
-                window = emb[i : i + seq_len][np.newaxis, :, :].astype(np.float32)
+            for idx in range(n_frames - seq_len + 1):
+                window = emb[idx : idx + seq_len][np.newaxis, :, :].astype(np.float32)
                 score = session.run(None, {input_name: window})[0]
-                s = float(np.asarray(score).flatten()[0])
-                if s > max_score:
-                    max_score = s
+                max_score = max(max_score, float(np.asarray(score).flatten()[0]))
             return max_score
         except Exception:
             logger.warning("Failed to score file (temporal OWW path): %s", wav_path, exc_info=True)
@@ -498,19 +366,8 @@ def _build_temporal_oww_scorer(session, input_name: str):
     return _score_file_temporal
 
 
-def build_model_scorer(
-    model_path: str | Path,
-) -> tuple[str, Callable[[Path], float | None]]:
-    """
-    Build a clip-level scoring function for an ONNX wake word model.
-
-    Args:
-        model_path: Path to the .onnx model file.
-
-    Returns:
-        (architecture, scorer) where scorer accepts a WAV/FLAC path and
-        returns a float score or None if scoring fails.
-    """
+def build_model_scorer(model_path: str | Path) -> tuple[str, Callable[[Path], float | None]]:
+    """Create a clip scorer for an ONNX wake-word model."""
     try:
         import onnxruntime as ort
     except ImportError as e:
@@ -525,14 +382,9 @@ def build_model_scorer(
 
     if architecture == "mlp_on_oww":
         return architecture, _build_oww_scorer(session, input_name)
-
     if architecture == "temporal_oww":
         return architecture, _build_temporal_oww_scorer(session, input_name)
-
     return architecture, _build_cnn_scorer(session, input_name)
-
-
-# ── Main evaluation function ─────────────────────────────────────────────────
 
 
 def evaluate_onnx_model(
@@ -540,34 +392,14 @@ def evaluate_onnx_model(
     test_dir: str | Path,
     threshold: float = 0.50,
     dump_scores_csv: str | Path | None = None,
+    sweep: bool = True,
 ) -> dict:
     """
-    Evaluate an ONNX wake word model on a test set.
+    Evaluate an ONNX wake-word model on a test set.
 
-    Auto-detects model architecture (MLP-on-OWW vs CNN) and uses the
-    correct scoring path. For MLP-on-OWW models, extracts OWW embeddings
-    (matching train.py exactly). For legacy CNN models, uses mel spectrograms.
-
-    The test_dir must contain:
-        positives/  -- WAV files containing the wake word
-        negatives/  -- WAV files of background audio (no wake word)
-
-    Args:
-        model_path: Path to the .onnx model file.
-        test_dir: Directory containing positives/ and negatives/ subdirs.
-        threshold: Classification threshold for FAR/FRR computation.
-        dump_scores_csv: Optional path to write per-file scores CSV.
-            Columns: file, label, score, threshold_pass.
-            Useful for debugging false rejects/accepts.
-
-    Returns:
-        dict with keys:
-            d_prime, far_per_hour, frr, roc_auc,
-            tp_scores, fp_scores, tp_mean, fp_mean,
-            n_positives, n_negatives, threshold_used,
-            architecture,
-            optimal_threshold, optimal_far, optimal_frr, eer_approx,
-            confusion_matrix (dict with tp, fp, tn, fn, precision, recall, f1)
+    When ``sweep`` is enabled, thresholds are scanned from ``0.00`` to ``1.00``
+    in ``0.01`` steps and the operating point minimizing ``FPR + FNR`` is used
+    for the optimal-threshold analysis outputs.
     """
     try:
         from sklearn.metrics import auc, roc_curve
@@ -586,59 +418,61 @@ def evaluate_onnx_model(
 
     architecture, score_file = build_model_scorer(model_path)
 
-    # Score positive samples
     logger.info("Scoring positive samples in %s", pos_dir)
     pos_files = sorted(list(pos_dir.rglob("*.wav")) + list(pos_dir.rglob("*.flac")))
     pos_scores: list[float] = []
     pos_scored_files: list[Path] = []
-    for f in pos_files:
-        s = score_file(f)
-        if s is not None:
-            pos_scores.append(s)
-            pos_scored_files.append(f)
+    for path in pos_files:
+        score = score_file(path)
+        if score is not None:
+            pos_scores.append(score)
+            pos_scored_files.append(path)
 
-    # Score negative samples
     logger.info("Scoring negative samples in %s", neg_dir)
     neg_files = sorted(list(neg_dir.rglob("*.wav")) + list(neg_dir.rglob("*.flac")))
     neg_scores: list[float] = []
     neg_scored_files: list[Path] = []
-    for f in neg_files:
-        s = score_file(f)
-        if s is not None:
-            neg_scores.append(s)
-            neg_scored_files.append(f)
+    for path in neg_files:
+        score = score_file(path)
+        if score is not None:
+            neg_scores.append(score)
+            neg_scored_files.append(path)
 
     if not pos_scores:
         raise RuntimeError(f"No valid positive audio files found in {pos_dir}")
     if not neg_scores:
         raise RuntimeError(f"No valid negative audio files found in {neg_dir}")
 
-    pos_arr = np.array(pos_scores)
-    neg_arr = np.array(neg_scores)
+    pos_arr = np.asarray(pos_scores, dtype=np.float32)
+    neg_arr = np.asarray(neg_scores, dtype=np.float32)
 
     d_prime = compute_dprime(pos_arr, neg_arr)
 
-    # ROC curve and AUC
     all_scores = np.concatenate([pos_arr, neg_arr])
     all_labels = np.concatenate([np.ones(len(pos_arr)), np.zeros(len(neg_arr))])
-    fpr, tpr, _thresholds = roc_curve(all_labels, all_scores)
+    fpr, tpr, _ = roc_curve(all_labels, all_scores)
     roc_auc = float(auc(fpr, tpr))
 
-    # FAR and FRR at the given threshold
-    tp_at_thresh = np.sum(pos_arr >= threshold)
-    fp_at_thresh = np.sum(neg_arr >= threshold)
-    frr = float(1.0 - tp_at_thresh / len(pos_arr)) if len(pos_arr) > 0 else 1.0
+    tp_at_threshold = np.sum(pos_arr >= threshold)
+    fp_at_threshold = np.sum(neg_arr >= threshold)
+    far = float(fp_at_threshold / len(neg_arr)) if len(neg_arr) > 0 else 1.0
+    frr = float(1.0 - tp_at_threshold / len(pos_arr)) if len(pos_arr) > 0 else 1.0
 
-    # FAR in events/hour -- assumes each negative file is approximately 1 second
-    # (standard test set convention). Adjust if your test set files are longer.
     neg_total_hours = len(neg_arr) / 3600.0
-    far_per_hour = float(fp_at_thresh / neg_total_hours) if neg_total_hours > 0 else float("inf")
+    far_per_hour = float(fp_at_threshold / neg_total_hours) if neg_total_hours > 0 else float("inf")
 
-    # Optimal threshold sweep
-    opt = find_optimal_threshold(pos_arr, neg_arr)
+    if sweep:
+        opt = find_optimal_threshold(pos_arr, neg_arr)
+    else:
+        opt = {
+            "optimal_threshold": float(threshold),
+            "optimal_far": far,
+            "optimal_frr": frr,
+            "eer_approx": (far + frr) / 2.0,
+        }
 
-    # Confusion matrix at the given threshold
     cm = compute_confusion_matrix(pos_arr, neg_arr, threshold)
+    optimal_cm = compute_confusion_matrix(pos_arr, neg_arr, opt["optimal_threshold"])
 
     results = {
         "d_prime": d_prime,
@@ -653,28 +487,28 @@ def evaluate_onnx_model(
         "n_negatives": len(neg_scores),
         "threshold_used": threshold,
         "architecture": architecture,
-        # Optimal threshold results
         "optimal_threshold": opt["optimal_threshold"],
         "optimal_far": opt["optimal_far"],
         "optimal_frr": opt["optimal_frr"],
         "eer_approx": opt["eer_approx"],
-        # Confusion matrix at the given threshold
         "confusion_matrix": cm,
+        "optimal_confusion_matrix": optimal_cm,
+        "threshold_sweep_enabled": sweep,
+        "score_dump_threshold": opt["optimal_threshold"],
     }
 
-    # Dump per-file scores if requested
     if dump_scores_csv is not None:
         _dump_scores_csv(
             pos_scored_files,
             pos_scores,
             neg_scored_files,
             neg_scores,
-            threshold,
+            opt["optimal_threshold"],
             Path(dump_scores_csv),
         )
 
     logger.info(
-        "Evaluation complete: arch=%s, d'=%.2f, FAR=%.2f/hr, FRR=%.1f%%, AUC=%.3f, optimal_thresh=%.2f",
+        "Evaluation complete: arch=%s, d'=%.2f, FAR=%.2f/hr, FRR=%.1f%%, AUC=%.3f, opt=%.2f",
         architecture,
         d_prime,
         far_per_hour,

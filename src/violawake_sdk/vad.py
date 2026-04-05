@@ -1,8 +1,8 @@
 """Voice Activity Detection (VAD) module.
 
 Supports three backends in priority order:
-  1. WebRTC VAD (webrtcvad library) — preferred, high accuracy
-  2. Silero VAD (PyTorch, onnxruntime) — good accuracy, larger dependency
+  1. Silero VAD (silero-vad package, embedded ONNX model) — preferred
+  2. WebRTC VAD (webrtcvad library)
   3. RMS heuristic — fallback, no additional dependencies required
 
 The ``VADEngine`` class auto-selects the best available backend unless
@@ -10,7 +10,7 @@ The ``VADEngine`` class auto-selects the best available backend unless
 
 Usage::
 
-    vad = VADEngine(backend="webrtc")
+    vad = VADEngine(backend="silero")
     prob = vad.process_frame(audio_20ms_bytes)  # float 0.0–1.0
     prob = vad.process_frame(audio_20ms_ndarray)  # also accepts numpy arrays
     is_speech = prob > 0.5
@@ -24,11 +24,17 @@ from typing import Protocol
 
 import numpy as np
 
+try:
+    from silero_vad import load_silero_vad
+except ImportError:
+    load_silero_vad = None
+
 logger = logging.getLogger(__name__)
 
 # Frame configuration
 SAMPLE_RATE = 16_000
-FRAME_SAMPLES = 320  # 20ms at 16kHz
+FRAME_SAMPLES = 320  # 20ms at 16kHz (SDK pipeline default)
+SILERO_FRAME_SAMPLES = 512  # 32ms at 16kHz (Silero ONNX window size)
 
 
 class VADBackend(str, Enum):
@@ -71,7 +77,7 @@ class _VADBackendProtocol(Protocol):
     """Protocol that all VAD backends must implement."""
 
     def process_frame(self, audio_bytes: bytes) -> float:
-        """Process a 20ms audio frame. Returns speech probability 0.0–1.0."""
+        """Process a frame. Returns speech probability 0.0–1.0."""
         ...
 
     def reset(self) -> None:
@@ -136,55 +142,41 @@ class _WebRTCVADBackend:
         """WebRTC VAD is stateless — no-op."""
 
 
-class _SileroVADBackend:
-    """Silero VAD backend using torch.hub.
+class SileroVAD:
+    """Silero VAD backend using the packaged ONNX model from ``silero-vad``.
 
-    Requires PyTorch (torch). Loaded lazily to avoid hard dependency.
-    Install with: pip install torch
-
-    Note: torch is NOT a hard dependency of violawake. It is only required
-    when explicitly selecting the "silero" backend or when "auto" falls
-    through WebRTC to Silero.
+    The upstream package ships an embedded ONNX model and exposes it via
+    ``load_silero_vad(onnx=True)``. The wrapped ONNX runtime expects 512-sample
+    windows at 16kHz; shorter SDK frames are zero-padded and longer frames are
+    processed in 512-sample chunks, returning the maximum speech probability.
     """
 
     def __init__(self) -> None:
+        if load_silero_vad is None:
+            raise ImportError(
+                "silero-vad is not installed. Install it with: "
+                "pip install 'violawake[vad]'"
+            ) from None
+
         try:
             import torch
         except ImportError as e:
             raise ImportError(
-                "PyTorch is required for Silero VAD. Install with: pip install torch"
+                "silero-vad requires torch at runtime. Install it with: "
+                "pip install 'violawake[vad]'"
             ) from e
 
         try:
-            # SECURITY: trust_repo=True disables the interactive safety prompt
-            # AND bypasses integrity checks on the downloaded repository code.
-            # This is accepted because:
-            #   1. Silero VAD (snakers4/silero-vad) is a well-known, widely-used
-            #      open-source project with 5k+ GitHub stars.
-            #   2. The alternative — bundling the model — would increase SDK
-            #      package size by ~4MB and complicate version updates.
-            #   3. For production deployments that require stricter supply-chain
-            #      security, pin to a known commit hash or vendor the model.
-            logger.warning(
-                "Loading Silero VAD from torch.hub with trust_repo=True — "
-                "the remote repo is not integrity-verified. Pin to a known "
-                "commit hash in production deployments."
-            )
-            model, _ = torch.hub.load("snakers4/silero-vad", "silero_vad", trust_repo=True)
-        except (RuntimeError, OSError) as e:
-            raise RuntimeError(
-                f"Failed to load Silero VAD model from torch.hub. "
-                f"This may indicate a network issue, corrupted cache, or "
-                f"incompatible PyTorch version. Try clearing the hub cache "
-                f"with: rm -rf ~/.cache/torch/hub/snakers4_silero-vad_master — "
-                f"Original error: {e}"
-            ) from e
+            self._model = load_silero_vad(onnx=True)
         except Exception as e:
-            raise RuntimeError(f"Failed to load Silero VAD model: {e}") from e
+            raise RuntimeError(
+                "Failed to load Silero VAD model from the silero-vad package: "
+                f"{e}"
+            ) from e
 
-        self._model = model
         self._torch = torch
         self._sample_rate = SAMPLE_RATE
+        self._frame_samples = SILERO_FRAME_SAMPLES
 
     def process_frame(self, audio_bytes: bytes) -> float:
         """Returns speech probability from Silero VAD model."""
@@ -197,23 +189,31 @@ class _SileroVADBackend:
                 f"audio_bytes length must be even (int16 = 2 bytes/sample), got {len(audio_bytes)}"
             )
         pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
-
-        # Silero VAD requires specific window sizes (512, 768, 1024, 1536 at
-        # 16kHz).  The wake detector sends 20ms frames (320 samples) which
-        # Silero rejects.  Zero-pad to 512 so short frames work transparently.
-        n_samples = len(pcm)
-        if n_samples < 512:
-            padded = np.zeros(512, dtype=np.float32)
-            padded[:n_samples] = pcm
-            pcm = padded
-
-        tensor = self._torch.from_numpy(pcm)
-        try:
-            prob = self._model(tensor, self._sample_rate).item()
-        except Exception as e:
-            logger.warning("Silero VAD error (samples=%d): %s", n_samples, e)
+        if pcm.size == 0:
             return 0.0
-        return float(prob)
+
+        probs: list[float] = []
+        for start in range(0, pcm.size, self._frame_samples):
+            chunk = pcm[start : start + self._frame_samples]
+            if chunk.size < self._frame_samples:
+                padded = np.zeros(self._frame_samples, dtype=np.float32)
+                padded[: chunk.size] = chunk
+                chunk = padded
+
+            tensor = self._torch.from_numpy(chunk)
+            try:
+                prob = self._model(tensor, self._sample_rate).item()
+            except Exception as e:
+                logger.warning(
+                    "Silero VAD error (samples=%d, chunk_start=%d): %s",
+                    pcm.size,
+                    start,
+                    e,
+                )
+                return 0.0
+            probs.append(float(prob))
+
+        return max(probs, default=0.0)
 
     def reset(self) -> None:
         """Reset Silero model internal states."""
@@ -267,29 +267,29 @@ def _create_backend(
 ) -> tuple[VADBackend, _VADBackendProtocol]:
     """Create the specified VAD backend.
 
-    For AUTO, tries WebRTC → Silero → RMS (best available).
+    For AUTO, tries Silero → WebRTC → RMS (best available).
     """
     if backend == VADBackend.WEBRTC:
         return backend, _WebRTCVADBackend(**kwargs)  # type: ignore[arg-type]
     elif backend == VADBackend.SILERO:
-        return backend, _SileroVADBackend()
+        return backend, SileroVAD()
     elif backend == VADBackend.RMS:
         return backend, _RMSHeuristicBackend(**kwargs)  # type: ignore[arg-type]
     elif backend == VADBackend.AUTO:
-        # Fallback chain: WebRTC → Silero → RMS
+        # Fallback chain: Silero → WebRTC → RMS
+        try:
+            b = SileroVAD()
+            logger.info("VAD backend: Silero")
+            return VADBackend.SILERO, b
+        except Exception as e:
+            logger.debug("Silero VAD unavailable (%s: %s), trying WebRTC", type(e).__name__, e)
         try:
             b = _WebRTCVADBackend()
             logger.info("VAD backend: WebRTC")
             return VADBackend.WEBRTC, b
         except Exception as e:
-            logger.debug("WebRTC VAD unavailable (%s: %s), trying Silero", type(e).__name__, e)
-        try:
-            b = _SileroVADBackend()
-            logger.info("VAD backend: Silero")
-            return VADBackend.SILERO, b
-        except Exception as e:
             logger.debug(
-                "Silero VAD unavailable (%s: %s), falling back to RMS heuristic",
+                "WebRTC VAD unavailable (%s: %s), falling back to RMS heuristic",
                 type(e).__name__,
                 e,
             )
@@ -306,7 +306,7 @@ class VADEngine:
 
     Example::
 
-        vad = VADEngine(backend="webrtc")  # or "silero", "rms", "auto"
+        vad = VADEngine(backend="silero")  # or "webrtc", "rms", "auto"
         prob = vad.process_frame(audio_20ms_bytes)
         is_speech = prob > 0.5
     """
@@ -322,6 +322,7 @@ class VADEngine:
             backend: One of "auto", "webrtc", "silero", "rms".
                      "auto" selects the best available backend.
             **backend_kwargs: Backend-specific arguments.
+                For "silero": no backend-specific args
                 For "webrtc": aggressiveness (0–3, default 2)
                 For "rms": speech_threshold, silence_threshold
         """
@@ -336,14 +337,17 @@ class VADEngine:
         return self._backend_name.value
 
     def process_frame(self, audio: bytes | np.ndarray) -> float:
-        """Process a 20ms audio frame.
+        """Process a 16kHz mono audio frame.
 
         Args:
-            audio: 320 samples of 16kHz mono audio. Accepted formats:
-                - bytes/bytearray: int16 PCM (640 bytes for 20ms)
+            audio: Accepted formats:
+                - bytes/bytearray: int16 PCM
                 - np.ndarray float32/float64: assumed normalized to [-1.0, 1.0],
                   scaled by 32768 to int16. Use int16 dtype for int16-range data.
                 - np.ndarray int16: converted to bytes directly
+
+            WebRTC accepts 10/20/30ms frames. Silero runs on 512-sample
+            16kHz windows internally and pads/chunks frames as needed.
 
         Returns:
             Speech probability in [0.0, 1.0].

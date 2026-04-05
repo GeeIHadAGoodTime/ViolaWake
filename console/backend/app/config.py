@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     db_path: Path = Path(__file__).resolve().parent.parent / "data" / "violawake.db"
     upload_dir: Path = Path(__file__).resolve().parent.parent / "data" / "recordings"
     models_dir: Path = Path(__file__).resolve().parent.parent / "data" / "models"
+    tmp_dir: Path = Path(__file__).resolve().parent.parent / "data" / "tmp"
 
     # Object storage
     r2_endpoint: str = ""
@@ -190,3 +191,4 @@ settings = Settings()
 settings.data_dir.mkdir(parents=True, exist_ok=True)
 settings.upload_dir.mkdir(parents=True, exist_ok=True)
 settings.models_dir.mkdir(parents=True, exist_ok=True)
+settings.tmp_dir.mkdir(parents=True, exist_ok=True)

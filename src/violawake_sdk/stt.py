@@ -56,6 +56,7 @@ MODEL_PROFILES = {
 
 DEFAULT_MODEL = "base"
 NO_SPEECH_THRESHOLD = 0.6  # Skip transcription if no_speech_prob > this value
+_DEFAULT_TEMPERATURE_FALLBACK = (0.0, 0.2, 0.4)
 
 
 @dataclass
@@ -172,8 +173,8 @@ class STTEngine:
 
         Note:
             This engine uses a progressive temperature fallback of
-            ``[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]`` during decoding, which can
-            trigger up to 6 decoding passes and increase latency. For
+            ``(0.0, 0.2, 0.4)`` during decoding, which can trigger up to
+            3 decoding passes and increase latency. For
             low-latency use cases, prefer a single-pass configuration such as
             ``temperature_fallback=[0.0]``.
 
@@ -216,7 +217,7 @@ class STTEngine:
                 ``transcribe_full``).
             beam_size: Beam search width. Default 5.
             best_of: Number of candidates when sampling. Default 5.
-            temperature: Temperature schedule. Default ``[0.0, 0.2, 0.4, 0.6, 0.8, 1.0]``.
+            temperature: Temperature schedule. Default ``(0.0, 0.2, 0.4)``.
 
         Yields:
             TranscriptSegment — one per decoded segment, in time order.
@@ -228,7 +229,9 @@ class STTEngine:
                 print(f"[{seg.start:.1f}s] {seg.text}")
         """
         if temperature is None:
-            temperature = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+            # Keep 0.0 inside a fallback schedule so faster-whisper can retry if needed
+            # instead of pairing greedy decoding with beam_size > 1 in a single pass.
+            temperature = list(_DEFAULT_TEMPERATURE_FALLBACK)
 
         audio = np.asarray(audio, dtype=np.float32)
         if audio.ndim > 1:
@@ -333,7 +336,9 @@ class STTEngine:
             word_timestamps=False,
             beam_size=5,
             best_of=5,
-            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],  # Progressive fallback
+            # Keep 0.0 in a short fallback schedule so the initial pass is greedy-safe
+            # without combining a lone temperature=0.0 decode with beam_size > 1.
+            temperature=_DEFAULT_TEMPERATURE_FALLBACK,
         )
 
         # Consume the generator (transcription happens here)
