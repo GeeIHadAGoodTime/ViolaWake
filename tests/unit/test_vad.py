@@ -1,9 +1,9 @@
 """Unit tests for VADEngine.
 
 Tests cover:
-- Backend selection (auto, webrtc, rms)
+- Backend selection (auto, silero, webrtc, rms)
 - RMS heuristic backend correctness
-- Graceful degradation when webrtcvad not installed
+- Graceful degradation when optional VAD deps are not installed
 - is_speech() convenience method
 """
 
@@ -15,7 +15,19 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from violawake_sdk.vad import VADBackend, VADEngine, _RMSHeuristicBackend, _coerce_to_bytes
+from violawake_sdk.vad import (
+    SileroVAD,
+    VADBackend,
+    VADEngine,
+    _coerce_to_bytes,
+    _RMSHeuristicBackend,
+)
+
+
+def _make_silero_output(prob: float) -> MagicMock:
+    output = MagicMock()
+    output.item.return_value = prob
+    return output
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -94,20 +106,30 @@ class TestVADEngineRMSBackend:
 class TestVADEngineAutoBackend:
     """Tests for auto backend selection."""
 
-    def test_auto_falls_back_when_webrtcvad_unavailable(self) -> None:
-        with patch.dict("sys.modules", {"webrtcvad": None}):
-            vad = VADEngine(backend="auto")
-            # Auto chain: webrtc → silero → rms. With webrtc blocked,
-            # picks silero (if torch available) or rms.
-            assert vad.backend_name in ("rms", "silero", "auto")
-
-    def test_auto_selects_webrtc_when_available(self) -> None:
+    def test_auto_falls_back_to_webrtc_when_silero_unavailable(self) -> None:
         mock_webrtcvad = MagicMock()
-        mock_webrtcvad.Vad.return_value.is_speech.return_value = True
-        with patch.dict("sys.modules", {"webrtcvad": mock_webrtcvad}):
+        mock_webrtcvad.Vad.return_value.is_speech.return_value = False
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", None),
+            patch.dict("sys.modules", {"webrtcvad": mock_webrtcvad}),
+        ):
             vad = VADEngine(backend="auto")
-            # Auto tries webrtc first, then silero, then rms
-            assert vad.backend_name in ("rms", "webrtc", "silero")
+            assert vad.backend_name == "webrtc"
+
+    def test_auto_selects_silero_when_available(self) -> None:
+        mock_model = MagicMock()
+        mock_model.return_value = _make_silero_output(0.8)
+        mock_webrtcvad = MagicMock()
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch, "webrtcvad": mock_webrtcvad}),
+        ):
+            vad = VADEngine(backend="auto")
+            assert vad.backend_name == "silero"
 
 
 class TestVADEngineWebRTCBackend:
@@ -136,8 +158,10 @@ class TestVADEngineWebRTCBackend:
             assert prob == 0.0
 
     def test_webrtc_import_error_raises(self) -> None:
-        with patch.dict("sys.modules", {"webrtcvad": None}):
-            with pytest.raises(ImportError, match="webrtcvad"):
+        with (
+            patch.dict("sys.modules", {"webrtcvad": None}),
+            pytest.raises(ImportError, match="webrtcvad"),
+        ):
                 VADEngine(backend="webrtc")
 
 
@@ -205,46 +229,112 @@ class TestAutoFallbackChain:
     """Tests for AUTO mode fallback chain with both WebRTC and Silero unavailable."""
 
     def test_auto_falls_back_to_rms_when_both_unavailable(self) -> None:
-        """When both webrtcvad and torch are unavailable, AUTO must fall back to RMS."""
-        with patch.dict("sys.modules", {"webrtcvad": None, "torch": None}):
+        """When both Silero and WebRTC are unavailable, AUTO must fall back to RMS."""
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", None),
+            patch.dict("sys.modules", {"webrtcvad": None}),
+        ):
             vad = VADEngine(backend="auto")
             assert vad.backend_name == "rms"
 
     def test_auto_rms_fallback_still_works(self) -> None:
         """RMS fallback from AUTO must still process frames correctly."""
-        with patch.dict("sys.modules", {"webrtcvad": None, "torch": None}):
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", None),
+            patch.dict("sys.modules", {"webrtcvad": None}),
+        ):
             vad = VADEngine(backend="auto")
             silent = np.zeros(320, dtype=np.int16).tobytes()
             prob = vad.process_frame(silent)
             assert prob == 0.0
 
-    def test_auto_prefers_webrtc_over_silero(self) -> None:
-        """When webrtcvad is available, AUTO should pick it over Silero."""
+    def test_auto_prefers_silero_over_webrtc(self) -> None:
+        """When both are available, AUTO should pick Silero first."""
+        mock_model = MagicMock()
+        mock_model.return_value = _make_silero_output(0.6)
         mock_webrtcvad = MagicMock()
         mock_webrtcvad.Vad.return_value = MagicMock()
-        with patch.dict("sys.modules", {"webrtcvad": mock_webrtcvad}):
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch, "webrtcvad": mock_webrtcvad}),
+        ):
             vad = VADEngine(backend="auto")
-            assert vad.backend_name == "webrtc"
+            assert vad.backend_name == "silero"
 
 
-class TestSileroNetworkError:
-    """Tests that Silero handles network errors (OSError) during torch.hub.load."""
+class TestSileroVADBackend:
+    """Tests for the packaged Silero ONNX backend."""
 
-    def test_oserror_during_hub_load_raises_runtime(self) -> None:
-        """OSError (network failure) during torch.hub.load must raise RuntimeError."""
-        mock_torch = MagicMock()
-        mock_torch.hub.load.side_effect = OSError("Network is unreachable")
-        with patch.dict("sys.modules", {"torch": mock_torch}):
-            with pytest.raises(RuntimeError, match="Failed to load Silero VAD"):
+    def test_missing_silero_package_raises_importerror(self) -> None:
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", None),
+            pytest.raises(ImportError, match="silero-vad"),
+        ):
                 VADEngine(backend="silero")
 
-    def test_connection_error_during_hub_load_raises_runtime(self) -> None:
-        """ConnectionError (subclass of OSError) must also be caught."""
+    def test_load_error_raises_runtimeerror(self) -> None:
         mock_torch = MagicMock()
-        mock_torch.hub.load.side_effect = ConnectionError("Connection refused")
-        with patch.dict("sys.modules", {"torch": mock_torch}):
-            with pytest.raises(RuntimeError, match="Failed to load Silero VAD"):
-                VADEngine(backend="silero")
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", side_effect=RuntimeError("bad model")),
+            patch.dict("sys.modules", {"torch": mock_torch}),
+            pytest.raises(RuntimeError, match="Failed to load Silero VAD model"),
+        ):
+            VADEngine(backend="silero")
+
+    def test_process_frame_accepts_native_512_sample_frame(self) -> None:
+        mock_model = MagicMock()
+        mock_model.return_value = _make_silero_output(0.73)
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch}),
+        ):
+            backend = SileroVAD()
+            frame = np.zeros(512, dtype=np.int16).tobytes()
+            prob = backend.process_frame(frame)
+
+        assert prob == 0.73
+        mock_model.assert_called_once()
+
+    def test_process_frame_pads_short_sdk_frames(self) -> None:
+        mock_model = MagicMock()
+        mock_model.return_value = _make_silero_output(0.42)
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch}),
+        ):
+            backend = SileroVAD()
+            frame = np.zeros(320, dtype=np.int16).tobytes()
+            prob = backend.process_frame(frame)
+
+        assert prob == 0.42
+        passed_chunk = mock_torch.from_numpy.call_args[0][0]
+        assert passed_chunk.shape == (512,)
+
+    def test_process_frame_chunks_long_audio_and_uses_max_probability(self) -> None:
+        mock_model = MagicMock()
+        mock_model.side_effect = [_make_silero_output(0.1), _make_silero_output(0.9)]
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch}),
+        ):
+            backend = SileroVAD()
+            frame = np.zeros(1024, dtype=np.int16).tobytes()
+            prob = backend.process_frame(frame)
+
+        assert prob == 0.9
+        assert mock_model.call_count == 2
 
 
 class TestRMSInputValidation:
@@ -289,12 +379,18 @@ class TestVADEngineBackendEnum:
             VADEngine(backend="invalid_backend")  # type: ignore[arg-type]
 
     def test_silero_backend(self) -> None:
-        """Silero VAD backend should initialize if torch is available."""
-        try:
+        """Silero VAD backend should initialize through the packaged loader."""
+        mock_model = MagicMock()
+        mock_model.return_value = _make_silero_output(0.5)
+        mock_torch = MagicMock()
+        mock_torch.from_numpy.side_effect = lambda arr: arr
+
+        with (
+            patch("violawake_sdk.vad.load_silero_vad", return_value=mock_model),
+            patch.dict("sys.modules", {"torch": mock_torch}),
+        ):
             vad = VADEngine(backend="silero")
             assert vad.backend_name == "silero"
-        except (ImportError, RuntimeError):
-            pytest.skip("torch not available or Silero failed to load")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

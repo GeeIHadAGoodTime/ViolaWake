@@ -110,6 +110,36 @@ def test_split_sentences() -> None:
     ]
 
 
+def test_split_sentences_uses_pysbd_when_available() -> None:
+    mock_segmenter = MagicMock()
+    mock_segmenter.segment.return_value = [
+        "Dr. Smith went home. ",
+        "Visit https://example.com/test?x=1. ",
+        "Pi is 3.14.",
+    ]
+    mock_pysbd = MagicMock()
+    mock_pysbd.Segmenter.return_value = mock_segmenter
+
+    with patch("violawake_sdk.tts.pysbd", mock_pysbd):
+        result = TTSEngine._split_sentences(
+            "Dr. Smith went home. Visit https://example.com/test?x=1. Pi is 3.14."
+        )
+
+    assert result == [
+        "Dr. Smith went home.",
+        "Visit https://example.com/test?x=1.",
+        "Pi is 3.14.",
+    ]
+    mock_pysbd.Segmenter.assert_called_once_with(language="en", clean=False)
+
+
+def test_split_sentences_falls_back_when_pysbd_missing() -> None:
+    with patch("violawake_sdk.tts.pysbd", None):
+        result = TTSEngine._split_sentences("Hello. How are you? Fine!")
+
+    assert result == ["Hello.", "How are you?", "Fine!"]
+
+
 def test_chunked_yields() -> None:
     engine = TTSEngine()
 
@@ -158,9 +188,11 @@ def test_resample_raises_on_missing_scipy() -> None:
     """_resample should raise ImportError with guidance if scipy is not installed."""
     import sys
 
-    with patch.dict(sys.modules, {"scipy": None, "scipy.signal": None}):
-        with pytest.raises(ImportError, match="scipy is required"):
-            TTSEngine._resample(np.zeros(100, dtype=np.float32), 24000, 16000)
+    with (
+        patch.dict(sys.modules, {"scipy": None, "scipy.signal": None}),
+        pytest.raises(ImportError, match="scipy is required"),
+    ):
+        TTSEngine._resample(np.zeros(100, dtype=np.float32), 24000, 16000)
 
 
 def test_thread_safety() -> None:
@@ -203,7 +235,7 @@ class TestTTSEngineReExports:
         assert isinstance(DEFAULT_VOICE, str)
 
     def test_import_sample_rates(self) -> None:
-        from violawake_sdk.tts_engine import TTS_SAMPLE_RATE, TARGET_SAMPLE_RATE
+        from violawake_sdk.tts_engine import TARGET_SAMPLE_RATE, TTS_SAMPLE_RATE
         assert isinstance(TTS_SAMPLE_RATE, int)
         assert isinstance(TARGET_SAMPLE_RATE, int)
 

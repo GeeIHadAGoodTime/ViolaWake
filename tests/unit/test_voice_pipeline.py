@@ -306,6 +306,14 @@ class TestConcurrentAccess:
         pipeline = _build_pipeline()
         assert isinstance(pipeline._state_lock, type(threading.Lock()))
 
+    def test_transition_state_requires_expected_state(self) -> None:
+        pipeline = _build_pipeline()
+
+        assert pipeline._transition_state(_STATE_IDLE, _STATE_LISTENING) is True
+        assert pipeline._state == _STATE_LISTENING
+        assert pipeline._transition_state(_STATE_IDLE, _STATE_RESPONDING) is False
+        assert pipeline._state == _STATE_LISTENING
+
 
 # ---------------------------------------------------------------------------
 # Speak method
@@ -787,6 +795,18 @@ class TestLazyEngineLoading:
 
 class TestRunLoopListening:
     """Test _run_loop behavior in the listening state."""
+
+    def test_idle_wake_detection_uses_live_playback_state(self) -> None:
+        pipeline = _build_pipeline()
+        frame = b"\x00" * 640
+        pipeline._wake_detector = MagicMock()
+        pipeline._wake_detector.stream_mic.return_value = iter([frame])
+        pipeline._wake_detector.detect.return_value = False
+
+        with patch.object(pipeline, "_is_playing", return_value=True):
+            pipeline._run_loop()
+
+        pipeline._wake_detector.detect.assert_called_once_with(frame, is_playing=True)
 
     def test_silence_frames_trigger_transcription(self) -> None:
         """After enough silent frames, pipeline transitions to transcribing."""
