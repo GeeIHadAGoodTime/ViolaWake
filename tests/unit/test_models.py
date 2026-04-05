@@ -190,10 +190,10 @@ class TestListCachedModels:
 class TestCheckRegistryIntegrity:
     """Test check_registry_integrity() catches placeholder hashes."""
 
-    def test_current_registry_reports_known_placeholder_non_strictly(self) -> None:
-        """The live registry currently contains the unreleased temporal_cnn_tflite placeholder."""
+    def test_current_registry_has_no_placeholders(self) -> None:
+        """The live registry should have no placeholder hashes after TFLite removal."""
         result = check_registry_integrity(strict=False)
-        assert "temporal_cnn_tflite" in result
+        assert result == []
 
     def test_raises_on_placeholder_hashes(self) -> None:
         """A registry with placeholder hashes should raise in strict mode."""

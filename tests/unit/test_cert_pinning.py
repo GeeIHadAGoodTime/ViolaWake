@@ -727,7 +727,7 @@ class TestDownloadModelPinIntegration:
         from violawake_sdk import models
 
         # Create the expected output file so model_path.stat() doesn't fail
-        model_file = tmp_path / "viola_mlp_oww.onnx"
+        model_file = tmp_path / "temporal_cnn.onnx"
         model_file.write_bytes(b"fake-model-data")
 
         mock_response = mock.MagicMock()
@@ -737,14 +737,14 @@ class TestDownloadModelPinIntegration:
 
         # Mock stat to return expected size so post-download size validation passes
         fake_stat = mock.MagicMock()
-        fake_stat.st_size = models.MODEL_REGISTRY["viola_mlp_oww"].size_bytes
+        fake_stat.st_size = models.MODEL_REGISTRY["temporal_cnn"].size_bytes
 
         with mock.patch.object(models, "get_model_dir", return_value=tmp_path):
             with mock.patch("requests.get", return_value=mock_response) as mock_get:
                 with mock.patch.object(models, "_verify_sha256"):
                     with mock.patch("pathlib.Path.stat", return_value=fake_stat):
                         models.download_model(
-                            "viola_mlp_oww",
+                            "temporal_cnn",
                             force=True,
                             verify=False,
                             skip_verify=True,
@@ -756,14 +756,14 @@ class TestDownloadModelPinIntegration:
         from violawake_sdk import models
 
         # Create the expected output file so it appears cached
-        model_file = tmp_path / "viola_mlp_oww.onnx"
+        model_file = tmp_path / "temporal_cnn.onnx"
         model_file.write_bytes(b"fake-model-data")
 
         with mock.patch.object(models, "get_model_dir", return_value=tmp_path):
             with mock.patch("requests.get") as mock_get:
                 with mock.patch.object(models, "_verify_sha256"):
                     result = models.download_model(
-                        "viola_mlp_oww",
+                        "temporal_cnn",
                         force=False,
                         verify=False,
                         skip_verify=True,
