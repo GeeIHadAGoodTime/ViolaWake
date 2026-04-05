@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-04-05.** Historical MLP-era benchmark. Production model is now `temporal_cnn` (d'=8.577). See `docs/PROVEN_TRAINING_RECIPE.md`.
+
 # Wake Word Detection Benchmark: ViolaWake vs OpenWakeWord
 
 ## Setup

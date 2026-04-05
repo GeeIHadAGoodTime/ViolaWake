@@ -1,11 +1,11 @@
 # ViolaWake Pre-Launch Checklist
 
-Last reviewed: 2026-03-26
+Last reviewed: 2026-04-05
 
 This checklist is based on the current repository state:
 
-- `pyproject.toml` is already set to version `0.1.0`.
-- `src/violawake_sdk/models.py` still contains placeholder SHA-256 values.
+- `pyproject.toml` is at version `0.2.2`.
+- `src/violawake_sdk/models.py` has real SHA-256 hashes for `temporal_cnn` (production default), `temporal_convgru`, and `kokoro` models. TFLite variant still has a placeholder.
 - `.github/workflows/release.yml` expects `RELEASE_NOTES.md`, `tools/fetch_release_models.py`, and `tools/update_model_registry.py` — all now present.
 - The backend health endpoint is `GET /api/health`.
 - The backend initializes schema with `Base.metadata.create_all()` on startup; there is no Alembic migration workflow yet.
@@ -26,29 +26,29 @@ This checklist is based on the current repository state:
 
 ## SDK Release
 
-- [ ] Bump version in `pyproject.toml` to `0.1.0`
-  How: `pyproject.toml` already says `0.1.0`; confirm any mirrored version strings and the git tag are aligned, then commit the release-ready version set.
+- [x] Bump version in `pyproject.toml`
+  Done: `pyproject.toml` is at `0.2.2`. Confirm the git tag is aligned, then commit the release-ready version set.
 
 - [ ] Replace SHA-256 placeholders in `models.py` with real hashes
   How: compute hashes for every shipped model asset with `Get-FileHash <file> -Algorithm SHA256` and replace the placeholder values in `src/violawake_sdk/models.py` before publishing.
 
-- [ ] Upload `.onnx` model files to GitHub Release `v0.1.0`
-  How: attach all release assets needed by the registry URLs, including `viola_mlp_oww.onnx`, `oww_backbone.onnx`, `viola_cnn_v4.onnx`, `kokoro-v1.0.onnx`, and `voices-v1.0.bin`; either automate this in the current release workflow or upload them manually to the GitHub Release.
+- [ ] Upload `.onnx` model files to GitHub Release `v0.2.2`
+  How: attach all release assets needed by the registry URLs, primarily `temporal_cnn.onnx` (production default, 102KB) and `temporal_convgru.onnx` (reserve model); Kokoro TTS models are hosted upstream at thewh1teagle/kokoro-onnx and auto-download on first use.
 
 - [ ] Run full test suite locally (`pytest tests/unit/ -v`)
   How: from repo root, install dev dependencies, run `pytest tests/unit/ -v`, and do not tag until failures and coverage regressions are resolved.
 
-- [ ] Create `RELEASE_NOTES.md` for `v0.1.0`
-  How: add a root-level `RELEASE_NOTES.md` because `.github/workflows/release.yml` uses it as `body_path`; summarize highlights, breaking changes, install steps, and known limitations.
+- [ ] Create `RELEASE_NOTES.md` for `v0.2.2`
+  How: add a root-level `RELEASE_NOTES.md` because `.github/workflows/release.yml` uses it as `body_path`; summarize highlights (temporal_cnn production model, 8-phase training pipeline, quality gate), breaking changes, install steps, and known limitations.
 
-- [ ] Push tag `v0.1.0` to trigger release workflow
-  How: after merging the final release commit, create and push the annotated tag with `git tag -a v0.1.0 -m "ViolaWake v0.1.0"` and `git push origin v0.1.0`; confirm PyPI trusted publishing and any required GitHub secrets such as `MODEL_STORE_TOKEN` are configured first.
+- [ ] Push tag `v0.2.2` to trigger release workflow
+  How: after merging the final release commit, create and push the annotated tag with `git tag -a v0.2.2 -m "ViolaWake v0.2.2"` and `git push origin v0.2.2`; confirm PyPI trusted publishing and any required GitHub secrets such as `MODEL_STORE_TOKEN` are configured first.
 
 - [ ] Verify PyPI publish succeeded
-  How: watch the `Release` workflow and confirm the `Publish to PyPI` job completes successfully for tag `v0.1.0`, then verify the package page exists on PyPI.
+  How: watch the `Release` workflow and confirm the `Publish to PyPI` job completes successfully for tag `v0.2.2`, then verify the package page exists on PyPI.
 
 - [ ] Test `pip install violawake` from PyPI
-  How: create a clean virtualenv, run `pip install violawake`, import the package, and smoke-test a documented entry point such as `violawake-download --model viola_mlp_oww`.
+  How: create a clean virtualenv, run `pip install violawake`, import the package, and smoke-test a documented entry point such as `violawake-download --model temporal_cnn`.
 
 ## Console Backend (Railway)
 

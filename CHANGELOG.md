@@ -12,6 +12,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_coerce_to_bytes()` shared helper for input normalization across VAD backends
 - API docs generation setup with pdoc (`docs` optional dependency)
 
+## [0.2.2] - 2026-04-05
+
+### Fixed
+- Silence quality gate bug: zero-energy audio correctly rejected by OWW backbone now scores 0.0 instead of 1.0 (was causing false Grade F on perfectly good models)
+- Training pipeline consistency: patience=15 everywhere (CLI, SDK, Console — was 10 in some paths)
+- Console training service: added `augment_source_files` parameter and repo-root corpus search path to match CLI pipeline
+- Standalone `train_full_pipeline.py`: same fixes as Console for full parity
+
+## [0.2.1] - 2026-03-30
+
+### Added
+- Kokoro TTS fallback when Edge TTS is unavailable
+- `temporal_convgru` reserve model in registry
+- Registry integrity checking (`check_registry_integrity()`)
+
+### Changed
+- `r3_10x_s42` MLP model marked DEPRECATED in registry (fails live mic test, max score 0.50)
+- Removed `viola_mlp_oww` and `viola_cnn_v4` from registry (never uploaded to GitHub Releases)
+
+## [0.2.0] - 2026-03-28
+
+### Added
+- **TemporalCNN production model** (`temporal_cnn`): 9-frame sliding window over OWW embeddings, d'=8.577, EER 0.8%, AUC 0.9993 — replaces MLP as default
+- 8-phase training pipeline: user positives → TTS (20 voices x 3 phrases) → audiomentations augmentation → confusable negatives R1 (30 words) → R2 (16 words) → speech negatives (104 phrases) → universal corpus (LibriSpeech, MUSAN) → TemporalCNN training
+- Post-training quality gate with A/B/C/F grading (Grade F blocks ONNX export)
+- FocalLoss(gamma=2.0, alpha=0.75, label_smoothing=0.05) with AdamW + CosineAnnealingLR + EMA
+- Group-aware stratified train/val split preventing augmentation data leakage
+- Auto-evaluation on held-out 20% test set
+- `docs/PROVEN_TRAINING_RECIPE.md` — canonical pipeline documentation
+
+### Changed
+- Default production model: `temporal_cnn` (was `r3_10x_s42` MLP)
+- Model alias `"viola"` now resolves to `temporal_cnn`
+
 ## [0.1.0] - 2026-03-27
 
 ### Added

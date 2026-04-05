@@ -25,7 +25,8 @@
 | Pre-Launch Checklist | `docs/PRE_LAUNCH_CHECKLIST.md` | Launch readiness checklist | 2026-03-26 | All items checked off = launch ready |
 | Show HN Draft | `docs/SHOW_HN_DRAFT.md` | Hacker News launch post draft | 2026-03-26 | Post published or product pivot |
 | Roadmap | `docs/ROADMAP_10_OF_10.md` | Multi-phase product roadmap | 2026-03-26 | Phase completion or priority change |
-| This registry | `docs/REGISTRY.md` | Doc routing | 2026-03-26 | New doc added without updating registry |
+| Proven Training Recipe | `docs/PROVEN_TRAINING_RECIPE.md` | Canonical training pipeline, parameters, Console parity | 2026-04-05 | Pipeline change, new architecture, hyperparameter change |
+| This registry | `docs/REGISTRY.md` | Doc routing | 2026-04-05 | New doc added without updating registry |
 
 ## Architecture Decision Records (ADRs)
 
@@ -62,6 +63,20 @@ ADRs are immutable once accepted. To change an architecture decision, create a n
 **"Are we ready to launch?"** → `docs/PRE_LAUNCH_CHECKLIST.md`
 
 **"What does the HN post say?"** → `docs/SHOW_HN_DRAFT.md`
+
+---
+
+## Archived Documents
+
+Moved to `docs/archive/` on 2026-04-05. These are MLP-era records superseded by the temporal CNN production model.
+
+| Document | Path | Original Location | Why Archived |
+|----------|------|--------------------|-------------|
+| OWW Benchmark Report | `docs/archive/BENCHMARK_REPORT_oww.md` | `benchmark_oww/` | MLP vs OWW comparison; production model is now temporal_cnn |
+| Meta Analysis (MLP era) | `docs/archive/META_ANALYSIS_mlp_era.md` | `experiments/` | 30 patterns from MLP accuracy campaign; FAPH crisis resolved by temporal CNN |
+| Streaming vs Clip Analysis | `docs/archive/STREAMING_VS_CLIP_ANALYSIS.md` | `experiments/` | Mean-pooling validity analysis; temporal CNN uses 9-frame windows |
+| FAR/FRR Report (MLP) | `docs/archive/far_frr_report_mlp.md` | `eval_clean/` | MLP FAR/FRR metrics; superseded by temporal_cnn EER 0.8% |
+| Clean Eval Results (MLP) | `docs/archive/RESULTS_eval_clean_mlp.md` | `eval_clean/` | MLP d'=4.14; superseded by temporal_cnn d'=8.577 |
 
 ---
 

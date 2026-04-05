@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-04-05.** Historical MLP-era accuracy campaign. The FAPH crisis documented here was resolved by switching to TemporalCNN. See `docs/PROVEN_TRAINING_RECIPE.md`.
+
 # ViolaWake Accuracy Campaign — Meta Analysis & Pattern Report
 
 **Date:** 2026-03-26

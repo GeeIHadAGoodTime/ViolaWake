@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-04-05.** FAR/FRR for MLP models (`viola_mlp_oww`). Production model is now `temporal_cnn` (EER 0.8%).
+
 # ViolaWake FAR/FRR Analysis Report
 
 Industry-standard wake word metrics computed on a clean evaluation set

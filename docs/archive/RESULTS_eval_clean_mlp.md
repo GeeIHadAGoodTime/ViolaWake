@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-04-05.** Clean eval results for MLP models (d'=4.14). Production `temporal_cnn` achieves d'=8.577.
+
 # ViolaWake Clean Eval Set Results
 
 **Date**: 2026-03-26

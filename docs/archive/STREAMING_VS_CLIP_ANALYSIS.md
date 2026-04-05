@@ -1,3 +1,5 @@
+> **ARCHIVED 2026-04-05.** Historical analysis of MLP mean-pooling vs streaming. The temporal CNN uses 9-frame sliding windows, resolving this architectural concern.
+
 # Streaming vs Clip Evaluation: Validity Analysis
 
 **Date**: 2026-03-26

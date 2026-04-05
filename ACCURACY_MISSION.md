@@ -2,7 +2,7 @@
 
 > **PURPOSE:** This document drives the ViolaWake accuracy improvement campaign.
 > It survives context compaction. Read it FIRST after any break.
-> **Last updated:** 2026-03-27T04:00 — **FAPH CRISIS RESOLVED.** Production config: r3_10x_s42 + 3-of-3 multiwindow @0.80 = **0.37 FAPH** on uncontaminated test-clean (5.4h). SDK inference path FIXED — was fundamentally broken (oww_backbone.onnx didn't exist, 20ms frames incompatible). Now uses correct 2-model OWW pipeline with circular buffer.
+> **Last updated:** 2026-04-05 — **SUPERSEDED BY TEMPORAL CNN.** Production model is now `temporal_cnn` (TemporalCNN(96,9), d'=8.577, EER 0.8%, AUC 0.9993). The MLP-era accuracy campaign below is historical. The temporal CNN uses 9-frame sliding windows over OWW embeddings instead of mean-pooling, resolving the "feature extractor ceiling" and eliminating the FAPH crisis. See `docs/PROVEN_TRAINING_RECIPE.md` for the canonical pipeline.
 
 ---
 
@@ -11,12 +11,13 @@
 > You are improving ViolaWake's wake word detection (wake word is **"Viola"**, NOT "Hey Viola"). Project: `J:\CLAUDE\PROJECTS\Wakeword`.
 > Read `ACCURACY_MISSION.md` for full context. Current state:
 >
-> **WHERE WE ARE — RESOLVED:**
-> 1. **Production FAPH: 0.37/hour** (r3_10x_s42 + 3-of-3 @0.80 on test-clean 5.4h)
-> 2. **Held-out TP: 96.9%@0.80** (pos_backup, 1,067 clean samples)
+> **WHERE WE ARE — TEMPORAL CNN ERA:**
+> 1. **Production model: `temporal_cnn.onnx`** (TemporalCNN(96,9), 25,409 params, d'=8.577, EER 0.8%)
+> 2. **8-phase training pipeline proven reproducible** — "big chungus" from 20 recordings → Grade A
 > 3. **SDK inference path FIXED** — now uses real OWW 2-model pipeline (melspectrogram + embedding_model)
-> 4. **Multi-window confirmation added to SDK** — 3-of-3 consecutive above threshold
-> 5. **Production model: `r3_10x_s42.onnx`** (96-dim mean-pooled → 64→32→1 MLP)
+> 4. **Multi-window confirmation in SDK** — 3-of-3 consecutive above threshold
+> 5. **CLI/Console/standalone use identical pipeline** — verified 2026-04-05
+> 6. **Old MLP (r3_10x_s42) DEPRECATED** — failed live mic test (max score 0.50)
 >
 > **DEAD ENDS (do not revisit):**
 > - 864-dim temporal concat: 4x worse FAPH (11.84 vs 2.96). Distribution shift.
@@ -32,10 +33,12 @@
 > - FAPH spot-check comparing SDK direct pipeline vs embed_clips (running)
 >
 > **KEY FILES:**
-> - `experiments/META_ANALYSIS.md` — 30 patterns, Pattern 30 is definitive
-> - `experiments/models/r3_10x_s42.onnx` — production model
-> - `experiments/faph_multiwindow_r3_10x_testclean.json` — definitive FAPH result
+> - `experiments/models/j5_temporal/temporal_cnn.onnx` — production model (d'=8.577)
+> - `experiments/train_temporal_j5.py` — experiment that produced the proven model
+> - `experiments/j5_temporal_results.json` — full metrics across 4 architectures x 3 seeds
+> - `docs/PROVEN_TRAINING_RECIPE.md` — canonical training pipeline documentation
 > - `src/violawake_sdk/wake_detector.py` — SDK (rewritten 2026-03-27)
+> - `experiments/META_ANALYSIS.md` — 30 patterns from MLP era (historical)
 >
 > **PRINCIPLES:**
 > 1. Wake word is "Viola" (one word, no prefix)
