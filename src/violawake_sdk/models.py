@@ -84,16 +84,8 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         description="Kokoro voice embeddings — required for TTS",
         version="1.0",
     ),
-    "temporal_cnn_tflite": ModelSpec(
-        name="temporal_cnn",
-        # TODO: Upload .tflite to GitHub Releases once conversion is validated.
-        # For now, users convert locally via: violawake-download --model temporal_cnn --format tflite
-        url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/temporal_cnn.tflite",
-        sha256="PLACEHOLDER_PENDING_TFLITE_UPLOAD",
-        size_bytes=102378,  # approximate; actual TFLite size may differ after conversion
-        description="Temporal CNN on OWW embeddings — TFLite format for edge/mobile devices",
-        version="0.1.0",
-    ),
+    # temporal_cnn_tflite removed — TFLite conversion not yet validated.
+    # Re-add once .tflite is generated and uploaded to GitHub Releases.
     "temporal_convgru": ModelSpec(
         name="temporal_convgru",
         url="https://github.com/GeeIHadAGoodTime/ViolaWake/releases/download/v0.1.0/temporal_convgru.onnx",

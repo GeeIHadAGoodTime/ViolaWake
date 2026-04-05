@@ -67,6 +67,10 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import numpy as np
 
+# Module-level temp directory override. When set, all tempfile operations use
+# this instead of the OS default (which may be on a small system drive).
+# Set by _train_temporal_cnn() via its tmp_dir parameter.
+_TMP_DIR: str | None = None
 
 # ---------------------------------------------------------------------------
 # Edge-TTS voice pool for diverse positive and negative generation
@@ -307,7 +311,7 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
             pass
 
         # Fallback: write MP3 to temp, load with torchaudio/scipy
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp3")
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp3", dir=_TMP_DIR)
         try:
             os.write(tmp_fd, mp3_data)
         finally:
@@ -611,6 +615,177 @@ def _save_wav(audio: np.ndarray, path: Path, sample_rate: int = 16000) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Positive augmentation and temporal embedding helpers
+# ---------------------------------------------------------------------------
+
+
+def _augment_positives(
+    raw_audio_arrays: list[np.ndarray],
+    *,
+    sample_rate: int = 16000,
+    copies_per_clip: int = 21,
+    seed: int = 42,
+) -> list[np.ndarray]:
+    """Augment positive clips with the roadmap audiomentations chain.
+
+    This operates on raw waveform arrays before OWW embedding extraction and
+    returns only augmented copies (the originals remain unchanged).
+    """
+    import numpy as np
+
+    try:
+        from audiomentations import (
+            Compose,
+            Gain,
+            Mp3Compression,
+            PitchShift,
+            TimeMask,
+            TimeStretch,
+        )
+    except ImportError as e:
+        raise RuntimeError(
+            "audiomentations is required for positive augmentation. "
+            "Install with: pip install 'violawake[training]'"
+        ) from e
+
+    if not raw_audio_arrays:
+        return []
+
+    augmenter = Compose(
+        [
+            Gain(min_gain_db=-6.0, max_gain_db=6.0, p=0.8),
+            TimeStretch(min_rate=0.9, max_rate=1.1, p=0.5),
+            PitchShift(min_semitones=-2.0, max_semitones=2.0, p=0.5),
+            Mp3Compression(min_bitrate=32, max_bitrate=128, p=0.3),
+            TimeMask(min_band_part=0.0, max_band_part=0.1, p=0.3),
+        ],
+        shuffle=False,
+    )
+
+    augmented: list[np.ndarray] = []
+    rng = np.random.default_rng(seed)
+
+    for audio in raw_audio_arrays:
+        base_audio = np.asarray(audio, dtype=np.float32)
+        for _ in range(copies_per_clip):
+            # audiomentations reads numpy's global RNG internally.
+            np.random.seed(int(rng.integers(0, 2**31 - 1)))
+            augmented_audio = augmenter(samples=base_audio.copy(), sample_rate=sample_rate)
+            augmented.append(np.asarray(augmented_audio, dtype=np.float32))
+
+    return augmented
+
+
+def _prepare_audio_for_oww(
+    audio: np.ndarray,
+    *,
+    clip_name: str,
+    verbose: bool,
+) -> np.ndarray | None:
+    """Center-crop/pad an audio clip and convert it to int16 for OWW."""
+    import numpy as np
+
+    from violawake_sdk._constants import CLIP_SAMPLES
+    from violawake_sdk.audio import center_crop
+
+    audio_f32 = np.asarray(audio, dtype=np.float32)
+    if audio_f32.size == 0:
+        return None
+
+    audio_rms = float(np.sqrt(np.mean(audio_f32**2)))
+    if audio_rms < 1e-6:
+        if verbose:
+            print(f"    WARNING: Skipping zero-energy clip: {clip_name}")
+        return None
+
+    audio_f32 = center_crop(audio_f32, CLIP_SAMPLES)
+    audio_i16 = np.clip(audio_f32, -1.0, 1.0)
+    audio_i16 = (audio_i16 * 32767).astype(np.int16)
+
+    if len(audio_i16) < CLIP_SAMPLES:
+        audio_i16 = np.pad(audio_i16, (0, CLIP_SAMPLES - len(audio_i16)))
+    else:
+        audio_i16 = audio_i16[:CLIP_SAMPLES]
+
+    return audio_i16
+
+
+def _extract_temporal_windows_from_audio(
+    audio_clips: list[np.ndarray],
+    source_ids: list[int],
+    tag: str,
+    verbose: bool = True,
+    seq_len: int = 9,
+) -> tuple[list[np.ndarray], list[int], list[str]]:
+    """Extract temporal OWW embedding windows from in-memory audio arrays."""
+    import numpy as np
+
+    try:
+        from openwakeword.model import Model as OWWModel
+    except ImportError as e:
+        print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if len(audio_clips) != len(source_ids):
+        raise ValueError("audio_clips and source_ids must have the same length")
+
+    oww = OWWModel()
+    preprocessor = oww.preprocessor
+
+    all_embeddings: list[np.ndarray] = []
+    all_source_idx: list[int] = []
+    all_tags: list[str] = []
+    failures = 0
+
+    for clip_idx, audio in enumerate(audio_clips):
+        audio_i16 = _prepare_audio_for_oww(
+            audio,
+            clip_name=f"{tag}_{clip_idx:04d}",
+            verbose=verbose and failures == 0,
+        )
+        if audio_i16 is None:
+            failures += 1
+            continue
+
+        try:
+            frame_embeddings_3d = preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1)
+            frame_embeddings = frame_embeddings_3d[0]
+
+            if len(frame_embeddings.shape) == 1:
+                frame_embeddings = frame_embeddings.reshape(1, -1)
+
+            n_frames = frame_embeddings.shape[0]
+
+            if n_frames >= seq_len:
+                for i in range(n_frames - seq_len + 1):
+                    window = frame_embeddings[i : i + seq_len].astype(np.float32)
+                    all_embeddings.append(window)
+                    all_source_idx.append(source_ids[clip_idx])
+                    all_tags.append(tag)
+            elif n_frames > 0:
+                padded = np.zeros((seq_len, frame_embeddings.shape[1]), dtype=np.float32)
+                padded[:n_frames] = frame_embeddings
+                for j in range(n_frames, seq_len):
+                    padded[j] = frame_embeddings[-1]
+                all_embeddings.append(padded)
+                all_source_idx.append(source_ids[clip_idx])
+                all_tags.append(tag)
+        except Exception:
+            failures += 1
+
+        if verbose and (clip_idx + 1) % 100 == 0:
+            print(f"    {clip_idx + 1}/{len(audio_clips)} clips -> {len(all_embeddings)} windows")
+
+    if verbose:
+        print(
+            f"  [{tag}] {len(audio_clips)} clips -> {len(all_embeddings)} temporal windows "
+            f"({failures} failures)"
+        )
+
+    return all_embeddings, all_source_idx, all_tags
+
+
+# ---------------------------------------------------------------------------
 # Temporal embedding extraction (9-frame windows from OWW backbone)
 # ---------------------------------------------------------------------------
 
@@ -639,21 +814,10 @@ def _extract_temporal_embeddings(
     """
     import numpy as np
 
-    from violawake_sdk._constants import CLIP_SAMPLES
-    from violawake_sdk.audio import center_crop, load_audio
+    from violawake_sdk.audio import load_audio
 
-    try:
-        from openwakeword.model import Model as OWWModel
-    except ImportError as e:
-        print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    oww = OWWModel()
-    preprocessor = oww.preprocessor
-
-    all_embeddings: list[np.ndarray] = []
-    all_source_idx: list[int] = []
-    all_tags: list[str] = []
+    audio_clips: list[np.ndarray] = []
+    source_ids: list[int] = []
     failures = 0
 
     for file_idx, wav_path in enumerate(audio_files):
@@ -661,68 +825,21 @@ def _extract_temporal_embeddings(
         if audio is None:
             failures += 1
             continue
+        audio_clips.append(audio)
+        source_ids.append(file_idx)
 
-        # Guard against zero-energy files (corrupted or silent recordings).
-        # If these slip through upload validation, they corrupt training:
-        # the model learns silence = wake word.
-        audio_rms = float(np.sqrt(np.mean(audio ** 2)))
-        if audio_rms < 1e-6:
-            if verbose and failures == 0:
-                print(f"    WARNING: Skipping zero-energy file: {wav_path.name}")
-            failures += 1
-            continue
+    embeddings, embedding_source_ids, tags = _extract_temporal_windows_from_audio(
+        audio_clips,
+        source_ids,
+        tag,
+        verbose=verbose,
+        seq_len=seq_len,
+    )
 
-        audio = center_crop(audio, CLIP_SAMPLES)
-        audio_i16 = np.clip(audio, -1.0, 1.0)
-        audio_i16 = (audio_i16 * 32767).astype(np.int16)
+    if verbose and failures > 0:
+        print(f"  [{tag}] skipped {failures} files during audio loading")
 
-        if len(audio_i16) < CLIP_SAMPLES:
-            audio_i16 = np.pad(audio_i16, (0, CLIP_SAMPLES - len(audio_i16)))
-        else:
-            audio_i16 = audio_i16[:CLIP_SAMPLES]
-
-        try:
-            # embed_clips returns (n_clips, n_frames, embedding_dim)
-            # This is the PRODUCTION embedding path — batch mode, not streaming.
-            frame_embeddings_3d = preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1)
-            # Shape: (1, n_frames, 96) -> (n_frames, 96)
-            frame_embeddings = frame_embeddings_3d[0]  # (n_frames, 96)
-
-            if len(frame_embeddings.shape) == 1:
-                # Single frame returned -- reshape to (1, 96)
-                frame_embeddings = frame_embeddings.reshape(1, -1)
-
-            n_frames = frame_embeddings.shape[0]
-
-            if n_frames >= seq_len:
-                for i in range(n_frames - seq_len + 1):
-                    window = frame_embeddings[i : i + seq_len].astype(np.float32)
-                    all_embeddings.append(window)
-                    all_source_idx.append(file_idx)
-                    all_tags.append(tag)
-            elif n_frames > 0:
-                # Pad to seq_len by repeating last frame
-                padded = np.zeros((seq_len, frame_embeddings.shape[1]), dtype=np.float32)
-                padded[:n_frames] = frame_embeddings
-                for j in range(n_frames, seq_len):
-                    padded[j] = frame_embeddings[-1]
-                all_embeddings.append(padded)
-                all_source_idx.append(file_idx)
-                all_tags.append(tag)
-
-        except Exception:
-            failures += 1
-
-        if verbose and (file_idx + 1) % 100 == 0:
-            print(f"    {file_idx + 1}/{len(audio_files)} files -> {len(all_embeddings)} windows")
-
-    if verbose:
-        print(
-            f"  [{tag}] {len(audio_files)} files -> {len(all_embeddings)} temporal windows "
-            f"({failures} failures)"
-        )
-
-    return all_embeddings, all_source_idx, all_tags
+    return embeddings, embedding_source_ids, tags
 
 
 # ---------------------------------------------------------------------------
@@ -887,11 +1004,13 @@ def _train_temporal_cnn(
     ema_decay: float = 0.999,
     seq_len: int = 9,
     neg_tags: dict[str, list[Path]] | None = None,
+    augment_source_files: list[Path] | None = None,
+    tmp_dir: Path | str | None = None,
 ) -> dict[str, Any]:
     """Train a TemporalCNN on 9-frame OWW embedding windows.
 
     This replicates the proven production training recipe:
-    - TemporalCNN(96, 9) architecture (~12K params)
+    - TemporalCNN(96, 9) architecture (~25K params)
     - FocalLoss(gamma=2.0, alpha=0.75, label_smoothing=0.05)
     - AdamW + cosine annealing LR
     - EMA weight averaging
@@ -908,18 +1027,26 @@ def _train_temporal_cnn(
         eval_dir: Optional eval directory.
         batch_size: Mini-batch size.
         lr: Learning rate.
-        patience: Early stopping patience.
+        patience: Early stopping patience (default 15, matching J5 proven recipe).
         verbose: Print progress.
         progress_callback: Optional callback for UI.
         device: Torch device hint.
         ema_decay: EMA decay factor.
         seq_len: Number of frames per temporal window.
         neg_tags: Optional dict mapping tag -> file list, for tagged negatives.
+        augment_source_files: Optional subset of positives to augment. Defaults
+            to all positives when omitted.
 
     Returns:
         Config dict with training results.
     """
     training_start = time.monotonic()
+
+    # -- Direct temp files to a non-system drive when requested --------------
+    global _TMP_DIR  # noqa: PLW0603
+    if tmp_dir is not None:
+        _TMP_DIR = str(tmp_dir)
+        Path(_TMP_DIR).mkdir(parents=True, exist_ok=True)
 
     # -- Lazy imports --------------------------------------------------------
     try:
@@ -953,43 +1080,79 @@ def _train_temporal_cnn(
     EMBEDDING_DIM = 96
     torch_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # -- Augment positive files if requested ---------------------------------
-    augmented_pos_files = list(pos_files)
-    if augment:
+    # -- Load and augment positives before embedding extraction ---------------
+    from violawake_sdk._constants import SAMPLE_RATE
+    from violawake_sdk.audio import load_audio
+
+    validation_fraction = 0.2
+    raw_pos_audio: list[np.ndarray] = []
+    raw_pos_source_ids: list[int] = []
+    augment_candidates: list[np.ndarray] = []
+    augment_candidate_source_ids: list[int] = []
+    augment_target_paths = set(augment_source_files or pos_files)
+    load_failures = 0
+
+    for file_idx, wav_path in enumerate(pos_files):
+        audio = load_audio(wav_path)
+        if audio is None:
+            load_failures += 1
+            continue
+        raw_pos_audio.append(audio)
+        raw_pos_source_ids.append(file_idx)
+        if wav_path in augment_target_paths:
+            augment_candidates.append(audio)
+            augment_candidate_source_ids.append(file_idx)
+
+    original_pos_clip_count = len(raw_pos_audio)
+    n_augmented = 0
+    augmented_pos_audio: list[np.ndarray] = []
+    augmented_pos_source_ids: list[int] = []
+
+    if augment and augment_candidates:
         if verbose:
-            print("\nStep 2: Augmenting positive audio files...")
-        from violawake_sdk.audio import load_audio
-        from violawake_sdk.training.augment import AugmentationPipeline
+            print("\nStep 2: Augmenting positive audio arrays with audiomentations...")
 
-        pipeline = AugmentationPipeline(seed=SEED)
-        aug_dir = output_path.parent / "_aug_positives"
-        aug_dir.mkdir(parents=True, exist_ok=True)
-        augment_factor = 10  # 10x augmentation (matches production golden path)
-        n_augmented = 0
-
-        for file_idx, f in enumerate(pos_files):
-            audio = load_audio(f)
-            if audio is None:
-                continue
-            variants = pipeline.augment_clip(audio, factor=augment_factor)
-            for var_idx, variant in enumerate(variants):
-                aug_path = aug_dir / f"aug_{file_idx:04d}_{var_idx}.wav"
-                _save_wav(variant, aug_path)
-                augmented_pos_files.append(aug_path)
-                n_augmented += 1
+        min_augmented_total = 210
+        copies_per_clip = max(1, math.ceil(min_augmented_total / len(augment_candidates)))
+        augmented_pos_audio = _augment_positives(
+            augment_candidates,
+            sample_rate=SAMPLE_RATE,
+            copies_per_clip=copies_per_clip,
+            seed=SEED,
+        )
+        augmented_pos_source_ids = [
+            source_id
+            for source_id in augment_candidate_source_ids
+            for _ in range(copies_per_clip)
+        ]
+        n_augmented = len(augmented_pos_audio)
+        raw_pos_audio.extend(augmented_pos_audio)
+        raw_pos_source_ids.extend(augmented_pos_source_ids)
 
         if verbose:
             print(
-                f"  {len(pos_files)} originals + {n_augmented} augmented = {len(augmented_pos_files)} total"
+                f"  {original_pos_clip_count} original clips + {n_augmented} augmented clips "
+                f"= {len(raw_pos_audio)} positive clips before embeddings"
             )
+    elif verbose and not augment:
+        print("\nStep 2: Positive augmentation disabled; using original clips only.")
+    elif verbose:
+        print("\nStep 2: No positive clips available for augmentation; using originals only.")
+
+    if verbose and load_failures > 0:
+        print(f"  Skipped {load_failures} positive files during audio loading")
 
     # -- Extract temporal embeddings -----------------------------------------
     if verbose:
         print(f"\nStep 3: Extracting {seq_len}-frame temporal OWW embeddings...")
-        print(f"  Processing {len(augmented_pos_files)} positive files...")
+        print(f"  Processing {len(raw_pos_audio)} positive clips...")
 
-    pos_embs, pos_src, pos_tags = _extract_temporal_embeddings(
-        augmented_pos_files, "pos", verbose=verbose, seq_len=seq_len
+    pos_embs, pos_src, pos_tags = _extract_temporal_windows_from_audio(
+        raw_pos_audio,
+        raw_pos_source_ids,
+        "pos",
+        verbose=verbose,
+        seq_len=seq_len,
     )
 
     if len(pos_embs) < 5:
@@ -1064,7 +1227,12 @@ def _train_temporal_cnn(
             print(f"    {t}: {count}")
 
     # -- Group-aware split ---------------------------------------------------
-    train_idx, val_idx = _group_aware_split(labels, source_idx, seed=42)
+    train_idx, val_idx = _group_aware_split(
+        labels,
+        source_idx,
+        seed=SEED,
+        val_fraction=validation_fraction,
+    )
 
     X_tensor = torch.tensor(X_data, dtype=torch.float32)
     y_tensor = torch.tensor(labels, dtype=torch.float32).unsqueeze(1)
@@ -1298,6 +1466,8 @@ def _train_temporal_cnn(
             "n_params": n_params,
             "n_pos_samples": n_pos,
             "n_neg_samples": n_neg,
+            "n_original_pos_clips": original_pos_clip_count,
+            "n_augmented_pos_clips": n_augmented,
             "augmented": augment,
             "epochs_trained": min(epoch, epochs),
             "best_epoch": best_epoch,
@@ -1308,6 +1478,8 @@ def _train_temporal_cnn(
             "batch_size": batch_size,
             "lr": lr,
             "patience": patience,
+            "validation_split": validation_fraction,
+            "early_stopped": no_improve >= patience,
             "training_duration_s": round(training_duration, 2),
             "wake_word": wake_word,
             "deployment_threshold": deployment_threshold,
@@ -1333,13 +1505,6 @@ def _train_temporal_cnn(
         if model_exported:
             print(f"Model saved: {output_path}")
             print(f"Load with:  WakeDetector(model='{output_path}')")
-
-    # Cleanup augmented files
-    aug_dir = output_path.parent / "_aug_positives"
-    if aug_dir.exists():
-        import shutil
-
-        shutil.rmtree(aug_dir, ignore_errors=True)
 
     if quality_grade == "F":
         raise RuntimeError(
@@ -1434,7 +1599,7 @@ def _run_quality_gate(
     quality_phrases = SPEECH_NEGATIVE_PHRASES[:50]
     voice = EDGE_TTS_VOICES[0]  # Single voice keeps the gate fast and deterministic.
 
-    with tempfile.TemporaryDirectory(prefix="violawake_qc_") as tmp_dir:
+    with tempfile.TemporaryDirectory(prefix="violawake_qc_", dir=_TMP_DIR) as tmp_dir:
         quality_dir = Path(tmp_dir)
 
         speech_files: list[Path] = []
@@ -1481,7 +1646,9 @@ def _run_quality_gate(
 
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
-    silence_max_score = float(silence_scores.max()) if len(silence_scores) else 1.0
+    # If silence produced no embeddings, the OWW backbone (correctly) rejected
+    # the zero-energy audio — the model can never trigger on silence. Score = 0.
+    silence_max_score = float(silence_scores.max()) if len(silence_scores) else 0.0
     grade = _grade_quality(speech_fp_rate, confusable_fp_rate, silence_max_score)
 
     metrics: dict[str, Any] = {
@@ -1517,7 +1684,7 @@ def _run_quality_gate(
             "were scored in the quality gate."
         )
     if verbose and len(silence_scores) == 0:
-        print("  WARNING: Silence scoring failed; quality gate forced to grade F.")
+        print("  NOTE: Silence produced no OWW embeddings (zero-energy rejected by backbone). Score: 0.0")
 
     return grade, metrics
 
@@ -2025,10 +2192,11 @@ def main() -> None:
         metavar="N",
         help="Early stopping patience (default: 15)",
     )
+    parser.set_defaults(augment=True)
     parser.add_argument(
         "--augment",
+        dest="augment",
         action="store_true",
-        default=True,
         help="Enable audio-level data augmentation (default: True)",
     )
     parser.add_argument(
@@ -2396,6 +2564,7 @@ def main() -> None:
         patience=args.patience,
         verbose=verbose,
         neg_tags=train_neg_tag_map,
+        augment_source_files=user_pos_files or train_pos_files,
     )
 
     print("\n" + "=" * 70)

@@ -152,7 +152,10 @@ def main():
     print(f"Output: {output_path}")
     print()
 
-    corpus_dir = Path(tempfile.mkdtemp(prefix="violawake_full_"))
+    # Use a temp dir on the same drive as the project to avoid filling the system drive
+    _tmp_base = Path(args.output).parent / "tmp"
+    _tmp_base.mkdir(parents=True, exist_ok=True)
+    corpus_dir = Path(tempfile.mkdtemp(prefix="violawake_full_", dir=str(_tmp_base)))
 
     # Step 1: TTS positive voice diversity
     print("Step 1: TTS positive generation (voice diversity + noise + reverb)...")
@@ -192,7 +195,11 @@ def main():
     # Step 4: Universal corpus
     print("Step 4: Universal corpus (LibriSpeech, MUSAN)...")
     rng = random.Random(42)
-    search_paths = [Path.home() / ".violawake" / "corpus", Path("corpus")]
+    search_paths = [
+        Path(__file__).resolve().parent.parent.parent / "corpus",  # repo root
+        Path.home() / ".violawake" / "corpus",
+        Path("corpus"),
+    ]
     subdirs = {
         "neg_librispeech": ("librispeech",),
         "neg_musan_speech": ("musan/musan/speech", "musan/speech"),
@@ -259,6 +266,7 @@ def main():
         verbose=True,
         progress_callback=on_progress,
         neg_tags=neg_tag_map,
+        augment_source_files=user_pos,
     )
 
     elapsed = time.monotonic() - start

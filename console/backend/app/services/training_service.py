@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from app.config import settings
 from app.monitoring import log_exception
 from app.storage import get_storage
 
@@ -68,7 +69,7 @@ def run_training_job_sync(
             "error": None,
         })
 
-        positives_dir = Path(tempfile.mkdtemp(prefix="violawake_train_"))
+        positives_dir = Path(tempfile.mkdtemp(prefix="violawake_train_", dir=str(settings.tmp_dir)))
         for index, recording_identifier in enumerate(recording_identifiers):
             _ensure_not_cancelled()
             if not storage.exists(recording_identifier):
@@ -103,9 +104,11 @@ def run_training_job_sync(
             _train_temporal_cnn,
         )
 
-        neg_temp_dir = Path(tempfile.mkdtemp(prefix="violawake_neg_"))
+        neg_temp_dir = Path(tempfile.mkdtemp(prefix="violawake_neg_", dir=str(settings.tmp_dir)))
 
         # Auto-generate TTS positives when user has <100 samples (production behavior)
+        # Keep track of user-provided files so augmentation targets only real recordings
+        user_pos_files = list(pos_files)
         if len(pos_files) < 100:
             tts_pos_dir = neg_temp_dir / "tts_positives"
             try:
@@ -121,7 +124,11 @@ def run_training_job_sync(
                         len(tts_pos_files), job_id, len(pos_files),
                     )
             except Exception as exc:
-                logger.warning("TTS positive generation failed for job %s: %s", job_id, exc)
+                logger.error(
+                    "TTS positive generation FAILED for job %s: %s — "
+                    "model quality will be degraded without TTS diversity",
+                    job_id, exc,
+                )
 
             _ensure_not_cancelled()
             progress_callback({
@@ -148,19 +155,45 @@ def run_training_job_sync(
         _ensure_not_cancelled()
 
         # Source 2: Auto-generated confusable negatives (phonetically similar)
-        confusable_dir = neg_temp_dir / "confusables"
+        # Two rounds matching CLI production pipeline:
+        #   Round 1: 30 confusables x 10 voices (broad phonetic coverage)
+        #   Round 2: 16 confusables x 10 voices (tight variants for hard negatives)
+        confusable_dir_r1 = neg_temp_dir / "confusables_r1"
         try:
-            confusable_files = _generate_confusable_negatives(
+            confusable_r1 = _generate_confusable_negatives(
                 wake_word,
-                confusable_dir,
-                n_confusables=20,
-                voices_per_word=5,
+                confusable_dir_r1,
+                n_confusables=30,
+                voices_per_word=10,
                 verbose=False,
             )
-            if confusable_files:
-                neg_tag_map["neg_confusable"] = confusable_files
+            if confusable_r1:
+                neg_tag_map["neg_confusable_r1"] = confusable_r1
         except Exception as exc:
-            logger.warning("Confusable generation failed for job %s: %s", job_id, exc)
+            logger.error(
+                "Confusable round 1 FAILED for job %s: %s — "
+                "model will have higher false positive rate on similar-sounding words",
+                job_id, exc,
+            )
+
+        _ensure_not_cancelled()
+
+        confusable_dir_r2 = neg_temp_dir / "confusables_r2"
+        try:
+            confusable_r2 = _generate_confusable_negatives(
+                wake_word,
+                confusable_dir_r2,
+                n_confusables=16,
+                voices_per_word=10,
+                verbose=False,
+            )
+            if confusable_r2:
+                neg_tag_map["neg_confusable_r2"] = confusable_r2
+        except Exception as exc:
+            logger.error(
+                "Confusable round 2 FAILED for job %s: %s",
+                job_id, exc,
+            )
 
         _ensure_not_cancelled()
         progress_callback({
@@ -175,22 +208,28 @@ def run_training_job_sync(
         })
 
         # Source 3: Auto-generated speech negatives (common phrases)
+        # 5 voices matching CLI production pipeline (was 3)
         speech_dir = neg_temp_dir / "speech"
         try:
             speech_files = _generate_speech_negatives(
                 speech_dir,
-                n_voices=3,
+                n_voices=5,
                 verbose=False,
             )
             if speech_files:
                 neg_tag_map["neg_speech"] = speech_files
         except Exception as exc:
-            logger.warning("Speech neg generation failed for job %s: %s", job_id, exc)
+            logger.error(
+                "Speech neg generation FAILED for job %s: %s — "
+                "model will have higher false positive rate on general speech",
+                job_id, exc,
+            )
 
         _ensure_not_cancelled()
 
         # Source 4: Universal corpus (LibriSpeech, MUSAN) if available
         _CORPUS_SEARCH_PATHS = [
+            Path(__file__).resolve().parent.parent.parent.parent / "corpus",  # repo root
             Path.home() / ".violawake" / "corpus",
             Path("corpus"),
         ]
@@ -280,6 +319,8 @@ def run_training_job_sync(
             verbose=True,
             progress_callback=_on_epoch,
             neg_tags=neg_tag_map,
+            tmp_dir=settings.tmp_dir,
+            augment_source_files=user_pos_files,
         )
 
         _ensure_not_cancelled()
