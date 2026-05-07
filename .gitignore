@@ -122,3 +122,6 @@ experiments/embedding_cache.npz.bak_round*
 test_model.config.json
 tests/live/.smoke_last_output.txt
 .openapi_live.json
+# WASM browser SDK shipped to violawake.com via Cloudflare Pages
+!console/frontend/public/wasm/dist/
+!console/frontend/public/wasm/dist/**
