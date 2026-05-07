@@ -18,6 +18,14 @@ except ImportError:
 
 pytestmark = pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi not installed")
 
+ADMIN_HEALTH_TOKEN = "test-admin-token"
+
+
+def health_headers(path: str) -> dict[str, str]:
+    if path == "/api/health/details":
+        return {"X-Admin-Token": ADMIN_HEALTH_TOKEN}
+    return {}
+
 
 @pytest.fixture(scope="module")
 def client():
@@ -88,6 +96,7 @@ def healthy_runtime(client, monkeypatch):
     monkeypatch.setattr(health_module, "_check_training_queue", fake_check_training_queue)
     monkeypatch.setattr(health_module, "_check_storage", fake_check_storage)
     monkeypatch.setattr(health_module, "_check_billing", fake_check_billing)
+    monkeypatch.setattr(health_module.settings, "admin_token", ADMIN_HEALTH_TOKEN)
     monkeypatch.setattr(client.app.state, "startup_complete", True, raising=False)
 
 
@@ -118,7 +127,7 @@ def test_health_ready_returns_200_when_database_is_available(client, healthy_run
 
 
 def test_health_details_returns_component_breakdown(client, healthy_runtime) -> None:
-    response = client.get("/api/health/details")
+    response = client.get("/api/health/details", headers=health_headers("/api/health/details"))
 
     assert response.status_code == 200
     data = response.json()
@@ -189,7 +198,7 @@ def test_classify_exception_expected_vs_unexpected() -> None:
     ],
 )
 def test_health_responses_include_request_id_header(client, healthy_runtime, path: str) -> None:
-    response = client.get(path)
+    response = client.get(path, headers=health_headers(path))
 
     assert response.status_code == 200
     assert "X-Request-ID" in response.headers
@@ -206,7 +215,7 @@ def test_health_responses_include_request_id_header(client, healthy_runtime, pat
     ],
 )
 def test_health_responses_include_nosniff_header(client, healthy_runtime, path: str) -> None:
-    response = client.get(path)
+    response = client.get(path, headers=health_headers(path))
 
     assert response.status_code == 200
     assert response.headers["X-Content-Type-Options"] == "nosniff"
