@@ -61,7 +61,25 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
     Returns:
         Audio samples as float32 numpy array, or None if failed
     """
-    # Try torchaudio first, fall back to wave module
+    # Try soundfile first — handles WAV/FLAC/OGG natively via libsndfile
+    # (bundled in the soundfile wheel, no system FFmpeg required). torchaudio
+    # 2.10+ requires torchcodec → FFmpeg shared libs, which aren't always
+    # present in slim Docker images.
+    try:
+        import soundfile as sf
+
+        data, sr = sf.read(str(path), dtype="float32", always_2d=False)
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        if sr != target_sr:
+            from scipy import signal
+
+            data = signal.resample(data, int(len(data) * target_sr / sr)).astype(np.float32)
+        return data
+    except Exception:
+        logger.debug("soundfile failed for %s, trying torchaudio", path, exc_info=True)
+
+    # Fallback to torchaudio (handles MP3 via torchcodec when present)
     if _TORCHAUDIO_AVAILABLE:
         try:
             waveform, sr = torchaudio.load(str(path))
@@ -78,7 +96,7 @@ def load_audio(path: Path, target_sr: int = SAMPLE_RATE) -> np.ndarray | None:
                 "torchaudio failed for %s, falling back to wave module", path, exc_info=True
             )
 
-    # Fallback to wave module (WAV only)
+    # Last-ditch: wave module (WAV only)
     try:
         import wave
 
