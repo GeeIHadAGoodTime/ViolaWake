@@ -261,7 +261,7 @@ def _build_oww_scorer(session, input_name: str):
     from violawake_sdk._constants import CLIP_SAMPLES
     from violawake_sdk.audio import center_crop, load_audio
 
-    oww = OWWModel()
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
     if not hasattr(preprocessor, "onnx_execution_provider"):
         preprocessor.onnx_execution_provider = "CPUExecutionProvider"
@@ -324,7 +324,7 @@ def _build_temporal_oww_scorer(session, input_name: str):
     from violawake_sdk._constants import CLIP_SAMPLES
     from violawake_sdk.audio import center_crop, load_audio
 
-    oww = OWWModel()
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
     if not hasattr(preprocessor, "onnx_execution_provider"):
         preprocessor.onnx_execution_provider = "CPUExecutionProvider"

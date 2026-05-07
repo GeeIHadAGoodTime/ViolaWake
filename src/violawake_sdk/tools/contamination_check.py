@@ -111,7 +111,7 @@ def _check_embedding_overlap(
     from violawake_sdk._constants import CLIP_SAMPLES
     from violawake_sdk.audio import center_crop, load_audio
 
-    oww = OWWModel()
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
 
     def _embed_file(path: Path) -> np.ndarray | None:
