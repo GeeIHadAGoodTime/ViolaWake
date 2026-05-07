@@ -10,6 +10,7 @@ for i in 1 2 3 4 5; do
         break
     fi
     echo "[entrypoint] alembic try $i failed; retrying in 3s..."
+    [ "$i" = "5" ] && exit 1
     sleep 3
 done
 
@@ -19,8 +20,7 @@ done
 # Required for the training pipeline (OWWModel construction in
 # violawake_sdk.tools.train).
 echo "[entrypoint] ensuring openwakeword backbone models are downloaded"
-python -c "from openwakeword.utils import download_models; download_models()" 2>&1 \
-    | tail -3 || true
+python -c "from openwakeword.utils import download_models; download_models()"
 
 if [ "$(id -u)" = "0" ]; then
     chown -R app:app /app/data
