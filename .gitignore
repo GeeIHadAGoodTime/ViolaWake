@@ -115,3 +115,4 @@ experiments/embedding_cache.npz.bak_round*
 
 # Test artifacts
 test_model.config.json
+tests/live/.smoke_last_output.txt
