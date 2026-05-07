@@ -149,7 +149,11 @@ export async function register(
     method: "POST",
     body: JSON.stringify({ email, password, name }),
   });
-  setToken(data.token);
+  if (data.token) {
+    setToken(data.token);
+  } else {
+    clearToken();
+  }
   return data;
 }
 
@@ -220,6 +224,19 @@ export async function forgotPassword(
   return request<MessageResponse>("/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify({ email }),
+  });
+}
+
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<MessageResponse> {
+  return request<MessageResponse>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
   });
 }
 

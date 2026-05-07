@@ -1,9 +1,4 @@
 User-agent: *
 Allow: /
-Disallow: /api/
-Disallow: /dashboard
-Disallow: /billing
-Disallow: /record
-Disallow: /training/
 
-Sitemap: https://console.violawake.com/sitemap.xml
+Sitemap: https://violawake.com/sitemap.xml

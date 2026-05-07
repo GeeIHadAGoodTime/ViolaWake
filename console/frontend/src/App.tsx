@@ -24,6 +24,7 @@ import TermsPage from "./pages/Terms.tsx";
 import VerifyEmailPage from "./pages/VerifyEmail";
 import ResetPasswordPage from "./pages/ResetPassword";
 import ForgotPasswordPage from "./pages/ForgotPassword";
+import ChangePasswordPage from "./pages/ChangePassword";
 import TeamsPage from "./pages/Teams";
 import TeamDetailPage from "./pages/TeamDetail";
 import CookieConsent from "./components/CookieConsent";
@@ -85,6 +86,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <ModelPerformancePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/account/password"
+                  element={
+                    <ProtectedRoute>
+                      <ChangePasswordPage />
                     </ProtectedRoute>
                   }
                 />

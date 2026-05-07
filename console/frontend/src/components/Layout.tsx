@@ -28,6 +28,9 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/teams" className="nav-link">
                 Teams
               </Link>
+              <Link to="/account/password" className="nav-link">
+                Password
+              </Link>
               <button
                 onClick={logout}
                 className="nav-link nav-button"
