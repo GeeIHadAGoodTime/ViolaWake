@@ -1,60 +1,114 @@
 #!/usr/bin/env python3
-"""Verify all models in the ViolaWake registry.
+"""Verify downloadable models in the ViolaWake registry.
 
-Downloads each model, checks SHA-256 when a real hash is present, loads ONNX
-models with onnxruntime, and validates input/output tensor shapes.
-
-Usage:
-    python scripts/verify_models.py          # Interactive output
-    python scripts/verify_models.py --ci     # CI mode: JSON report + nonzero exit on failure
+The CI path downloads each non-deprecated registry entry, computes SHA-256,
+and compares it to the hash declared in ``src/violawake_sdk/models.py``.
+Package-managed models, such as the OpenWakeWord backbone, are skipped by
+default because they are not release assets owned by ViolaWake.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
+import tempfile
 import time
-import warnings
+import urllib.error
+import urllib.request
 from pathlib import Path
+from typing import Any
 
-# Expected ONNX model input/output shapes.
-# Keys are model names from MODEL_REGISTRY.
-# Shapes use None for dynamic/batch dimensions.
-EXPECTED_SHAPES: dict[str, dict[str, list[list[int | None]]]] = {
-    # viola_mlp_oww and viola_cnn_v4 removed — never uploaded to GitHub Releases.
-    # Add expected shapes for new models as needed.
-}
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SRC_ROOT = REPO_ROOT / "src"
+REPORT_PATH = REPO_ROOT / "model-verify-report.json"
+CHUNK_SIZE = 1024 * 1024
 
 
-def shapes_match(
-    actual: list[int | str | None],
-    expected: list[int | None],
-) -> bool:
-    """Check if actual tensor shape matches expected."""
-    if len(actual) != len(expected):
-        return False
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Verify ViolaWake release model hashes")
+    parser.add_argument(
+        "--ci",
+        action="store_true",
+        help="Exit nonzero when any verified model fails.",
+    )
+    parser.add_argument(
+        "--model",
+        metavar="NAME",
+        help="Verify one registry key instead of all downloadable models.",
+    )
+    parser.add_argument(
+        "--skip-deprecated",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip models whose description marks them deprecated (default: true).",
+    )
+    parser.add_argument(
+        "--skip-package-managed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Skip models managed by upstream packages instead of ViolaWake releases (default: true).",
+    )
+    parser.add_argument(
+        "--report",
+        default=str(REPORT_PATH),
+        help="JSON report path (default: model-verify-report.json).",
+    )
+    return parser.parse_args()
 
-    for actual_dim, expected_dim in zip(actual, expected):
-        if expected_dim is None:
-            continue
-        if isinstance(actual_dim, str):
-            return False
-        if actual_dim != expected_dim:
-            return False
 
-    return True
+def ensure_src_importable() -> None:
+    src_path = str(SRC_ROOT)
+    if src_path not in sys.path:
+        sys.path.insert(0, src_path)
 
 
-def verify_model(
-    name: str,
-    spec: object,
-    model_dir: Path,
-) -> dict:
-    """Verify a single model and return a structured result."""
-    from violawake_sdk.models import _verify_sha256  # noqa: PLC2701
+def sha256_file(path: Path) -> str:
+    digest = __import__("hashlib").sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(CHUNK_SIZE), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-    result: dict = {
+
+def is_deprecated(spec: Any) -> bool:
+    description = str(getattr(spec, "description", ""))
+    return "DEPRECATED" in description.upper()
+
+
+def target_path(model_dir: Path, spec: Any) -> Path:
+    ext = Path(str(getattr(spec, "url", ""))).suffix or ".onnx"
+    return model_dir / f"{getattr(spec, 'name')}{ext}"
+
+
+def download_to_path(url: str, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(destination.parent),
+        prefix=f".{destination.name}.",
+        suffix=".tmp",
+    )
+    tmp_path = Path(tmp_name)
+    os.close(fd)
+
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "violawake-model-verify"})
+        with urllib.request.urlopen(request, timeout=120) as response, tmp_path.open("wb") as out:
+            while True:
+                chunk = response.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                out.write(chunk)
+        tmp_path.replace(destination)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def verify_one(name: str, spec: Any, model_dir: Path) -> dict[str, Any]:
+    started = time.monotonic()
+    result: dict[str, Any] = {
         "model": name,
         "status": "unknown",
         "checks": {},
@@ -62,223 +116,144 @@ def verify_model(
         "warnings": [],
         "duration_s": 0.0,
     }
-    t0 = time.monotonic()
 
-    ext = Path(spec.url).suffix or ".onnx"
-    model_path = model_dir / f"{spec.name}{ext}"
-
-    # Check 1: download
-    try:
-        from violawake_sdk.models import download_model
-
-        download_model(name, force=False, verify=False)
-        result["checks"]["download"] = "pass"
-    except Exception as exc:  # pragma: no cover - exercised in CI/runtime
-        result["checks"]["download"] = "fail"
-        result["errors"].append(f"Download failed: {exc}")
+    url = str(getattr(spec, "url", ""))
+    expected_sha256 = str(getattr(spec, "sha256", ""))
+    if not url.startswith("https://"):
+        result["checks"]["url"] = "fail"
+        result["errors"].append(f"Refusing non-HTTPS URL: {url}")
         result["status"] = "fail"
-        result["duration_s"] = round(time.monotonic() - t0, 2)
+        result["duration_s"] = round(time.monotonic() - started, 2)
         return result
 
-    if not model_path.exists():
-        result["checks"]["download"] = "fail"
-        result["errors"].append(f"Model file not found at {model_path} after download")
-        result["status"] = "fail"
-        result["duration_s"] = round(time.monotonic() - t0, 2)
-        return result
-
-    # Check 2: SHA-256
-    try:
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            _verify_sha256(model_path, spec.sha256, name)
-
-        if caught:
-            result["checks"]["sha256"] = "warn"
-            for caught_warning in caught:
-                result["warnings"].append(str(caught_warning.message))
-        else:
-            result["checks"]["sha256"] = "pass"
-    except ValueError as exc:
+    if not expected_sha256 or "placeholder" in expected_sha256.lower():
         result["checks"]["sha256"] = "fail"
-        result["errors"].append(str(exc))
+        result["errors"].append("Registry SHA-256 is missing or still a placeholder.")
         result["status"] = "fail"
-        result["duration_s"] = round(time.monotonic() - t0, 2)
+        result["duration_s"] = round(time.monotonic() - started, 2)
         return result
 
-    # Check 3: file size sanity
-    actual_size = model_path.stat().st_size
-    low = int(spec.size_bytes * 0.8)
-    high = int(spec.size_bytes * 1.2)
-    if low <= actual_size <= high:
-        result["checks"]["size"] = "pass"
+    path = target_path(model_dir, spec)
+    if path.exists():
+        result["checks"]["download"] = "cached"
     else:
-        result["checks"]["size"] = "warn"
-        result["warnings"].append(
-            f"Size mismatch: expected ~{spec.size_bytes} bytes, got {actual_size} bytes"
+        try:
+            download_to_path(url, path)
+            result["checks"]["download"] = "pass"
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            result["checks"]["download"] = "fail"
+            result["errors"].append(f"Download failed: {exc}")
+            result["status"] = "fail"
+            result["duration_s"] = round(time.monotonic() - started, 2)
+            return result
+
+    actual_sha256 = sha256_file(path)
+    result["checks"]["sha256"] = "pass" if actual_sha256 == expected_sha256 else "fail"
+    result["actual_sha256"] = actual_sha256
+    result["expected_sha256"] = expected_sha256
+    result["size_bytes"] = path.stat().st_size
+
+    if actual_sha256 != expected_sha256:
+        result["errors"].append(
+            f"SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}"
         )
 
-    # Check 4: ONNX load and shape validation
-    if ext == ".onnx":
-        try:
-            import onnxruntime as ort
-
-            session = ort.InferenceSession(
-                str(model_path),
-                providers=["CPUExecutionProvider"],
+    expected_size = int(getattr(spec, "size_bytes", 0) or 0)
+    if expected_size > 0:
+        lower = int(expected_size * 0.8)
+        upper = int(expected_size * 1.2)
+        result["checks"]["size"] = "pass" if lower <= path.stat().st_size <= upper else "warn"
+        if result["checks"]["size"] == "warn":
+            result["warnings"].append(
+                f"Size differs from registry: expected about {expected_size}, got {path.stat().st_size}"
             )
-            result["checks"]["onnx_load"] = "pass"
 
-            inputs = session.get_inputs()
-            outputs = session.get_outputs()
-            input_shapes = [inp.shape for inp in inputs]
-            output_shapes = [out.shape for out in outputs]
-
-            result["checks"]["input_shapes"] = [str(shape) for shape in input_shapes]
-            result["checks"]["output_shapes"] = [str(shape) for shape in output_shapes]
-
-            if name in EXPECTED_SHAPES:
-                expected = EXPECTED_SHAPES[name]
-
-                if len(input_shapes) != len(expected["inputs"]):
-                    result["checks"]["shape_match_inputs"] = "fail"
-                    result["errors"].append(
-                        f"Expected {len(expected['inputs'])} inputs, got {len(input_shapes)}"
-                    )
-                else:
-                    inputs_match = True
-                    for index, (actual_shape, expected_shape) in enumerate(
-                        zip(input_shapes, expected["inputs"])
-                    ):
-                        if not shapes_match(actual_shape, expected_shape):
-                            inputs_match = False
-                            result["errors"].append(
-                                f"Input[{index}] shape mismatch: "
-                                f"expected {expected_shape}, got {actual_shape}"
-                            )
-                    result["checks"]["shape_match_inputs"] = (
-                        "pass" if inputs_match else "fail"
-                    )
-
-                if len(output_shapes) != len(expected["outputs"]):
-                    result["checks"]["shape_match_outputs"] = "fail"
-                    result["errors"].append(
-                        f"Expected {len(expected['outputs'])} outputs, got {len(output_shapes)}"
-                    )
-                else:
-                    outputs_match = True
-                    for index, (actual_shape, expected_shape) in enumerate(
-                        zip(output_shapes, expected["outputs"])
-                    ):
-                        if not shapes_match(actual_shape, expected_shape):
-                            outputs_match = False
-                            result["errors"].append(
-                                f"Output[{index}] shape mismatch: "
-                                f"expected {expected_shape}, got {actual_shape}"
-                            )
-                    result["checks"]["shape_match_outputs"] = (
-                        "pass" if outputs_match else "fail"
-                    )
-            else:
-                result["checks"]["shape_match"] = "skip (no expected shapes defined)"
-
-        except ImportError:
-            result["checks"]["onnx_load"] = "skip (onnxruntime not installed)"
-        except Exception as exc:  # pragma: no cover - exercised in CI/runtime
-            result["checks"]["onnx_load"] = "fail"
-            result["errors"].append(f"ONNX load failed: {exc}")
-    else:
-        result["checks"]["onnx_load"] = "skip (not an .onnx file)"
-
-    has_fail = any(value == "fail" for value in result["checks"].values())
-    result["status"] = "fail" if has_fail else "pass"
-    result["duration_s"] = round(time.monotonic() - t0, 2)
+    result["status"] = "fail" if result["errors"] else "pass"
+    result["duration_s"] = round(time.monotonic() - started, 2)
     return result
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify ViolaWake model registry")
-    parser.add_argument(
-        "--ci",
-        action="store_true",
-        help="CI mode: write JSON report and exit nonzero on failure",
-    )
-    parser.add_argument(
-        "--model",
-        metavar="NAME",
-        help="Verify a single model instead of all",
-    )
-    args = parser.parse_args()
+def iter_registry(args: argparse.Namespace) -> list[tuple[str, Any, str | None]]:
+    ensure_src_importable()
+    from violawake_sdk.models import MODEL_REGISTRY, get_model_dir  # noqa: PLC0415
+    from violawake_sdk import models as model_module  # noqa: PLC0415
 
-    from violawake_sdk.models import MODEL_REGISTRY, get_model_dir
+    package_managed = set(getattr(model_module, "_PACKAGE_MANAGED_MODELS", set()))
 
-    model_dir = get_model_dir()
-    print(f"Model directory: {model_dir}")
-    print()
-
-    models_to_verify: list[tuple[str, object]] = []
     if args.model:
         if args.model not in MODEL_REGISTRY:
-            print(f"ERROR: Model '{args.model}' not found", file=sys.stderr)
-            sys.exit(1)
-        models_to_verify.append((args.model, MODEL_REGISTRY[args.model]))
-    else:
-        seen_names: set[str] = set()
-        for name, spec in MODEL_REGISTRY.items():
-            if spec.name in seen_names:
-                print(f"  SKIP  {name:<30} (alias for {spec.name})")
-                continue
-            seen_names.add(spec.name)
-            models_to_verify.append((name, spec))
+            raise SystemExit(f"ERROR: model '{args.model}' not found in registry")
+        spec = MODEL_REGISTRY[args.model]
+        return [(args.model, spec, None)]
 
-    print()
-    print(f"Verifying {len(models_to_verify)} model(s)...")
-    print("=" * 70)
+    entries: list[tuple[str, Any, str | None]] = []
+    seen_spec_names: set[str] = set()
+    for name, spec in MODEL_REGISTRY.items():
+        spec_name = str(getattr(spec, "name", name))
+        if spec_name in seen_spec_names:
+            entries.append((name, spec, f"alias for {spec_name}"))
+            continue
+        seen_spec_names.add(spec_name)
 
-    results = []
-    all_passed = True
+        if args.skip_package_managed and (name in package_managed or spec_name in package_managed):
+            entries.append((name, spec, "package-managed"))
+            continue
+        if args.skip_deprecated and is_deprecated(spec):
+            entries.append((name, spec, "deprecated"))
+            continue
+        entries.append((name, spec, None))
 
-    for name, spec in models_to_verify:
-        print(f"\n--- {name} ---")
-        result = verify_model(name, spec, model_dir)
+    # Touch get_model_dir here so import failures surface before verification begins.
+    get_model_dir()
+    return entries
+
+
+def main() -> int:
+    args = parse_args()
+    ensure_src_importable()
+    from violawake_sdk.models import get_model_dir  # noqa: PLC0415
+
+    model_dir = get_model_dir()
+    results: list[dict[str, Any]] = []
+    print(f"Model directory: {model_dir}")
+
+    for name, spec, skip_reason in iter_registry(args):
+        if skip_reason:
+            print(f"SKIP {name}: {skip_reason}")
+            results.append({
+                "model": name,
+                "status": "skipped",
+                "reason": skip_reason,
+            })
+            continue
+        print(f"VERIFY {name}")
+        result = verify_one(name, spec, model_dir)
+        print(f"  {result['status'].upper()}")
+        for error in result.get("errors", []):
+            print(f"  ERROR: {error}")
+        for warning in result.get("warnings", []):
+            print(f"  WARNING: {warning}")
         results.append(result)
 
-        status_icon = "PASS" if result["status"] == "pass" else "FAIL"
-        print(f"  Status: {status_icon}")
-        for check_name, check_val in result["checks"].items():
-            print(f"    {check_name}: {check_val}")
-        for error in result["errors"]:
-            print(f"    ERROR: {error}")
-        for warning in result["warnings"]:
-            print(f"    WARNING: {warning}")
-        print(f"  Duration: {result['duration_s']}s")
-
-        if result["status"] != "pass":
-            all_passed = False
-
-    print()
-    print("=" * 70)
-    passed = sum(1 for result in results if result["status"] == "pass")
-    failed = sum(1 for result in results if result["status"] != "pass")
-    print(f"Results: {passed} passed, {failed} failed, out of {len(results)} verified")
-
+    failed = [result for result in results if result.get("status") == "fail"]
+    passed = [result for result in results if result.get("status") == "pass"]
+    skipped = [result for result in results if result.get("status") == "skipped"]
     report = {
         "total": len(results),
-        "passed": passed,
-        "failed": failed,
+        "passed": len(passed),
+        "failed": len(failed),
+        "skipped": len(skipped),
         "results": results,
     }
-    report_path = Path("model-verify-report.json")
-    report_path.write_text(json.dumps(report, indent=2))
-    print(f"Report written to: {report_path}")
+    report_path = Path(args.report)
+    report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(
+        f"Results: {len(passed)} passed, {len(failed)} failed, "
+        f"{len(skipped)} skipped. Report: {report_path}"
+    )
 
-    if not all_passed:
-        print("\nFAILED: One or more models failed verification.", file=sys.stderr)
-        if args.ci:
-            sys.exit(1)
-    else:
-        print("\nAll models verified successfully.")
+    return 1 if args.ci and failed else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

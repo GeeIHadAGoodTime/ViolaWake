@@ -1,41 +1,36 @@
-"""Generate static API reference docs with pdoc.
-
-Handles optional dependencies (tts, stt, training) gracefully by mocking
-heavy imports before pdoc processes the source tree.
-"""
+#!/usr/bin/env python3
+"""Generate static API reference docs with pdoc."""
 
 from __future__ import annotations
 
+import argparse
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = ROOT / "docs" / "api"
-
-# All public modules to document.
-# violawake is the convenience re-export package; violawake_sdk is the full SDK.
-MODULES = [
-    "violawake",
-    "violawake_sdk",
-]
-
-# Submodules that have heavy optional deps — we still want them documented.
-# pdoc will skip a module if it raises ImportError during import, so we list
-# them explicitly here so the caller knows what to expect in the output.
-OPTIONAL_SUBMODULES = [
-    "violawake_sdk.tts",
-    "violawake_sdk.tts_engine",
-    "violawake_sdk.stt",
-    "violawake_sdk.stt_engine",
-    "violawake_sdk.training",
-    "violawake_sdk.speaker",
-]
+DEFAULT_OUTPUT_DIR = ROOT / "docs" / "api"
+MODULES = ["violawake", "violawake_sdk"]
 
 
-def _check_pdoc() -> bool:
-    """Return True if pdoc is importable."""
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate ViolaWake API docs with pdoc")
+    parser.add_argument(
+        "--output-dir",
+        default=str(DEFAULT_OUTPUT_DIR),
+        help="Directory where pdoc HTML output should be written.",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the pdoc command without generating files.",
+    )
+    return parser.parse_args()
+
+
+def pdoc_available() -> bool:
     try:
         import importlib
 
@@ -45,70 +40,60 @@ def _check_pdoc() -> bool:
         return False
 
 
-def main() -> int:
-    if not _check_pdoc():
-        print(
-            "ERROR: pdoc is not installed. "
-            "Run: pip install -e '.[docs]'",
-            file=sys.stderr,
-        )
-        return 1
-
-    OUTPUT_DIR.parent.mkdir(parents=True, exist_ok=True)
-    if OUTPUT_DIR.exists():
-        shutil.rmtree(OUTPUT_DIR)
-    OUTPUT_DIR.mkdir(parents=True)
-
-    # Build the pdoc command.
-    # --docformat google  — parse Google-style docstrings (used throughout the SDK)
-    # MODULES             — let pdoc recurse into all subpackages automatically
-    command = [
+def build_command(output_dir: Path) -> list[str]:
+    return [
         sys.executable,
         "-m",
         "pdoc",
         "--output-directory",
-        str(OUTPUT_DIR),
+        str(output_dir),
         "--docformat",
         "google",
         *MODULES,
     ]
 
-    print(f"Running: {' '.join(command)}")
-    print(f"Output:  {OUTPUT_DIR}")
-    print()
 
-    # Run pdoc from the project root so that src/ layout is resolved correctly.
-    # We pass PYTHONPATH so the editable install is not strictly required —
-    # pdoc will find the packages directly from src/.
-    import os
+def main() -> int:
+    args = parse_args()
+    output_dir = Path(args.output_dir).resolve()
+    command = build_command(output_dir)
 
-    env = os.environ.copy()
     src_path = str(ROOT / "src")
+    env = os.environ.copy()
     existing_pythonpath = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{src_path}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else src_path
+    env["PYTHONPATH"] = (
+        f"{src_path}{os.pathsep}{existing_pythonpath}" if existing_pythonpath else src_path
+    )
 
-    result = subprocess.run(command, cwd=ROOT, env=env)
-
-    if result.returncode != 0:
-        print(
-            "\npdoc exited with errors. Common causes:\n"
-            "  - An optional dependency (torch, kokoro-onnx, faster-whisper) is not\n"
-            "    installed. pdoc skips modules it cannot import — this is expected.\n"
-            "  - Install the full extras to document optional modules:\n"
-            "    pip install -e '.[docs,tts,stt]'",
-            file=sys.stderr,
-        )
-        # Non-fatal: pdoc still writes output for modules it could import.
-        # Return 0 so CI doesn't fail when optional deps are absent.
-        print(f"\nPartial docs generated in {OUTPUT_DIR}")
+    print(f"Command: {' '.join(command)}")
+    print(f"Output:  {output_dir}")
+    if args.dry_run:
+        print(f"pdoc installed: {'yes' if pdoc_available() else 'no'}")
         return 0
 
-    # Count generated files for a quick sanity check.
-    html_files = list(OUTPUT_DIR.rglob("*.html"))
-    print(f"\nGenerated {len(html_files)} HTML file(s) in {OUTPUT_DIR}")
-    for f in sorted(html_files):
-        print(f"  {f.relative_to(ROOT)}")
+    if not pdoc_available():
+        print(
+            "ERROR: pdoc is not installed. Install docs extras with: pip install -e '.[docs]'",
+            file=sys.stderr,
+        )
+        return 1
 
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
+
+    result = subprocess.run(command, cwd=ROOT, env=env, check=False)
+    if result.returncode != 0:
+        print(
+            "\npdoc exited with errors. Install optional extras if optional modules failed to import: "
+            "pip install -e '.[docs,tts,stt]'",
+            file=sys.stderr,
+        )
+        return result.returncode
+
+    html_files = list(output_dir.rglob("*.html"))
+    print(f"Generated {len(html_files)} HTML file(s) in {output_dir}")
     return 0
 
 
