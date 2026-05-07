@@ -107,15 +107,20 @@ jobs:
           path: dist/
 
       - name: Fetch model files from model artifact store
-        # Models are stored in a private artifact store (not in git).
-        # This step retrieves the models for the current version and
-        # attaches them to the GitHub Release.
+        # Tolerant of "no models for this version yet" — `gh release download`
+        # has a chicken-and-egg problem when the release is being created in
+        # this same workflow. The SDK auto-downloads the OWW backbone at
+        # runtime, so PyPI users do not depend on Release assets being
+        # attached. `continue-on-error: true` keeps the release moving on a
+        # 404 from gh / urllib fallback.
+        continue-on-error: true
         env:
           MODEL_STORE_TOKEN: ${{ secrets.MODEL_STORE_TOKEN }}
         run: |
+          mkdir -p models/
           python tools/fetch_release_models.py \
             --version ${{ needs.validate.outputs.version }} \
-            --output models/
+            --output models/ || echo "no model assets fetched — continuing"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -125,6 +130,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: ${{ contains(needs.validate.outputs.version, 'rc') || contains(needs.validate.outputs.version, 'alpha') || contains(needs.validate.outputs.version, 'beta') }}
+          fail_on_unmatched_files: false
           files: |
             dist/*.whl
             dist/*.tar.gz
@@ -136,7 +142,13 @@ jobs:
   pypi-publish:
     name: Publish to PyPI
     runs-on: ubuntu-22.04
-    needs: [validate, build, github-release]
+    # Decoupled from github-release on purpose: PyPI publish is the
+    # user-facing load-bearing step (`pip install violawake`). If the
+    # GitHub Release creation fails — for example because no model
+    # artifacts are attachable for a brand-new version — PyPI must still
+    # publish. v0.2.3 was lost because this job had a transitive `needs`
+    # on github-release, which 404'd on the model-fetch step.
+    needs: [validate, build]
     environment: pypi  # required for OIDC trusted publishing
 
     steps:

@@ -14,7 +14,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 | Backend | ✅ live | Local Docker via Cloudflare Tunnel `violawake-api`, `api.violawake.com` | 2026-05-07 (image rebuilt from commit `5d7ac2a`) |
 | Postgres | ✅ live | Local Docker `wakeword-postgres-1`, internal to `wakeword_default` network | 11+ days uptime |
 | Cloudflare Tunnel | ✅ live | Container `wakeword-tunnel-1`, tunnel UUID `7dbef1da-...` | 11+ days uptime |
-| SDK on PyPI | ✅ live | `violawake` v0.2.2 | 2026-04-05 |
+| SDK on PyPI | ✅ live | `violawake` v0.2.4 | 2026-05-07 (manually published via twine — `release.yml` had a chicken-and-egg bug where `pypi-publish.needs: [..., github-release]` and `github-release` 404'd on `fetch_release_models.py`, blocking PyPI even for valid wheels. Both fixed in same commit.) |
 
 ## Verified end-to-end (2026-05-07)
 
