@@ -66,14 +66,26 @@ git log --oneline -3
 # 2. Build the new image from the current working tree
 docker compose -f docker-compose.production.yml build backend
 
-# 3. Recreate the running container with the new image
+# 3. Pre-recreate guard — refuse if a training job is in flight.
+#    Recreating wakeword-backend-1 kills any RUNNING job; the resume path
+#    re-queues PENDING jobs but a single slow progress event during the
+#    new container's warmup can still flip them to status=failed
+#    (Job 51 incident on 2026-05-07). Wait for the queue to drain, OR
+#    pass --force / VIOLAWAKE_DEPLOY_FORCE=1 for an emergency hotfix
+#    where queued customer work being killed is the lesser evil.
+python scripts/check_in_flight_jobs.py || {
+    echo "Deploy blocked. Re-run with --force when intentional.";
+    exit 1;
+}
+
+# 4. Recreate the running container with the new image
 docker compose -f docker-compose.production.yml up -d backend
 
-# 4. Watch healthcheck (typically <30s)
+# 5. Watch healthcheck (typically <30s)
 docker inspect wakeword-backend-1 --format='{{.State.Health.Status}}'
 # expect: healthy
 
-# 5. Verify the live API now reflects the new code
+# 6. Verify the live API now reflects the new code
 curl -sS https://api.violawake.com/api/health
 curl -sS https://api.violawake.com/openapi.json | python -c "import sys,json;d=json.load(sys.stdin);print('routes:',len(d['paths']))"
 ```
