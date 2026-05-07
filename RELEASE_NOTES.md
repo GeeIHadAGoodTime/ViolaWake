@@ -2,6 +2,54 @@
 
 Update this file before each release. These notes are used as the GitHub Release body in `.github/workflows/release.yml`.
 
+## v0.2.2 — Quality Gate & Training Parity
+
+### Highlights
+
+- **Silence quality gate fix**: zero-energy audio correctly rejected by OWW backbone now scores 0.0 instead of 1.0 (was causing false Grade F on perfectly good models)
+- **Training pipeline consistency**: patience=15 everywhere (CLI, SDK, Console) — was 10 in some paths
+- **Console training service**: added `augment_source_files` parameter and repo-root corpus search path to match CLI pipeline
+- **Standalone `train_full_pipeline.py`**: same fixes as Console for full parity
+
+### Breaking Changes
+
+- None.
+
+---
+
+## v0.2.1 — Kokoro TTS Fallback & Registry Cleanup
+
+### Highlights
+
+- **Kokoro TTS fallback** when Edge TTS is unavailable
+- **`temporal_convgru` reserve model** added to registry
+- **Registry integrity checking** via `check_registry_integrity()`
+- `r3_10x_s42` MLP model marked DEPRECATED (fails live mic test, max score 0.50)
+- Removed `viola_mlp_oww` and `viola_cnn_v4` from registry (never uploaded to GitHub Releases)
+
+### Breaking Changes
+
+- None.
+
+---
+
+## v0.2.0 — Temporal CNN & 8-Phase Training Pipeline
+
+### Highlights
+
+- **TemporalCNN production model** (`temporal_cnn`): 9-frame sliding window over OWW embeddings, d'=8.577, EER 0.8%, AUC 0.9993 — replaces MLP as default
+- **8-phase training pipeline**: user positives, TTS (20 voices x 3 phrases), audiomentations augmentation, confusable negatives R1+R2, speech negatives, universal corpus, TemporalCNN training
+- **Post-training quality gate** with A/B/C/F grading (Grade F blocks ONNX export)
+- FocalLoss with AdamW + CosineAnnealingLR + EMA
+- Group-aware stratified train/val split preventing augmentation data leakage
+
+### Breaking Changes
+
+- Default production model changed from `r3_10x_s42` MLP to `temporal_cnn`
+- Model alias `"viola"` now resolves to `temporal_cnn`
+
+---
+
 ## v0.1.0 — Initial Release
 
 ### Highlights

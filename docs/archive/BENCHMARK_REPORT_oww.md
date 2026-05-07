@@ -19,7 +19,7 @@ Each system evaluated on its own best wake word -- this is NOT about detecting '
 
 | Metric | ViolaWake (viola) | OWW (alexa) |
 |--------|-------------------|-------------|
-| **Cohen's d** | **4.14** | **6.14** |
+| **d'** | **4.14** | **6.14** |
 | ROC AUC | 0.9871 | 0.9840 |
 | EER | 0.0631 | 0.0212 |
 | FAR | 3.9% (13/330) | 2.0% (11/546) |
@@ -53,7 +53,7 @@ Each system evaluated on its own best wake word -- this is NOT about detecting '
 
 ## Bootstrap Confidence Intervals (10,000 resamples)
 
-| System | Cohen's d | 95% CI |
+| System | d' | 95% CI |
 |--------|-----------|--------|
 | ViolaWake (viola) | 4.14 | [3.55, 4.98] |
 | OWW (alexa) | 6.14 | [5.00, 8.11] |
@@ -76,7 +76,7 @@ Each system evaluated on its own best wake word -- this is NOT about detecting '
 
 ## Analysis
 
-**OpenWakeWord wins on separability.** OWW's Cohen's d (6.14) is 1.5x higher than ViolaWake's (4.14).
+**OpenWakeWord wins on separability.** OWW's d' (6.14) is 1.5x higher than ViolaWake's (4.14).
 
 ROC AUC: ViolaWake 0.9871 vs OWW 0.9840.
 EER: ViolaWake 0.0631 vs OWW 0.0212.

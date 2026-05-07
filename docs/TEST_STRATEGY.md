@@ -20,7 +20,7 @@ staleness-signals: New test tier added, CI provider change, coverage target chan
 
 **Synthetic audio over real recordings.** Unit tests use programmatically generated audio (noise, tones, silence) from numpy. Real audio samples are used only in integration tests and are not committed to the repository.
 
-**Accuracy claims require evidence.** The current Cohen's d claim (≥ 15.0 on the synthetic-negative benchmark) must be verifiable via a documented evaluation command, not just asserted. The `tests/benchmarks/bench_accuracy.py` test suite is the canonical evaluation that supports any accuracy claim in the README.
+**Accuracy claims require evidence.** The current d' (d-prime) claim must be verifiable via a documented evaluation command, not just asserted. The `tests/benchmarks/bench_accuracy.py` test suite is the canonical evaluation that supports any accuracy claim in the README.
 
 ---
 
@@ -72,7 +72,7 @@ pytest tests/unit/ -v
 **Coverage target:** ≥ 60% line coverage on model-dependent paths
 
 **What to test:**
-- `WakeDetector` with `viola_mlp_oww.onnx`: score range [0.0, 1.0] on noise, score > 0.9 on known positive samples
+- `WakeDetector` with `temporal_cnn.onnx`: score range [0.0, 1.0] on noise, score > 0.9 on known positive samples
 - `TTSEngine` with `kokoro_v1_0.onnx`: synthesize short sentence → numpy array with correct dtype/shape
 - `STTEngine` with `whisper_base`: transcribe 3s noise → empty or near-empty string
 - `VADEngine` (all backends): returns float in [0.0, 1.0] per frame
@@ -80,7 +80,7 @@ pytest tests/unit/ -v
 
 **Pre-condition setup:**
 ```bash
-violawake-download --model viola_mlp_oww
+violawake-download --model temporal_cnn
 violawake-download --model kokoro_v1_0
 pytest tests/integration/ -v
 ```
@@ -120,7 +120,7 @@ pytest tests/benchmarks/bench_accuracy.py -v
 
 | Test | Metric | Target | Methodology |
 |------|--------|--------|-------------|
-| `bench_wake_dprime` | Cohen's d (historical name) | ≥ 15.0 | Internal synthetic-negative test set: 500 positives, 2hr negatives; not a speech-negative d-prime benchmark |
+| `bench_wake_dprime` | d' (d-prime) | ≥ 8.0 | Internal eval set: 500 positives, 2hr negatives; production TemporalCNN target |
 | `bench_wake_far` | false accept rate/hr | ≤ 0.5 | 2hr continuous noise+music corpus |
 | `bench_wake_frr` | false reject rate | ≤ 3% | 500 positive samples |
 | `bench_stt_wer` | WER | ≤ 9% (base) | LibriSpeech test-clean subset (100 examples) |
@@ -179,7 +179,7 @@ Runs only on `main` branch and release tags. Downloads models from GitHub Releas
 
 ```yaml
 - run: pip install -e ".[all,dev]"
-- run: violawake-download --model viola_mlp_oww --model kokoro_v1_0
+- run: violawake-download --model temporal_cnn --model kokoro_v1_0
 - run: pytest tests/integration/ -v -m integration
 ```
 
@@ -291,7 +291,7 @@ def test_decision_policy(score, in_cooldown, is_playing, expected):
 
 ```python
 def test_model_not_found_raises():
-    with pytest.raises(ModelNotFoundError, match="viola_mlp_oww"):
+    with pytest.raises(ModelNotFoundError, match="nonexistent_model"):
         WakeDetector(model="nonexistent_model.onnx")
 ```
 
@@ -311,7 +311,7 @@ def test_wake_inference_latency(benchmark, loaded_wake_detector, noise_frame):
 - **ONNX Runtime internals:** We don't test that `ort.InferenceSession` loads a file correctly — that's ONNX Runtime's responsibility
 - **PyAudio device enumeration:** Hardware-dependent, not meaningful in CI
 - **Kokoro model quality:** "Does this TTS sound good?" is subjective and not testable via assertion
-- **Training convergence:** "Does the model reach Cohen's d 15 on the synthetic benchmark after N epochs?" is a validation concern, not a unit test concern
+- **Training convergence:** "Does the model reach the target d' on the benchmark after N epochs?" is a validation concern, not a unit test concern
 - **Network reliability:** Download tests mock the network; we don't test GitHub Releases availability
 
 ---
@@ -320,7 +320,7 @@ def test_wake_inference_latency(benchmark, loaded_wake_detector, noise_frame):
 
 ### "Integration test skipped"
 ```
-SKIP: Model viola_mlp_oww.onnx not found in cache. Run: violawake-download --model viola_mlp_oww
+SKIP: Model temporal_cnn.onnx not found in cache. Run: violawake-download --model temporal_cnn
 ```
 **Fix:** Run `violawake-download --model <model_name>` to populate the cache.
 

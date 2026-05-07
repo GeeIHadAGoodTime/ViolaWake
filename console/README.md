@@ -102,16 +102,99 @@ Examples:
 
 ## API Endpoints
 
+### Auth
+
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/auth/register` | - | Create account |
 | POST | `/api/auth/login` | - | Get JWT token |
 | GET | `/api/auth/me` | JWT | Get user profile |
+| POST | `/api/auth/verify-email` | - | Verify email from signed token |
+| POST | `/api/auth/forgot-password` | - | Send password reset email |
+| POST | `/api/auth/reset-password` | - | Reset password from signed token |
+| POST | `/api/auth/change-password` | JWT | Change authenticated user's password |
+| POST | `/api/auth/download-token` | JWT | Issue short-lived download/SSE token |
+| DELETE | `/api/auth/account` | JWT | Delete account (requires password confirmation) |
+
+### Recordings
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
 | POST | `/api/recordings/upload` | JWT | Upload WAV file |
 | GET | `/api/recordings` | JWT | List recordings |
+| DELETE | `/api/recordings/:id` | JWT | Delete a recording |
+
+### Training
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
 | POST | `/api/training/start` | JWT | Start training job |
 | GET | `/api/training/status/:id` | JWT | Get job status |
-| GET | `/api/training/stream/:id` | JWT | SSE progress stream |
+| GET | `/api/training/stream/:id` | JWT/Token | SSE progress stream |
+
+### Models
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
 | GET | `/api/models` | JWT | List trained models |
-| GET | `/api/models/:id/download` | JWT | Download .onnx |
-| GET | `/api/models/:id/config` | JWT | Get model config |
+| GET | `/api/models/:id/download` | JWT/Token | Download .onnx file |
+| GET | `/api/models/:id/config` | JWT | Get model config and metrics |
+| GET | `/api/models/:id/performance` | JWT | Get model performance details |
+| DELETE | `/api/models/:id` | JWT | Delete a trained model |
+
+### Jobs
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/jobs` | JWT | Submit a new training job |
+| GET | `/api/jobs` | JWT | List user's training jobs |
+| GET | `/api/jobs/:id` | JWT | Get a single training job |
+| DELETE | `/api/jobs/:id` | JWT | Cancel a pending/running job |
+| POST | `/api/jobs/resume` | JWT | Resume paused queue after circuit breaker |
+| GET | `/api/jobs/circuit-breaker/state` | JWT | Get circuit breaker state |
+
+### Billing
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/billing/checkout` | JWT | Create Stripe checkout session |
+| POST | `/api/billing/webhook` | Stripe | Handle Stripe webhook events |
+| GET | `/api/billing/subscription` | JWT | Get subscription and usage |
+| POST | `/api/billing/portal` | JWT | Create Stripe billing portal session |
+| GET | `/api/billing/usage` | JWT | Get current month's usage vs limit |
+
+### Teams
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/teams` | JWT | Create a new team |
+| GET | `/api/teams` | JWT | List user's teams |
+| GET | `/api/teams/:id` | JWT | Get team details |
+| POST | `/api/teams/:id/invite` | JWT | Invite a user by email |
+| POST | `/api/teams/:id/join` | JWT | Accept invite via signed token |
+| DELETE | `/api/teams/:id/members/:user_id` | JWT | Remove a team member |
+| PATCH | `/api/teams/:id/members/:user_id` | JWT | Change a member's role |
+| POST | `/api/teams/:id/models/:model_id/share` | JWT | Share a model with the team |
+| GET | `/api/teams/:id/models` | JWT | List team's shared models |
+| DELETE | `/api/teams/:id` | JWT | Delete a team (owner only) |
+
+### Files
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/files/:key` | JWT/Token | Serve locally stored file |
+
+### Health
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/health` | - | Health summary |
+| GET | `/api/health/live` | - | Liveness check |
+| GET | `/api/health/ready` | - | Readiness check |
+| GET | `/api/health/details` | Admin | Detailed health (requires X-Admin-Token) |
+
+### Admin
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/admin/cleanup` | Admin | Trigger retention cleanup (requires X-Admin-Token) |

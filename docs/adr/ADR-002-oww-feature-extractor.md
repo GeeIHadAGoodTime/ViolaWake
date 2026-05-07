@@ -28,7 +28,7 @@ The original decision compared **two model families**:
 
 The architectural decision remains current even though the shipped default wake head later moved to `temporal_cnn`. The core choice is unchanged: **ViolaWake uses a frozen OWW backbone plus a ViolaWake-owned wake head.**
 
-On our current synthetic-negative benchmark, the MLP+OWW approach achieves **Cohen's d 15.10** vs **Cohen's d 3.07** for the CNN model. This is a large internal separability improvement, but it is not the same as a real-world speech-negative d-prime comparison. This ADR documents why we adopt OWW as the standard backbone for the SDK.
+On our current synthetic-negative benchmark, the MLP+OWW approach achieves **d' 15.10** vs **d' 3.07** for the CNN model. This is a large internal separability improvement, but it is not the same as a real-world speech-negative d-prime comparison. This ADR documents why we adopt OWW as the standard backbone for the SDK.
 
 ---
 
@@ -52,14 +52,14 @@ This is the `viola_v1–v4` approach.
 - No license dependencies beyond our own
 
 **Cons:**
-- Cohen's d 3.07 vs 15.10 on the synthetic-negative benchmark — a large internal gap
+- d' 3.07 vs 15.10 on the synthetic-negative benchmark — a large internal gap
 - Requires large negative dataset to train competitive feature extractor
 - Requires significant audio augmentation expertise to avoid overfitting
-- We validated this approach through v4 iterations and it plateaued around Cohen's d ~8 on the same synthetic-negative benchmark before OWW integration
+- We validated this approach through v4 iterations and it plateaued around d' ~8 on the same synthetic-negative benchmark before OWW integration
 
 **Why rejected:** The internal benchmark gap is large enough that the CNN path is clearly the weaker current option. We should not frame the `15.10` number as directly competitive with Porcupine until we have speech-negative benchmarking, but it is still strong evidence that the OWW backbone is the better internal baseline. The SDK's primary value proposition is accuracy, so the feature extractor decision directly determines whether we have a compelling product.
 
-**Kept as secondary:** `viola_v4.onnx` (CNN, Cohen's d 8.2 on the same synthetic-negative benchmark) is retained in the model registry as a "lightweight" option for heavily resource-constrained deployments (Pi Zero, etc.) that cannot afford OWW's 4M param feature extractor. But it is NOT the recommended/default path.
+**Kept as secondary:** `viola_v4.onnx` (CNN, d' 8.2 on the same synthetic-negative benchmark) is retained in the model registry as a "lightweight" option for heavily resource-constrained deployments (Pi Zero, etc.) that cannot afford OWW's 4M param feature extractor. But it is NOT the recommended/default path.
 
 ### Option B: Custom Wav2Vec2 or HuBERT backbone (rejected)
 
@@ -82,7 +82,7 @@ OpenWakeWord is itself a pre-trained audio embedding model designed specifically
 - Specifically designed for wake word detection — the embeddings encode acoustically-relevant features for short-duration keyword detection
 - Small: the current shared OWW backbone runtime asset is about 1.33 MB
 - Apache 2.0 license — compatible with our own Apache 2.0 SDK
-- We have production validation of the architecture in Viola, and the current reference model scores Cohen's d 15.10 on the synthetic-negative benchmark
+- We have production validation of the architecture in Viola, and the current reference model scores d' 15.10 on the synthetic-negative benchmark
 - Training overhead is minimal: we only train the small MLP head (~50K params) instead of the full model
 - Custom wake words can be trained with fewer positive samples because OWW backbone already understands general audio structure
 
@@ -130,7 +130,7 @@ We do NOT claim the feature extractor is original ViolaWake work. Our original c
 - The MLP classification head architecture and training
 - The training pipeline (FocalLoss, EMA, SWA, augmentation)
 - The 4-gate decision policy (zero-input guard, score threshold, cooldown, listening gate)
-- The Cohen's d / FAR / FRR evaluation infrastructure
+- The d' / FAR / FRR evaluation infrastructure
 - The SDK packaging and API design
 
 ---
@@ -138,7 +138,7 @@ We do NOT claim the feature extractor is original ViolaWake work. Our original c
 ## Consequences
 
 **Positive:**
-- The current reference model has a strong internal synthetic-negative score (Cohen's d 15.10), though direct comparison to Porcupine still requires speech-negative benchmarking
+- The current reference model has a strong internal synthetic-negative score (d' 15.10), though direct comparison to Porcupine still requires speech-negative benchmarking
 - MLP training runs on CPU, doesn't require GPU for custom wake word development
 - OWW backbone handles audio preprocessing — less custom code to maintain
 
@@ -154,5 +154,5 @@ We do NOT claim the feature extractor is original ViolaWake work. Our original c
 This decision should be revisited if:
 - OWW changes its license to non-Apache terms (action: switch to custom CNN or Wav2Vec2-tiny)
 - A new backbone (Wav2Vec2-tiny, EfficientAudio, etc.) achieves better benchmark separation at comparable size
-- Our CNN model (via continued training) reaches Cohen's d ≥ 13.0 on the synthetic-negative benchmark and also holds up on speech-negative evaluation
+- Our CNN model (via continued training) reaches d' >= 13.0 on the synthetic-negative benchmark and also holds up on speech-negative evaluation
 - A Phase 2 WASM build reveals that OWW's ONNX doesn't compile to WASM cleanly (action: CNN path for browser build)

@@ -12,6 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_coerce_to_bytes()` shared helper for input normalization across VAD backends
 - API docs generation setup with pdoc (`docs` optional dependency)
 
+### Security
+- Add login timing oracle protection (dummy bcrypt on non-existent accounts)
+- Make password reset tokens single-use via JTI tracking
+- Require password confirmation for account deletion
+- Handle chunked transfer encoding in body size middleware (ASGI receive wrapper)
+- Add Stripe webhook idempotency (bounded event ID cache, 1000 entries)
+- Use bounded OrderedDict for download token JTIs (10K cap + TTL pruning)
+- Make usage counter atomic (SQL-level `SET count = count + 1`, no read-modify-write race)
+- Cancel Stripe subscription on account deletion
+
+### Fixed
+- Fix SSE training stream (use `addEventListener("training", ...)` instead of `onmessage`)
+- Fix nginx port mismatch (`EXPOSE 80`, compose port `80:80`)
+- Correct Docker env var names to use `VIOLAWAKE_` prefix
+- Add Alembic migration for `failed_login_count`, `locked_until`, `deleted_at` columns
+- Add production frontend service to `docker-compose.production.yml`
+- Wire `send_training_complete()` email on training job completion
+- Wire `send_quota_warning()` email at 80% usage
+- Add trial status display to Billing page
+- Fix `UploadResponse` type (add `wake_word` field)
+- Fix double `await` in ModelCard download handler
+- Enable team members to download shared models (not just view)
+- Use UUID in recording filenames (eliminate concurrent upload collision)
+- Simplify CORS origin configuration to 3 clear branches
+- Preserve return path in protected route redirects (`?return=` param)
+
 ## [0.2.2] - 2026-04-05
 
 ### Fixed

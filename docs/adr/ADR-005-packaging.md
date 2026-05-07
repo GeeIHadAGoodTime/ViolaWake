@@ -147,12 +147,12 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         size_bytes=102_378,  # 102 KB
         description="Temporal CNN on OWW embeddings — current default wake head",
     ),
-    "viola_cnn_v4": ModelSpec(
-        name="viola_cnn_v4",
+    "temporal_convgru": ModelSpec(
+        name="temporal_convgru",
         url="...",
         sha256="...",
-        size_bytes=1_800_000,
-        description="ViolaWake CNN v4 — Cohen's d 8.2 on synthetic negatives (lightweight, no OWW dependency)",
+        size_bytes=80_780,
+        description="Temporal Conv-GRU on OWW embeddings — reserve model",
     ),
     "kokoro_v1_0": ModelSpec(
         name="kokoro_v1_0",

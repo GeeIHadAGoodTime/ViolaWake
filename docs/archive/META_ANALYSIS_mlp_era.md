@@ -957,7 +957,7 @@ r3_10x_s42 was trained and evaluated on cached embeddings extracted via `embed_c
 
 ### Implication
 **Every model MUST pass live microphone validation before shipping.** The evaluation hierarchy is now:
-1. Synthetic eval (EER, Cohen's d) — development signal
+1. Synthetic eval (EER, d') — development signal
 2. Streaming FAPH on LibriSpeech — false positive gate
 3. **Live microphone test** — final ship gate (NEW, mandatory)
 

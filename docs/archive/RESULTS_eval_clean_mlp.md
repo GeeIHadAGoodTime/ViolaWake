@@ -28,7 +28,7 @@ The prior claimed d-prime of 11.56 was measured on a contaminated evaluation set
 
 | Metric | All Phrases | Trained Phrases Only | Prior Claim |
 |--------|------------|---------------------|-------------|
-| **D-prime (Cohen's d)** | **2.07** | **4.14** | **11.56** |
+| **d'** | **2.07** | **4.14** | **11.56** |
 | 95% CI | [1.83, 2.35] | [3.55, 4.98] | -- |
 | Standard Error | 0.131 | 0.363 | -- |
 | AUC | 0.868 | -- | 0.9996 |
@@ -42,7 +42,7 @@ The prior claimed d-prime of 11.56 was measured on a contaminated evaluation set
 
 | Metric | All Phrases | Trained Phrases Only | Prior Claim |
 |--------|------------|---------------------|-------------|
-| **D-prime (Cohen's d)** | **1.62** | **2.70** | **3.07** |
+| **d'** | **1.62** | **2.70** | **3.07** |
 | 95% CI | [1.45, 1.81] | [2.43, 3.04] | -- |
 | Standard Error | 0.091 | 0.156 | -- |
 | AUC | 0.853 | -- | -- |

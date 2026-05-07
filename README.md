@@ -20,7 +20,7 @@ Feature comparison below is a public-docs snapshot plus current ViolaWake SDK ca
 | **License** | Apache 2.0 | Proprietary (metered) | Apache 2.0 |
 | **Training code open** | Yes | No (closed) | Yes |
 | **Custom wake words** | Yes (training CLI) | Yes (paid Console) | Yes (fine-tune) |
-| **Evaluation tooling** | `violawake-eval` (Cohen's d, EER, FAR/FRR, ROC AUC) | No public evaluation tooling documented | Basic |
+| **Evaluation tooling** | `violawake-eval` (d', EER, FAR/FRR, ROC AUC) | No public evaluation tooling documented | Basic |
 | **On-device** | Yes (ONNX + TFLite) | Yes (proprietary C lib) | Yes (ONNX) |
 | **Integrated TTS** | Yes (Kokoro-82M, streaming) | No | No |
 | **Integrated STT** | Yes (faster-whisper, with segments) | No | No |
@@ -875,7 +875,7 @@ ViolaWake ships 9 CLI tools:
 |---------|-----------|---------|
 | `violawake-download` | `--model NAME`, `--list` | Download models or list cached models |
 | `violawake-train` | `--word`, `--positives`, `--output`, `--epochs`, `--architecture [temporal_cnn\|mlp]`, `--no-augment` | Train a custom wake word model |
-| `violawake-eval` | `--model`, `--test-dir`, `--report`, `--dump-scores FILE` | Evaluate (EER, FAR/FRR, ROC AUC, Cohen's d, per-file CSV) |
+| `violawake-eval` | `--model`, `--test-dir`, `--report`, `--dump-scores FILE` | Evaluate (EER, FAR/FRR, ROC AUC, d', per-file CSV) |
 | `violawake-collect` | `--word`, `--output`, `--count` | Record positive samples from microphone |
 
 ### Evaluation & Testing

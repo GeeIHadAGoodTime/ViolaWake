@@ -26,6 +26,12 @@
 | Show HN Draft | `docs/SHOW_HN_DRAFT.md` | Hacker News launch post draft | 2026-03-26 | Post published or product pivot |
 | Roadmap | `docs/ROADMAP_10_OF_10.md` | Multi-phase product roadmap | 2026-03-26 | Phase completion or priority change |
 | Proven Training Recipe | `docs/PROVEN_TRAINING_RECIPE.md` | Canonical training pipeline, parameters, Console parity | 2026-04-05 | Pipeline change, new architecture, hyperparameter change |
+| Architecture | `docs/ARCHITECTURE.md` | System architecture overview | 2026-04-05 | Major structural change |
+| Changelog | `CHANGELOG.md` | Release history and notable changes | 2026-04-05 | New release shipped |
+| Security | `SECURITY.md` | Security policy, vulnerability reporting | 2026-04-05 | New threat model or disclosure process change |
+| Contributing | `CONTRIBUTING.md` | Contributor guidelines, dev setup | 2026-04-05 | Process or tooling change |
+| Progress | `PROGRESS.md` | Current development progress tracker | 2026-04-05 | Milestone completion or priority shift |
+| Release Notes | `RELEASE_NOTES.md` | User-facing release notes | 2026-04-05 | New release shipped |
 | This registry | `docs/REGISTRY.md` | Doc routing | 2026-04-05 | New doc added without updating registry |
 
 ## Architecture Decision Records (ADRs)
@@ -77,6 +83,17 @@ Moved to `docs/archive/` on 2026-04-05. These are MLP-era records superseded by 
 | Streaming vs Clip Analysis | `docs/archive/STREAMING_VS_CLIP_ANALYSIS.md` | `experiments/` | Mean-pooling validity analysis; temporal CNN uses 9-frame windows |
 | FAR/FRR Report (MLP) | `docs/archive/far_frr_report_mlp.md` | `eval_clean/` | MLP FAR/FRR metrics; superseded by temporal_cnn EER 0.8% |
 | Clean Eval Results (MLP) | `docs/archive/RESULTS_eval_clean_mlp.md` | `eval_clean/` | MLP d'=4.14; superseded by temporal_cnn d'=8.577 |
+
+### Archive Candidates
+
+Documents at the repo root that are audit-era records and candidates for archival.
+
+| Document | Path | Why Archive Candidate |
+|----------|------|-----------------------|
+| Launch Readiness | `LAUNCH_READINESS.md` | Point-in-time launch audit doc |
+| Functional Gap Analysis | `FUNCTIONAL_GAP_ANALYSIS.md` | Point-in-time gap audit doc |
+| E2E Readiness | `E2E_READINESS.md` | Point-in-time end-to-end readiness audit doc |
+| Adversary Audit | `ADVERSARY_AUDIT.md` | Point-in-time adversary/security audit doc |
 
 ---
 

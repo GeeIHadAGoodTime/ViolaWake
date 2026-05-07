@@ -1,7 +1,7 @@
 # ViolaWake 10/10 — Living Progress Document
 
 > **PURPOSE:** This document survives context compaction. Read it FIRST after any break.
-> **Last updated:** 2026-03-25 — ALL 4 GATES GREEN. E2E proven working.
+> **Last updated:** 2026-04-05 — ALL 4 GATES GREEN. E2E proven working. Security hardening sprint complete.
 
 ---
 
@@ -37,7 +37,7 @@ This means everything is self-contained: `npm run dev` + `uvicorn` + Playwright 
 | **2. Console Backend** | COMPLETE | 16/16 tests passing. All endpoints verified. |
 | **3. Console Frontend** | COMPLETE | TypeScript compiles clean. All pages functional. |
 | **4. E2E Tests** | COMPLETE | 9/9 API flow + 12/12 Playwright browser tests passing |
-| **5. Polish & Ship** | IN PROGRESS | Remaining: cross-browser, README, UX polish |
+| **5. Polish & Ship** | IN PROGRESS | Security hardening complete. Remaining: cross-browser, README, UX polish, OG image |
 
 ---
 
@@ -170,7 +170,40 @@ This means everything is self-contained: `npm run dev` + `uvicorn` + Playwright 
 - [x] Chromium passing (12/12 browser tests)
 
 ### Gate 5: Ship Ready (IN PROGRESS)
+- [x] Security hardening sprint (20 fixes, 2026-04-05)
 - [ ] Cross-browser: Firefox
 - [ ] README updated with Console quickstart
 - [ ] CSS/UX polish pass
 - [ ] All Playwright tests green in CI
+
+---
+
+## Security Hardening Sprint (2026-04-05)
+
+**20 fixes completed across 2 adversarial audit rounds.**
+
+### Blockers fixed (5)
+1. **SSE streaming** -- fixed event source authentication and connection handling
+2. **nginx.conf** -- added `/api` proxy block for production frontend-to-backend routing
+3. **Environment variables** -- production config validation and secret key enforcement
+4. **Alembic migration** -- added missing `teams`, `team_members` tables and team FK columns
+5. **Production frontend** -- multi-stage Docker build with nginx (replaced Vite dev server)
+
+### Security & integrity fixes (12)
+1. Timing oracle protection on login and password reset endpoints
+2. Single-use password reset tokens (invalidated after use)
+3. Account deletion with password confirmation
+4. Atomic usage counters (race condition prevention)
+5. Webhook idempotency (Stripe event ID tracking)
+6. Account lockout columns with Alembic migration
+7. Cookie consent banner (`react-cookie-consent`)
+8. Deprecated `docker-compose` version key removed
+9. Constant-time comparison for token validation
+10. Request ID correlation across all responses
+11. Error classification with appropriate log levels
+12. PII scrubbing in Sentry integration
+
+### Gap fixes (3)
+1. Email service improvements for transactional delivery
+2. Trial UI and billing flow hardening
+3. Frontend error states and retry logic

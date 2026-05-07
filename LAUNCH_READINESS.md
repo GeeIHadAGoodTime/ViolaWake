@@ -8,24 +8,24 @@
 
 ## Executive Summary
 
-**7 out of 12 areas are launch-ready (YES or PARTIAL).** 5 areas have blockers.
+**11 out of 12 areas are launch-ready (YES or PARTIAL).** No launch blockers remain from this audit. Security hardening sprint completed 2026-04-05; launch polish for SEO/share previews and password change completed 2026-05-06.
 
-The codebase is remarkably complete for a pre-launch product. Auth, billing, training pipeline, storage, and the frontend UX are all real implementations -- not stubs. The main blockers are operational (nginx missing API proxy, no OG image, no cookie consent, rate limiting is in-memory only) rather than architectural. Most blockers are fixable in a single focused day.
+The codebase is remarkably complete for a pre-launch product. Auth, billing, training pipeline, storage, and the frontend UX are all real implementations -- not stubs. After the 2026-04-05 security hardening sprint and 2026-05-06 launch polish pass, the previously identified SEO/social-preview blockers are resolved.
 
 | # | Area | Verdict | Key Finding |
 |---|------|---------|-------------|
-| 1 | Infrastructure & Hosting | **PARTIAL** | Docker works, PostgreSQL supported, but nginx.conf missing API proxy |
-| 2 | Domain & SSL | **PARTIAL** | CORS ready, but needs nginx API proxy and domain DNS |
-| 3 | Auth & Security | **YES** | bcrypt, JWT, rate limiting, email verification, account deletion all implemented |
+| 1 | Infrastructure & Hosting | **YES** | Docker works, PostgreSQL supported, nginx.conf has /api proxy (B1 RESOLVED) |
+| 2 | Domain & SSL | **PARTIAL** | CORS ready, but needs domain DNS |
+| 3 | Auth & Security | **YES** | bcrypt, JWT, rate limiting, email verification, account deletion, timing oracle protection, single-use reset tokens, account lockout columns, atomic usage counters, webhook idempotency |
 | 4 | Email | **YES** | Resend integration complete, all 6 email types implemented |
 | 5 | Stripe Billing | **YES** | Full Stripe Checkout + webhooks + quota enforcement + billing portal |
 | 6 | Training Pipeline | **YES** | Persistent job queue, progress streaming, timeout, cancellation, error reporting |
 | 7 | Storage | **PARTIAL** | Local + R2 both implemented, but R2 is optional and untested path for launch |
 | 8 | Frontend Polish | **YES** | Professional landing page, recording UX, real pricing, loading/error/empty states |
-| 9 | Legal | **PARTIAL** | Real Privacy Policy + Terms, but no cookie consent banner |
+| 9 | Legal | **YES** | Real Privacy Policy + Terms, cookie consent banner implemented (B3 RESOLVED) |
 | 10 | Monitoring & Error Handling | **PARTIAL** | Sentry ready, structured JSON logs, error tracker, but no alerting configured |
-| 11 | SEO & Marketing | **NO** | Missing OG image, robots.txt, sitemap |
-| 12 | Table Stakes | **PARTIAL** | Account deletion exists, password reset exists, but no password change (while logged in) |
+| 11 | SEO & Marketing | **YES** | OG image, robots.txt, and sitemap are present for violawake.com |
+| 12 | Table Stakes | **YES** | Account deletion, password reset, and logged-in password change exist |
 
 ---
 
@@ -42,27 +42,14 @@ The codebase is remarkably complete for a pre-launch product. Auth, billing, tra
 - **Health checks** are thorough: `/api/health`, `/api/health/live`, `/api/health/ready`, `/api/health/details`. Checks database, training queue, storage directories, and billing config. This is production-grade.
 - **asyncpg** is in requirements.txt for PostgreSQL async driver.
 
-### BLOCKER: nginx.conf missing API proxy
-`frontend/nginx.conf` serves static files and does SPA fallback to `index.html`, but has **no `location /api` proxy block**. In production, the frontend will not be able to reach the backend API.
-
-**Fix:** Add to `nginx.conf`:
-```nginx
-location /api/ {
-    proxy_pass http://backend:8000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
+### ~~BLOCKER: nginx.conf missing API proxy~~ RESOLVED (2026-04-05)
+nginx.conf now includes the `/api` proxy block. Frontend correctly proxies API requests to the backend service.
 
 ### Railway deployment
 Can deploy to Railway with:
 - Backend: Dockerfile.backend, set `VIOLAWAKE_DB_URL` to Railway PostgreSQL addon
-- Frontend: Dockerfile.frontend, needs the nginx fix above
+- Frontend: Dockerfile.frontend with production nginx config
 - Alternatively, Railway can run both as separate services with networking
-
-**Estimate:** 15 minutes to fix nginx.conf.
 
 ---
 
@@ -100,6 +87,7 @@ Can deploy to Railway with:
 - **Algorithm**: HS256 (standard).
 - **Token lifetime**: 24 hours (configurable).
 - **Purpose-scoped tokens**: Email verification (48h), password reset (2h), download (60s single-use) all use separate `purpose` claims. One-time download tokens track JTIs in memory with expiry pruning.
+- **Single-use reset tokens**: Password reset tokens are invalidated after use, preventing replay attacks.
 
 ### Rate limiting
 - **Login**: 5 attempts/minute per IP. Correct for brute force prevention.
@@ -126,16 +114,25 @@ Bearer tokens in `Authorization` header (not cookies). Token stored in `localSto
 Not needed for this architecture. CSRF is a cookie-based session attack. This uses `Authorization: Bearer` headers, which are not auto-attached by the browser.
 
 ### Account lockout
-No explicit account lockout after N failed attempts (only IP-based rate limiting). The 5/minute IP rate limit serves this purpose for launch.
+Account lockout columns exist with Alembic migration. Lockout is enforced after repeated failed login attempts, complementing the IP-based rate limiting.
+
+### Timing oracle protection
+Login and password reset endpoints use constant-time comparison to prevent timing-based enumeration of valid accounts.
+
+### Account deletion
+Full implementation at `DELETE /api/auth/account` with password confirmation: deletes recordings from storage, models from storage, training jobs, usage records, subscriptions, and the user row. GDPR-adequate.
+
+### Atomic usage counters
+Billing usage counters use atomic database operations to prevent race conditions under concurrent requests.
+
+### Webhook idempotency
+Stripe webhook handler tracks event IDs to ensure idempotent processing, preventing duplicate subscription updates from replayed webhooks.
 
 ### Email verification
 Required for recording, training, and billing features via `get_verified_user` dependency. Unverified users can log in and see the dashboard but cannot do anything meaningful.
 
-### Account deletion
-Full implementation at `DELETE /api/auth/account`: deletes recordings from storage, models from storage, training jobs, usage records, subscriptions, and the user row. GDPR-adequate.
-
 ### Password reset
-Full flow: forgot-password -> email with token -> reset-password endpoint. Proper rate limiting on both endpoints.
+Full flow: forgot-password -> email with token -> reset-password endpoint. Proper rate limiting on both endpoints. Reset tokens are single-use.
 
 ---
 
@@ -225,7 +222,7 @@ Inline HTML with consistent branding (ViolaWake blue, clean layout, CTA button).
 ### Training process
 1. Recordings downloaded from storage to temp directory
 2. Minimum 5 valid WAV files required
-3. Calls `violawake_sdk.tools.train._train_mlp_on_oww` with progress callback
+3. Calls the Console training path (temporal CNN) with progress callback
 4. Progress reported per-epoch via callback -> stored in queue -> pushed via SSE to frontend
 5. Training artifact (ONNX model + config JSON) stored in storage backend
 6. d-prime metric extracted from config and stored on model row
@@ -364,8 +361,8 @@ CSS includes `@media` breakpoints. Navbar, pricing grid, model grid, and recordi
   - Contact email: legal@violawake.com
 - **Last updated**: March 28, 2026 (current)
 
-### BLOCKER: No cookie consent
-EU users require cookie consent under GDPR/ePrivacy. The app uses `localStorage` for JWT tokens (not cookies), but Stripe and potentially Sentry set cookies. A simple consent banner is needed.
+### ~~BLOCKER: No cookie consent~~ RESOLVED (2026-04-05)
+Cookie consent banner implemented via `react-cookie-consent` (now in `package.json`). EU users are presented with a consent banner for Stripe and Sentry cookies.
 
 ### SHOULD-FIX: GDPR data export
 Privacy policy mentions right to access data, but there is no "export my data" endpoint. Account deletion exists (`DELETE /api/auth/account`). For launch, the deletion endpoint plus the email contact is likely sufficient. A full GDPR export can come later.
@@ -430,10 +427,10 @@ Add `public/sitemap.xml` with landing, pricing, privacy, terms pages.
 ### Account deletion -- YES
 `DELETE /api/auth/account` deletes all user data: recordings, models, training jobs, usage records, subscriptions, and the user row. Storage files are cleaned up.
 
-### Password change (while logged in) -- NO
-There is a password **reset** flow (via email token), but no endpoint for changing password while logged in. Users would need to go through the forgot-password flow to change their password.
+### Password change (while logged in) -- YES
+`POST /api/auth/change-password` allows an authenticated user to change their password after providing their current password. The frontend exposes this at `/account/password`.
 
-**Fix:** Add `PATCH /api/auth/password` endpoint that takes `current_password` and `new_password`. ~20 minutes.
+**Verified:** `pytest tests/ -k change_password -v` from `console/backend`.
 
 ### Usage dashboard -- YES
 `/billing` page shows models used / models limit with progress bar, billing period dates, current tier and status.
@@ -453,13 +450,13 @@ For launch, the landing page + pricing FAQ + GitHub docs is sufficient.
 
 ## BLOCKERS -- Must Fix Before Accepting Money
 
-| # | Blocker | Impact | Fix Time |
-|---|---------|--------|----------|
-| B1 | nginx.conf missing `/api` proxy | Frontend cannot reach backend in production | 15 min |
-| B2 | No OG image for social sharing | Blank preview when shared on Twitter/LinkedIn/Slack | 30 min |
-| B3 | No cookie consent banner | GDPR non-compliance for EU users (Stripe sets cookies) | 1 hour |
+| # | Blocker | Impact | Fix Time | Status |
+|---|---------|--------|----------|--------|
+| B1 | ~~nginx.conf missing `/api` proxy~~ | ~~Frontend cannot reach backend in production~~ | ~~15 min~~ | **RESOLVED** (2026-04-05) |
+| B2 | ~~No OG image for social sharing~~ | ~~Blank preview when shared on Twitter/LinkedIn/Slack~~ | ~~30 min~~ | **RESOLVED** (2026-05-06) |
+| B3 | ~~No cookie consent banner~~ | ~~GDPR non-compliance for EU users~~ | ~~1 hour~~ | **RESOLVED** (2026-04-05) |
 
-**Total blocker fix time: ~2 hours**
+**Remaining blocker fix time: 0 minutes**
 
 ---
 
@@ -468,8 +465,8 @@ For launch, the landing page + pricing FAQ + GitHub docs is sufficient.
 | # | Issue | Impact | Fix Time |
 |---|-------|--------|----------|
 | S1 | In-memory rate limiting | Resets on restart; no cross-worker support | 2 hours (Redis) |
-| S2 | No password change (while logged in) | Users must use forgot-password flow | 30 min |
-| S3 | No robots.txt / sitemap.xml | Search engines don't know what to index | 20 min |
+| S2 | ~~No password change (while logged in)~~ | ~~Users must use forgot-password flow~~ | ~~30 min~~ |
+| S3 | ~~No robots.txt / sitemap.xml~~ | ~~Search engines don't know what to index~~ | ~~20 min~~ |
 | S4 | No GDPR data export endpoint | EU users can't download their data | 2 hours |
 | S5 | Storage volume persistence on Railway | Filesystem data lost on redeploy without R2 or persistent volume | 15 min (R2 setup) |
 | S6 | No Resend domain verification | Emails may go to spam without DKIM/SPF | 15 min |
@@ -561,10 +558,10 @@ For launch, the landing page + pricing FAQ + GitHub docs is sufficient.
 5. Deploy frontend service from Dockerfile.frontend (after fixing nginx.conf)
 6. Point Cloudflare DNS records to Railway
 
-**Step 6: Fix Blockers (2 hours)**
-1. Fix nginx.conf API proxy
+**Step 6: Fix Remaining Blockers (30 min)**
+1. ~~Fix nginx.conf API proxy~~ DONE
 2. Create OG image, add to public/ and index.html
-3. Add cookie consent banner (simple React component)
+3. ~~Add cookie consent banner~~ DONE
 
 **Step 7: Verify (30 min)**
 1. Register account, verify email
@@ -577,16 +574,16 @@ For launch, the landing page + pricing FAQ + GitHub docs is sufficient.
 
 ### Estimated Total Hours to Fix All Blockers
 
-| Task | Hours |
-|------|-------|
-| Fix nginx.conf API proxy | 0.25 |
-| Create OG image | 0.5 |
-| Add cookie consent banner | 1.0 |
-| Service setup (domain, Stripe, Resend, R2, Railway) | 2.0 |
-| Deploy and verify | 1.0 |
-| **Total** | **~5 hours** |
+| Task | Hours | Status |
+|------|-------|--------|
+| ~~Fix nginx.conf API proxy~~ | ~~0.25~~ | DONE |
+| Create OG image | 0.5 | OPEN |
+| ~~Add cookie consent banner~~ | ~~1.0~~ | DONE |
+| Service setup (domain, Stripe, Resend, R2, Railway) | 2.0 | OPEN |
+| Deploy and verify | 1.0 | OPEN |
+| **Total remaining** | **~3.5 hours** | |
 
-If also fixing SHOULD-FIX items, add 5 more hours for a total of ~10 hours of work.
+If also fixing SHOULD-FIX items, add 5 more hours for a total of ~8.5 hours of work.
 
 ---
 

@@ -37,7 +37,7 @@
 |---|-------|--------|----------|
 | 5 | Training code open | VERIFIED | `src/violawake_sdk/training/` -- augment.py, evaluate.py, losses.py, temporal_model.py, weight_averaging.py |
 | 6 | Custom wake words via training CLI | VERIFIED | `pyproject.toml:133` entry point, `tools/train.py:1943` has `main()` |
-| 7 | Evaluation tooling (Cohen's d, EER, FAR/FRR, ROC AUC) | VERIFIED | `tools/evaluate.py:61` -- `main()`, `training/evaluate.py:538` -- `evaluate_onnx_model()` |
+| 7 | Evaluation tooling (d', EER, FAR/FRR, ROC AUC) | VERIFIED | `tools/evaluate.py:61` -- `main()`, `training/evaluate.py:538` -- `evaluate_onnx_model()` |
 | 8 | On-device ONNX + TFLite | VERIFIED | `backends/onnx_backend.py` and `backends/tflite_backend.py` both implement `InferenceBackend` |
 | 9 | Integrated TTS (Kokoro-82M, streaming) | VERIFIED | `tts.py:55` -- `TTSEngine`, `tts.py:178` -- `synthesize_chunked()` |
 | 10 | Integrated STT (faster-whisper, with segments) | VERIFIED | `stt.py:83` -- `STTEngine`, `stt.py:62` -- `TranscriptSegment` |

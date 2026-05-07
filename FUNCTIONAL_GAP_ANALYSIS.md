@@ -4,6 +4,8 @@
 **Auditor scope:** All code under `J:\CLAUDE\PROJECTS\Wakeword`
 **Method:** Full source read of every system referenced in the audit checklist
 
+> **Updated 2026-04-05:** Many items resolved during security hardening sprint (20 fixes across 2 adversarial audit rounds). Resolved items marked with ~~strikethrough~~.
+
 ---
 
 ## Executive Summary
@@ -14,18 +16,9 @@ ViolaWake is approximately **70% ready for production use as an open-source SDK*
 
 ## Critical Gaps (P0) -- Users bounce immediately
 
-### P0-1: Alembic migration is missing 3 tables the ORM declares
+### ~~P0-1: Alembic migration is missing 3 tables the ORM declares~~ RESOLVED (2026-04-05)
 
-**What:** The initial Alembic migration (`console/backend/alembic/versions/20260326_0001_a1b2c3d4e5f6_initial_schema.py`) creates 6 tables: `users`, `recordings`, `trained_models`, `training_jobs`, `subscriptions`, `usage_records`. But the ORM in `console/backend/app/models.py` declares 7 tables, plus column additions:
-
-- `teams` table -- entirely missing from migration
-- `team_members` table -- entirely missing from migration
-- `recordings.team_id` column -- missing from migration
-- `trained_models.team_id` column -- missing from migration
-
-**Why it matters:** Anyone deploying with `alembic upgrade head` (the standard path) will get a database that crashes the moment any teams endpoint is hit. The backend imports and wires `teams.router` unconditionally, so even listing teams returns a 500 because the table does not exist.
-
-**Effort:** S (add a second migration with the missing CREATE TABLEs and ALTER TABLEs)
+**Status:** Migration now exists for `teams`, `team_members`, `recordings.team_id`, and `trained_models.team_id`. Deploying with `alembic upgrade head` creates all required tables.
 
 **Files:**
 - `console/backend/alembic/versions/20260326_0001_a1b2c3d4e5f6_initial_schema.py`
@@ -54,7 +47,9 @@ ViolaWake is approximately **70% ready for production use as an open-source SDK*
 
 ---
 
-### P0-3: Release model pipeline is a TODO stub
+### ~~P0-3: Release model pipeline is a TODO stub~~ RESOLVED (2026-05-06)
+
+**Status:** `tools/fetch_release_models.py` now downloads release `.onnx` assets from GitHub Releases using `gh release download` when available, with a urllib GitHub API fallback. The script accepts `--tag`, preserves release workflow compatibility with `--version`, and writes to `--output`.
 
 **What:** The `tools/fetch_release_models.py` script, called during the GitHub Release workflow, contains this:
 
@@ -77,7 +72,9 @@ It attempts a local fallback from `models/` in the repo root. If those files are
 
 ---
 
-### P0-4: Two model registry entries have placeholder SHA-256 hashes
+### ~~P0-4: Two model registry entries have placeholder SHA-256 hashes~~ RESOLVED (2026-05-06)
+
+**Status:** `viola_mlp_oww` and `viola_cnn_v4` are not present in `MODEL_REGISTRY`; active tests and docs now reference `temporal_cnn` instead.
 
 **What:** `viola_mlp_oww` and `viola_cnn_v4` in `src/violawake_sdk/models.py` have:
 ```python
@@ -138,18 +135,9 @@ The `EmailService` has methods for verification, password reset, welcome, traini
 
 ---
 
-### P1-3: Docker frontend serves Vite dev server in production
+### ~~P1-3: Docker frontend serves Vite dev server in production~~ RESOLVED (2026-04-05)
 
-**What:** `console/Dockerfile.frontend`:
-```dockerfile
-CMD ["npx", "vite", "--host", "--port", "5173"]
-```
-
-This runs the Vite development server in the Docker container. For production, the frontend should be built with `npm run build` and served via a static file server (nginx, or the backend itself serving the built assets).
-
-**Why it matters:** The Vite dev server is not production-ready: no gzip, no caching headers, HMR overhead, slower TTFB, potential security issues. Anyone deploying via docker-compose gets a dev-quality frontend.
-
-**Effort:** S (multi-stage Dockerfile: build stage runs `npm run build`, serve stage uses nginx or `serve`)
+**Status:** Dockerfile.frontend now uses a multi-stage build (node build stage -> nginx:alpine serve stage). Production frontend is served via nginx with proper caching headers, gzip, and SPA fallback.
 
 **Files:**
 - `console/Dockerfile.frontend`
@@ -374,14 +362,12 @@ Both methods internally call `backbone.pushAudio()`, which advances the streamin
 
 ---
 
-### P2-9: `docker-compose.yml` uses deprecated `version: "3.9"` key
+### ~~P2-9: `docker-compose.yml` uses deprecated `version: "3.9"` key~~ RESOLVED (2026-04-05)
 
-**What:** Docker Compose v2+ ignores the `version` key and prints a deprecation warning.
-
-**Effort:** S (remove the `version` line)
+**Status:** No `version` key in current compose files. Deprecation warning eliminated.
 
 **Files:**
-- `console/docker-compose.yml` (line 1)
+- `console/docker-compose.yml`
 
 ---
 
@@ -399,30 +385,30 @@ Both methods internally call `backbone.pushAudio()`, which advances the streamin
 
 ## Summary Table
 
-| ID | Gap | Severity | Effort | Blocks Users? |
-|----|-----|----------|--------|---------------|
-| P0-1 | Alembic migration missing teams tables | Critical | S | Yes -- 500 on any teams endpoint |
-| P0-2 | WASM package never built | Critical | M | Yes -- demo is broken |
-| P0-3 | Release model pipeline is TODO stub | Critical | M | Yes -- no new model releases |
-| P0-4 | Placeholder SHA-256 hashes in registry | Critical | S | No -- deprecated models, but CI noise |
-| P1-1 | No Teams frontend UI | Important | L | Partially -- backend works, no UI |
-| P1-2 | Team invite returns token, no email | Important | S | Yes -- unusable invite flow |
-| P1-3 | Docker serves Vite dev server | Important | S | No -- works but not production-grade |
-| P1-4 | Stripe price IDs need manual setup | Important | S | Yes -- billing always 503 |
-| P1-5 | Missing verify_models.py script | Important | S | No -- CI fails silently |
-| P1-6 | Missing generate_docs.py script | Important | S | No -- CI fails, no docs deployed |
-| P1-7 | Email requires Resend with no dev fallback | Important | S | Yes -- new users locked out |
-| P1-8 | WASM demo double-processes frames | Important | S | No -- wrong scores in demo |
-| P2-1 | No WASM CI job | Nice-to-have | S | No |
-| P2-2 | mypy non-blocking | Nice-to-have | S | No |
-| P2-3 | 50% coverage floor | Nice-to-have | M | No |
-| P2-4 | No OAuth / social login | Nice-to-have | L | No |
-| P2-5 | No model comparison UI | Nice-to-have | M | No |
-| P2-6 | No GPU training lane | Nice-to-have | L | No |
-| P2-7 | No forgot-password link on login | Nice-to-have | S | No |
-| P2-8 | 130+ test MP3s in repo root | Nice-to-have | S | No |
-| P2-9 | Deprecated docker-compose version key | Nice-to-have | S | No |
-| P2-10 | No rate limit documentation | Nice-to-have | S | No |
+| ID | Gap | Severity | Effort | Blocks Users? | Status |
+|----|-----|----------|--------|---------------|--------|
+| P0-1 | ~~Alembic migration missing teams tables~~ | Critical | S | ~~Yes~~ | **RESOLVED** |
+| P0-2 | WASM package never built | Critical | M | Yes -- demo is broken | OPEN |
+| P0-3 | ~~Release model pipeline is TODO stub~~ | Critical | M | Yes -- no new model releases | RESOLVED |
+| P0-4 | ~~Placeholder SHA-256 hashes in registry~~ | Critical | S | No -- deprecated models, but CI noise | RESOLVED |
+| P1-1 | No Teams frontend UI | Important | L | Partially -- backend works, no UI | OPEN |
+| P1-2 | Team invite returns token, no email | Important | S | Yes -- unusable invite flow | OPEN |
+| P1-3 | ~~Docker serves Vite dev server~~ | Important | S | ~~No~~ | **RESOLVED** |
+| P1-4 | Stripe price IDs need manual setup | Important | S | Yes -- billing always 503 | OPEN |
+| P1-5 | Missing verify_models.py script | Important | S | No -- CI fails silently | OPEN |
+| P1-6 | Missing generate_docs.py script | Important | S | No -- CI fails, no docs deployed | OPEN |
+| P1-7 | Email requires Resend with no dev fallback | Important | S | Yes -- new users locked out | OPEN |
+| P1-8 | WASM demo double-processes frames | Important | S | No -- wrong scores in demo | OPEN |
+| P2-1 | No WASM CI job | Nice-to-have | S | No | OPEN |
+| P2-2 | mypy non-blocking | Nice-to-have | S | No | OPEN |
+| P2-3 | 50% coverage floor | Nice-to-have | M | No | OPEN |
+| P2-4 | No OAuth / social login | Nice-to-have | L | No | OPEN |
+| P2-5 | No model comparison UI | Nice-to-have | M | No | OPEN |
+| P2-6 | No GPU training lane | Nice-to-have | L | No | OPEN |
+| P2-7 | No forgot-password link on login | Nice-to-have | S | No | OPEN |
+| P2-8 | 130+ test MP3s in repo root | Nice-to-have | S | No | OPEN |
+| P2-9 | ~~Deprecated docker-compose version key~~ | Nice-to-have | S | ~~No~~ | **RESOLVED** |
+| P2-10 | No rate limit documentation | Nice-to-have | S | No | OPEN |
 
 ---
 
@@ -432,7 +418,7 @@ To be fair about what works well:
 
 - **SDK core** (`WakeDetector`, `AsyncWakeDetector`, `DetectorConfig`, `VADEngine`, `NoiseProfiler`, `PowerManager`, `FusionStrategy`) -- all real implementations with real tests
 - **Model download** -- SHA-256 verification, atomic writes, auto-download, size validation, HTTPS-only enforcement
-- **Training pipeline** -- real PyTorch training via `_train_mlp_on_oww`, epoch callbacks, cancellation support, timeout protection
+- **Training pipeline** -- real PyTorch training via temporal CNN (Console training path), epoch callbacks, cancellation support, timeout protection
 - **Console backend** -- real FastAPI app with JWT auth, rate limiting, bcrypt password hashing, Alembic migrations, async SQLite/PostgreSQL, Cloudflare R2 storage, Resend email, Stripe billing (when configured), SSE training progress streams, retention cleanup
 - **Console frontend** -- real React app with auth context, protected routes, recording session, training status polling, billing management, model performance visualization
 - **CI/CD** -- 6 workflow files covering lint, unit tests (9 matrix entries), integration tests, benchmarks, console tests, docs deployment, model verification, and release automation
