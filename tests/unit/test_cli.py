@@ -400,6 +400,20 @@ class TestDownloadCLI:
 
 
 # ===================================================================
+# violawake-download-corpus  (tools.download_corpus:main)
+# ===================================================================
+
+class TestDownloadCorpusCLI:
+    """Tests for the violawake-download-corpus entry point."""
+
+    def test_help_exits_zero(self) -> None:
+        result = _run_cli("violawake_sdk.tools.download_corpus", ["--help"])
+        assert result.returncode == 0
+        assert "violawake-download-corpus" in result.stdout
+        assert "--target-dir" in result.stdout
+
+
+# ===================================================================
 # violawake-collect  (tools.collect_samples:main)
 # ===================================================================
 

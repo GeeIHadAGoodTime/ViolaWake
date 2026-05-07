@@ -1729,6 +1729,7 @@ class TestCLIEntryPoints:
         "violawake-eval": "violawake_sdk.tools.evaluate:main",
         "violawake-collect": "violawake_sdk.tools.collect_samples:main",
         "violawake-download": "violawake_sdk.tools.download_model:main",
+        "violawake-download-corpus": "violawake_sdk.tools.download_corpus:main",
         "violawake-expand-corpus": "violawake_sdk.tools.expand_corpus:main",
         "violawake-streaming-eval": "violawake_sdk.tools.streaming_eval:main",
         "violawake-test-confusables": "violawake_sdk.tools.test_confusables:main",

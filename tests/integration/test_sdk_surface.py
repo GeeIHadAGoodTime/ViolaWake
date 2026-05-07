@@ -153,6 +153,7 @@ def test_vad_engine_invalid_backend_raises() -> None:
         "violawake_sdk.tools.collect_samples",
         "violawake_sdk.tools.train",
         "violawake_sdk.tools.download_model",
+        "violawake_sdk.tools.download_corpus",
     ],
 )
 def test_cli_entrypoints_are_importable_and_expose_main(module_name: str) -> None:
