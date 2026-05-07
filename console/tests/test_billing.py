@@ -434,3 +434,54 @@ class TestBillingWebhooks:
 
         assert response.status_code == 400, response.text
         assert response.json()["detail"] == "Invalid webhook signature."
+
+    def test_webhook_duplicate_event_id_is_processed_once(
+        self,
+        billing_settings,
+    ) -> None:
+        from app.routes import billing as billing_routes
+
+        event = {
+            "id": "evt_idempotency_direct_test",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_idempotency_direct_test",
+                    "customer": "cus_idempotency_direct_test",
+                    "subscription": "sub_idempotency_direct_test",
+                    "metadata": {"violawake_user_id": "123", "tier": "developer"},
+                }
+            },
+        }
+        stripe = make_stripe_mock()
+        stripe.Webhook.construct_event.return_value = event
+        request = SimpleNamespace(body=AsyncMock(return_value=b'{"test": true}'))
+        db = SimpleNamespace()
+        checkout_handler = AsyncMock()
+
+        billing_routes._processed_events.clear()
+        try:
+            with (
+                patch("app.routes.billing._get_stripe", return_value=stripe),
+                patch("app.routes.billing._handle_checkout_completed", new=checkout_handler),
+            ):
+                first = asyncio.run(
+                    billing_routes.stripe_webhook(
+                        request,
+                        db,
+                        stripe_signature="sig_test_123",
+                    )
+                )
+                second = asyncio.run(
+                    billing_routes.stripe_webhook(
+                        request,
+                        db,
+                        stripe_signature="sig_test_123",
+                    )
+                )
+        finally:
+            billing_routes._processed_events.clear()
+
+        assert first == {"status": "ok"}
+        assert second == {"status": "ok"}
+        checkout_handler.assert_awaited_once_with(db, event["data"]["object"])
