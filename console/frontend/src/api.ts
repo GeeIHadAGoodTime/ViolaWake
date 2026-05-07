@@ -14,6 +14,7 @@ import type {
   MessageResponse,
   Team,
   TeamListItem,
+  TeamMember,
   TeamMemberRole,
 } from "./types";
 
@@ -379,12 +380,38 @@ export async function joinTeam(
   );
 }
 
+export async function acceptTeamInvite(inviteToken: string): Promise<Team> {
+  return request<Team>(
+    `/teams/accept?token=${encodeURIComponent(inviteToken)}`,
+    { method: "POST" },
+  );
+}
+
 export async function removeTeamMember(
   teamId: number,
   memberId: number,
 ): Promise<MessageResponse> {
   return request<MessageResponse>(`/teams/${teamId}/members/${memberId}`, {
     method: "DELETE",
+  });
+}
+
+export async function changeTeamMemberRole(
+  teamId: number,
+  memberId: number,
+  role: Exclude<TeamMemberRole, "owner">,
+): Promise<TeamMember> {
+  return request<TeamMember>(
+    `/teams/${teamId}/members/${memberId}?role=${encodeURIComponent(role)}`,
+    { method: "PATCH" },
+  );
+}
+
+export async function leaveTeam(
+  teamId: number,
+): Promise<MessageResponse> {
+  return request<MessageResponse>(`/teams/${teamId}/leave`, {
+    method: "POST",
   });
 }
 

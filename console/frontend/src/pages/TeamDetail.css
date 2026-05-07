@@ -205,6 +205,22 @@
   color: var(--text-secondary);
 }
 
+.team-role-select {
+  min-width: 7rem;
+  padding: 0.3rem 0.55rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.team-role-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .btn-remove {
   background: none;
   border: 1px solid transparent;
@@ -362,6 +378,11 @@
   background: rgba(225, 112, 85, 0.1);
   border: 1px solid rgba(225, 112, 85, 0.25);
   color: var(--error);
+}
+
+.team-accept-section {
+  max-width: 36rem;
+  margin: 0 auto;
 }
 
 @media (max-width: 768px) {

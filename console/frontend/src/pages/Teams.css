@@ -22,9 +22,33 @@
   box-shadow: var(--shadow);
 }
 
+.teams-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.teams-create-modal {
+  width: min(100%, 32rem);
+  margin: 0;
+}
+
+.teams-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
 .teams-create-form h2 {
   font-size: 1.1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .teams-create-fields {
