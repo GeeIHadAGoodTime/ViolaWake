@@ -119,9 +119,11 @@ def fake_email_service(monkeypatch):
 
     class FakeEmailService:
         def __init__(self) -> None:
+            self.enabled = True
             self.verification_emails: list[dict[str, str]] = []
             self.password_reset_emails: list[dict[str, str]] = []
             self.welcome_emails: list[dict[str, str]] = []
+            self.existing_account_notices: list[dict[str, str]] = []
 
         async def send_verification_email(self, to: str, token: str, name: str) -> bool:
             self.verification_emails.append({"to": to, "token": token, "name": name})
@@ -133,6 +135,10 @@ def fake_email_service(monkeypatch):
 
         async def send_welcome(self, to: str, name: str) -> bool:
             self.welcome_emails.append({"to": to, "name": name})
+            return True
+
+        async def send_existing_account_notice(self, to: str, name: str) -> bool:
+            self.existing_account_notices.append({"to": to, "name": name})
             return True
 
         async def send_training_complete(

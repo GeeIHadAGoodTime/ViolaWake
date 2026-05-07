@@ -94,6 +94,23 @@ async def _current_user_with_rate_key(
     return current_user
 
 
+def _client_ip(request: Request) -> str:
+    """Resolve the client IP, honoring trusted_proxy_count for X-Forwarded-For.
+
+    With trusted_proxy_count=N (N>0), returns the Nth-from-right entry of
+    X-Forwarded-For (after the N proxies we trust). With count=0 (default),
+    ignores X-Forwarded-For entirely and returns the direct client host.
+    """
+    proxies = settings.trusted_proxy_count
+    if proxies > 0:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            parts = [p.strip() for p in xff.split(",") if p.strip()]
+            if len(parts) >= proxies:
+                return parts[-proxies]
+    return request.client.host
+
+
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_LIMIT)
 async def register(

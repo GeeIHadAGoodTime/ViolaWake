@@ -65,12 +65,20 @@ class FakeSession:
         self.users_by_email[self._pending.email] = self._pending
         self._pending = None
 
+    async def commit(self) -> None:
+        await self.flush()
+
+    async def rollback(self) -> None:
+        self._pending = None
+
 
 class FakeEmailService:
     def __init__(self) -> None:
+        self.enabled = True
         self.verification_emails: list[dict[str, str]] = []
         self.password_reset_emails: list[dict[str, str]] = []
         self.welcome_emails: list[dict[str, str]] = []
+        self.existing_account_notices: list[dict[str, str]] = []
 
     async def send_verification_email(self, to: str, token: str, name: str) -> bool:
         self.verification_emails.append({"to": to, "token": token, "name": name})
@@ -82,6 +90,10 @@ class FakeEmailService:
 
     async def send_welcome(self, to: str, name: str) -> bool:
         self.welcome_emails.append({"to": to, "name": name})
+        return True
+
+    async def send_existing_account_notice(self, to: str, name: str) -> bool:
+        self.existing_account_notices.append({"to": to, "name": name})
         return True
 
     async def send_training_complete(
@@ -125,8 +137,8 @@ async def test_register_sends_verification_email(
     email = f"register_{time.time_ns()}@example.com"
 
     response = await auth_routes.register(
-        RegisterRequest(email=email, password="TestPass123!", name="Register Test"),
         fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Register Test"),
         fake_db,
     )
 
@@ -145,15 +157,15 @@ async def test_verify_email_marks_user_verified_and_sends_welcome(
 ) -> None:
     email = f"verify_{time.time_ns()}@example.com"
     await auth_routes.register(
-        RegisterRequest(email=email, password="TestPass123!", name="Verify Test"),
         fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Verify Test"),
         fake_db,
     )
 
     verification_token = fake_email_service.verification_emails[0]["token"]
     response = await auth_routes.verify_email(
-        VerifyEmailRequest(token=verification_token),
         fake_request,
+        VerifyEmailRequest(token=verification_token),
         fake_db,
     )
 
@@ -171,25 +183,25 @@ async def test_forgot_password_and_reset_password_flow(
 ) -> None:
     email = f"reset_{time.time_ns()}@example.com"
     await auth_routes.register(
-        RegisterRequest(email=email, password="OriginalPass123!", name="Reset Test"),
         fake_request,
+        RegisterRequest(email=email, password="OriginalPass123!", name="Reset Test"),
         fake_db,
     )
 
     forgot_response = await auth_routes.forgot_password(
-        ForgotPasswordRequest(email=email),
         fake_request,
+        ForgotPasswordRequest(email=email),
         fake_db,
     )
     reset_token = fake_email_service.password_reset_emails[0]["token"]
     reset_response = await auth_routes.reset_password(
-        ResetPasswordRequest(token=reset_token, password="NewPass123!"),
         fake_request,
+        ResetPasswordRequest(token=reset_token, password="NewPass123!"),
         fake_db,
     )
     login_response = await auth_routes.login(
-        LoginRequest(email=email, password="NewPass123!"),
         fake_request,
+        LoginRequest(email=email, password="NewPass123!"),
         fake_db,
     )
 
