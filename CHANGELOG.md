@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-07
+
+### SDK
+- Auto-download OpenWakeWord backbone files on first use. Previously, `pip install violawake[oww]` left users with `ModelNotFoundError` until they manually ran `openwakeword.utils.download_models()`. Now the SDK calls it automatically when the backbone files are missing on first `WakeDetector(...)` call. Existing installations are unaffected.
+- Update `oww_backbone` SHA-256 in MODEL_REGISTRY to the current upstream openwakeword release. Eliminates the spurious "OWW backbone hash mismatch" warning that appeared on freshly-installed environments.
+
+### Console (SaaS)
+- Stripe LIVE mode activated for production. Test mode remains supported via env-var swap.
+- Postgres backups: daily `pg_dump` to Cloudflare R2 bucket `violawake-backups`, 30-day retention via R2 lifecycle rule.
+- WASM browser-SDK demo at https://violawake.com/wasm/demo/ now ships with the OpenWakeWord backbone + ViolaWake temporal_cnn ONNX files pre-hosted; no user input required.
+- Backend Content-Security-Policy header now set on all API responses (defence-in-depth).
+- Cloudflare Pages frontend now serves CSP, HSTS, Permissions-Policy, COEP/COOP via `_headers`.
+- Rate-limit keying switched from `request.client.host` (Cloudflare edge IP — collapsed all users to a few IPs) to `CF-Connecting-IP` (real per-user IP). `REGISTER_LIMIT` raised from 10/hour to 100/hour.
+- Marketing landing page accuracy claim now explicitly framed as "upper bound on production reference model; your custom model varies with sample quantity/quality".
+
 ### Added
 - VAD `process_frame()` and `is_speech()` now accept `np.ndarray` (float32, float64, int16) in addition to bytes
 - `_coerce_to_bytes()` shared helper for input normalization across VAD backends
