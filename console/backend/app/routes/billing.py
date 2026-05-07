@@ -1,19 +1,18 @@
 """Billing routes: Stripe checkout, webhook, subscription management, usage."""
 
 import logging
-from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_verified_user
 from app.config import settings
 from app.database import get_db
-from app.models import Subscription, UsageRecord, User
+from app.models import ProcessedStripeEvent, Subscription, UsageRecord, User
 from app.rate_limit import CHECKOUT_LIMIT, PORTAL_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.schemas import (
     BillingPortalResponse,
@@ -44,13 +43,9 @@ TIER_PRICE_MAP: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Webhook idempotency — deduplicate Stripe event deliveries within a single
-# process lifetime.  Bounded to the most recent 1000 event IDs.
+# Webhook idempotency: persist Stripe event IDs so redeliveries after a backend
+# restart do not re-run billing side effects.
 # ---------------------------------------------------------------------------
-
-_PROCESSED_EVENTS_MAX = 1000
-_processed_events: OrderedDict[str, None] = OrderedDict()
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,6 +153,42 @@ async def _get_or_create_stripe_customer(
     sub.stripe_customer_id = customer.id
     await db.flush()
     return customer.id
+
+
+async def _cleanup_processed_stripe_events(db: AsyncSession) -> None:
+    """Delete processed Stripe event IDs older than 30 days."""
+    bind = db.get_bind()
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+    if dialect_name == "postgresql":
+        await db.execute(
+            text(
+                "DELETE FROM processed_stripe_events "
+                "WHERE processed_at < NOW() - INTERVAL '30 days'"
+            )
+        )
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    await db.execute(
+        delete(ProcessedStripeEvent).where(ProcessedStripeEvent.processed_at < cutoff)
+    )
+
+
+async def _record_stripe_event_if_new(db: AsyncSession, event_id: str | None) -> bool:
+    """Return True when this Stripe event ID has not already been processed."""
+    await _cleanup_processed_stripe_events(db)
+    if not event_id:
+        return True
+
+    result = await db.execute(
+        text(
+            "INSERT INTO processed_stripe_events (event_id) "
+            "VALUES (:event_id) "
+            "ON CONFLICT (event_id) DO NOTHING"
+        ),
+        {"event_id": event_id},
+    )
+    return result.rowcount != 0
 
 
 # ---------------------------------------------------------------------------
@@ -384,14 +415,9 @@ async def stripe_webhook(
 
     # Deduplicate: Stripe may deliver the same event more than once.
     event_id = event.get("id")
-    if event_id and event_id in _processed_events:
+    if not await _record_stripe_event_if_new(db, event_id):
         logger.debug("Duplicate webhook event ignored: %s", event_id)
         return {"status": "ok"}
-    if event_id:
-        _processed_events[event_id] = None
-        # Evict oldest entries to stay within the bound.
-        while len(_processed_events) > _PROCESSED_EVENTS_MAX:
-            _processed_events.popitem(last=False)
 
     event_type = event["type"]
     data = event["data"]["object"]

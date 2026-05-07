@@ -168,9 +168,11 @@ def client():
     """Create a FastAPI test client."""
     try:
         from app.main import app
+        from app.database import init_db
     except ImportError as exc:
         pytest.skip(f"Backend not yet built: {exc}")
 
+    asyncio.run(init_db())
     return TestClient(app)
 
 
@@ -213,6 +215,39 @@ def make_stripe_mock() -> MagicMock:
     stripe = MagicMock()
     stripe.error.SignatureVerificationError = FakeSignatureVerificationError
     return stripe
+
+
+class FakeExecuteResult:
+    def __init__(self, rowcount: int) -> None:
+        self.rowcount = rowcount
+
+
+class FakeStripeEventSession:
+    """AsyncSession stand-in for webhook idempotency unit tests."""
+
+    def __init__(self) -> None:
+        self.event_ids: set[str] = set()
+        self.execute_calls: list[tuple[str, dict[str, object] | None]] = []
+
+    def get_bind(self) -> SimpleNamespace:
+        return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+    async def execute(self, statement, params: dict[str, object] | None = None) -> FakeExecuteResult:
+        sql = str(statement)
+        self.execute_calls.append((sql, params))
+
+        if sql.startswith("DELETE FROM processed_stripe_events"):
+            return FakeExecuteResult(rowcount=0)
+
+        if sql.startswith("INSERT INTO processed_stripe_events"):
+            assert params is not None
+            event_id = str(params["event_id"])
+            if event_id in self.event_ids:
+                return FakeExecuteResult(rowcount=0)
+            self.event_ids.add(event_id)
+            return FakeExecuteResult(rowcount=1)
+
+        raise AssertionError(f"Unexpected SQL in fake billing session: {sql}")
 
 
 class TestBillingRoutes:
@@ -322,7 +357,7 @@ class TestBillingWebhooks:
         subscription_id = f"sub_checkout_complete_{unique_suffix}"
         period_end = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
         event = {
-            "id": "evt_checkout_complete",
+            "id": f"evt_checkout_complete_{unique_suffix}",
             "type": "checkout.session.completed",
             "data": {
                 "object": {
@@ -385,7 +420,7 @@ class TestBillingWebhooks:
         )
 
         event = {
-            "id": "evt_subscription_deleted",
+            "id": f"evt_subscription_deleted_{unique_suffix}",
             "type": "customer.subscription.deleted",
             "data": {"object": {"id": subscription_id}},
         }
@@ -441,8 +476,9 @@ class TestBillingWebhooks:
     ) -> None:
         from app.routes import billing as billing_routes
 
+        event_id = f"evt_idempotency_direct_test_{time.time_ns()}"
         event = {
-            "id": "evt_idempotency_direct_test",
+            "id": event_id,
             "type": "checkout.session.completed",
             "data": {
                 "object": {
@@ -456,32 +492,37 @@ class TestBillingWebhooks:
         stripe = make_stripe_mock()
         stripe.Webhook.construct_event.return_value = event
         request = SimpleNamespace(body=AsyncMock(return_value=b'{"test": true}'))
-        db = SimpleNamespace()
+        db = FakeStripeEventSession()
         checkout_handler = AsyncMock()
 
-        billing_routes._processed_events.clear()
-        try:
-            with (
-                patch("app.routes.billing._get_stripe", return_value=stripe),
-                patch("app.routes.billing._handle_checkout_completed", new=checkout_handler),
-            ):
-                first = asyncio.run(
-                    billing_routes.stripe_webhook(
-                        request,
-                        db,
-                        stripe_signature="sig_test_123",
-                    )
+        with (
+            patch("app.routes.billing._get_stripe", return_value=stripe),
+            patch("app.routes.billing._handle_checkout_completed", new=checkout_handler),
+        ):
+            first = asyncio.run(
+                billing_routes.stripe_webhook(
+                    request,
+                    db,
+                    stripe_signature="sig_test_123",
                 )
-                second = asyncio.run(
-                    billing_routes.stripe_webhook(
-                        request,
-                        db,
-                        stripe_signature="sig_test_123",
-                    )
+            )
+            second = asyncio.run(
+                billing_routes.stripe_webhook(
+                    request,
+                    db,
+                    stripe_signature="sig_test_123",
                 )
-        finally:
-            billing_routes._processed_events.clear()
+            )
 
         assert first == {"status": "ok"}
         assert second == {"status": "ok"}
+        assert db.event_ids == {event_id}
+        assert sum(
+            1 for sql, _ in db.execute_calls if sql.startswith("INSERT INTO processed_stripe_events")
+        ) == 2
+        assert all(
+            "processed_at < NOW() - INTERVAL '30 days'" in sql
+            for sql, _ in db.execute_calls
+            if sql.startswith("DELETE FROM processed_stripe_events")
+        )
         checkout_handler.assert_awaited_once_with(db, event["data"]["object"])
