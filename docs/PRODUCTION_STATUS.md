@@ -25,7 +25,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 - ✅ `POST /api/auth/register` with new email → 201, returns user without token (verification flow placeholder).
 - ✅ `POST /api/auth/login` with valid creds → 200 + JWT.
 - ✅ `GET /api/auth/me` with token → 200.
-- ✅ `POST /api/billing/checkout` with token → 200 with `cs_test_*` Stripe Checkout URL. **Stripe is configured in TEST MODE.**
+- ✅ `POST /api/billing/checkout` with token → 200 with `cs_live_*` Stripe Checkout URL. **Stripe is in LIVE MODE as of 2026-05-07.** ViolaWake Developer ($29/mo, `price_1TUIz9P2JRxgIaplSsON1udI`) and ViolaWake Business ($99/mo, `price_1TUIzAP2JRxgIaplzAV7Epf2`) are live products. LIVE webhook endpoint `we_1TUIzBP2JRxgIapl505ieG7k` listens to `checkout.session.completed`, `customer.subscription.{created,updated,deleted}`, `invoice.payment_failed`. **NB:** LIVE billing was activated via Stripe API (no $0.50 self-test charge yet) — recommend you do a real $29 self-charge then refund yourself before announcing.
 - ✅ `GET /api/billing/subscription` → returns user's free-tier state.
 - ✅ `GET /api/recordings` (authed) → `[]` for new user.
 - ✅ `POST /api/auth/login` with 4 wrong passwords → 401, then 5+ → 429 (slowapi rate limit).
@@ -37,7 +37,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 ## NOT verified (and what would verify it)
 
 - ❌ **Email actually sends.** Resend is **not configured** as of 2026-05-07. Symptom: new users are auto-verified at first login (the `email_svc.enabled` fallback fires) and no verification email is sent. To enable: set `VIOLAWAKE_RESEND_API_KEY` in `.env.production`, verify the sending domain in Resend dashboard (DKIM/SPF), restart backend. To verify: register a new user, check inbox for "ViolaWake — Verify your email" within 60s.
-- ❌ **Stripe checkout completes end-to-end.** We confirmed checkout URL is issued. We have NOT confirmed: webhook receipt, subscription status update, quota changes after payment. To verify: drive Playwright through checkout with `4242 4242 4242 4242`, then `GET /api/billing/subscription` should show `tier=developer` within 30s.
+- ❌ **Stripe checkout completes end-to-end (LIVE mode).** Checkout URL is issued in `cs_live_*` form. We have NOT confirmed: real card charge succeeds, webhook fires, subscription tier updates to `developer` in our DB within 30s, refund handling works, recurring invoice next month. To verify: charge your own real card $29, observe `tier=developer`, refund/cancel the subscription, observe `tier=free`.
 - ❌ **Account lockout actually triggers.** New code adds `failed_login_count` + `locked_until` columns and sets them on bad attempts. We confirmed the rate-limit (slowapi) blocks after 4 attempts, but we have NOT confirmed the per-account lockout (which would persist across IP changes). To verify: 5 wrong logins on one account, then a 6th from a fresh IP should still 401 with "Account temporarily locked".
 - ❌ **Full training pipeline against the live console.** Upload 10 silent/synthetic WAVs → start training → wait for SSE completion → download ONNX → load locally → push silence → expect score < 0.5. Blocked previously by the registration rate limit (10/hour) eating the test budget; do this when bumping the limit.
 - ❌ **True-positive wake detection.** Verified: silence/sine/noise score < 0.5 (no false positives). NOT verified: an actual "Viola" utterance scores > 0.5 (true positive). Needs a recorded sample or live mic.
@@ -48,7 +48,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 | Lever | Where | Current value | Suggested for launch |
 |---|---|---|---|
 | `VIOLAWAKE_RESEND_API_KEY` | `.env.production` | unset | set + verify domain in Resend dashboard |
-| `VIOLAWAKE_STRIPE_SECRET_KEY` mode | Stripe dashboard | TEST (`sk_test_*`) | flip to LIVE when accepting real payments |
+| `VIOLAWAKE_STRIPE_SECRET_KEY` mode | Stripe dashboard | **LIVE** (`sk_live_*`) as of 2026-05-07 | rotate when leaked; do a real $29 self-charge to verify end-to-end before announcing |
 | Registration rate limit | `console/backend/app/rate_limit.py` `REGISTER_LIMIT` | `100/hour` (raised from 10/hour 2026-05-07) — and now correctly per-end-user-IP via `CF-Connecting-IP` instead of per-CF-edge-IP | leave unless you start seeing register spam |
 | Login rate limit | same file, `LOGIN_LIMIT` | works | leave |
 | Robots / sitemap | `console/frontend/public/robots.txt` | sitemap line points to `console.violawake.com` (typo) | should be `violawake.com/sitemap.xml` |
