@@ -2,27 +2,33 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system deps for audio processing
+# Install system deps for audio processing + gosu for entrypoint
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    portaudio19-dev curl \
+    portaudio19-dev curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps
+# Install Python deps + upgrade build tools
 COPY console/backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip hatchling && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Install ViolaWake SDK
 COPY pyproject.toml /sdk/
 COPY README.md /sdk/
+COPY LICENSE /sdk/
 COPY src/ /sdk/src/
-RUN pip install --no-cache-dir -e "/sdk[training]"
+RUN pip install --no-cache-dir "/sdk[training]"
 
 # Copy backend code
 COPY console/backend/ .
 
-# Create data directory
+# Create data directory and non-root user
 RUN mkdir -p /app/data
+RUN addgroup --system app && adduser --system --ingroup app app
+RUN chown -R app:app /app /app/data
+COPY console/backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["python", "run.py"]
+ENTRYPOINT ["/app/entrypoint.sh"]

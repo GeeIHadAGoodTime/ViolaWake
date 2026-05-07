@@ -94,7 +94,7 @@ for frame in mic_stream():
               </tr>
               <tr>
                 <td>Accuracy disclosure</td>
-                <td className="comparison-highlight">5.49% EER (adversarial benchmark v2); Cohen&apos;s d 15.10 (synthetic negatives)</td>
+                <td className="comparison-highlight">0.8% EER, d&prime; 8.58 (production model); 5.49% EER (adversarial benchmark v2)</td>
                 <td>No published d-prime</td>
               </tr>
               <tr>
@@ -160,7 +160,7 @@ for frame in mic_stream():
             <div className="step-number">3</div>
             <h3 className="step-title">Deploy</h3>
             <p className="step-desc">
-              Download your 102KB wake head. About 2.5MB total runtime with the
+              Download your 102KB wake head. About 1.4MB total runtime with the
               shared OpenWakeWord backbone. Runs anywhere Python runs.
             </p>
           </div>
@@ -172,15 +172,15 @@ for frame in mic_stream():
         <div className="proof-card">
           <div className="proof-stats">
             <div className="proof-stat">
-              <span className="proof-stat-value">5.49%</span>
-              <span className="proof-stat-label">EER (adversarial benchmark v2)</span>
+              <span className="proof-stat-value">0.8%</span>
+              <span className="proof-stat-label">EER (equal error rate)</span>
             </div>
             <div className="proof-stat">
-              <span className="proof-stat-value">15.10</span>
-              <span className="proof-stat-label">Cohen&apos;s d (synthetic negatives)</span>
+              <span className="proof-stat-value">8.58</span>
+              <span className="proof-stat-label">d&prime; (score separation)</span>
             </div>
             <div className="proof-stat">
-              <span className="proof-stat-value">8ms</span>
+              <span className="proof-stat-value">&lt;5ms</span>
               <span className="proof-stat-label">inference latency</span>
             </div>
             <div className="proof-stat">
@@ -194,9 +194,8 @@ for frame in mic_stream():
           </div>
           <p className="proof-text">
             Built by the makers of Viola, an AI voice assistant. Powered by the
-            same wake word technology running 24/7 in production. The published
-            15.10 score is from an internal synthetic-negative benchmark, not an
-            adversarial speech benchmark.
+            same wake word technology running 24/7 in production. Metrics from
+            our TemporalCNN(96,9) production model evaluated on 25,409 parameters.
           </p>
         </div>
       </section>

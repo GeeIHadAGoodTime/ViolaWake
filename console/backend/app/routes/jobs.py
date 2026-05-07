@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_verified_user
 from app.database import get_db
-from app.job_queue import Job, QueueFullError, init_job_queue
+from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.routes.billing import check_training_quota, record_usage
@@ -105,6 +105,11 @@ async def submit_training_job(
             recording_ids=recording_ids,
             epochs=epochs,
         )
+    except TooManyPendingJobsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
     except QueueFullError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

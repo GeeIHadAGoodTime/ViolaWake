@@ -11,7 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.auth import decode_download_token, decode_token, get_verified_user
 from app.database import get_db
-from app.job_queue import init_job_queue
+from app.job_queue import TooManySubscribersError, init_job_queue
 from app.models import User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.routes.billing import check_training_quota
@@ -19,6 +19,8 @@ from app.routes.jobs import get_owned_job_or_404, submit_training_job
 from app.schemas import JobSubmitRequest, TrainingStartResponse, TrainingStatusResponse
 
 router = APIRouter(prefix="/api/training", tags=["training"])
+MAX_SSE_PER_USER = 10
+_active_sse_connections: dict[int, int] = {}
 
 
 async def _quota_user_with_rate_key(
@@ -119,29 +121,53 @@ async def stream_training(
     current_user = await _resolve_sse_user(request, token, db, job_id=job_id)
     job = await get_owned_job_or_404(job_id, current_user)
     queue_manager = await init_job_queue()
+    active_connection_count = _active_sse_connections.get(current_user.id, 0)
+    if active_connection_count >= MAX_SSE_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many active SSE connections. Close an existing stream and try again.",
+        )
+    _active_sse_connections[current_user.id] = active_connection_count + 1
+
+    def _release_connection() -> None:
+        remaining = _active_sse_connections.get(current_user.id, 0) - 1
+        if remaining > 0:
+            _active_sse_connections[current_user.id] = remaining
+        else:
+            _active_sse_connections.pop(current_user.id, None)
 
     if job.status.value in {"completed", "failed", "cancelled"}:
 
         async def _final_event():
-            yield {
-                "event": "training",
-                "data": json.dumps({
-                    "status": _legacy_status(job.status.value),
-                    "progress": job.progress_pct,
-                    "epoch": 0,
-                    "total_epochs": job.epochs,
-                    "train_loss": 0.0,
-                    "val_loss": 0.0,
-                    "d_prime": job.d_prime,
-                    "model_id": job.model_id,
-                    "message": job.error if job.status.value != "completed" else "Training complete.",
-                    "error": job.error,
-                }),
-            }
+            try:
+                yield {
+                    "event": "training",
+                    "data": json.dumps({
+                        "status": _legacy_status(job.status.value),
+                        "progress": job.progress_pct,
+                        "epoch": 0,
+                        "total_epochs": job.epochs,
+                        "train_loss": 0.0,
+                        "val_loss": 0.0,
+                        "d_prime": job.d_prime,
+                        "model_id": job.model_id,
+                        "message": job.error if job.status.value != "completed" else "Training complete.",
+                        "error": job.error,
+                    }),
+                }
+            finally:
+                _release_connection()
 
         return EventSourceResponse(_final_event())
 
-    queue = queue_manager.subscribe(job_id)
+    try:
+        queue = queue_manager.subscribe(job_id)
+    except TooManySubscribersError as exc:
+        _release_connection()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=str(exc),
+        ) from exc
 
     async def _event_generator():
         try:
@@ -160,5 +186,6 @@ async def stream_training(
                     yield {"event": "ping", "data": ""}
         finally:
             queue_manager.unsubscribe(job_id, queue)
+            _release_connection()
 
     return EventSourceResponse(_event_generator())

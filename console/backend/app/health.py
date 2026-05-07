@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import secrets
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -23,6 +24,15 @@ from app.monitoring import (
 )
 
 router = APIRouter(prefix="/api/health", tags=["health"])
+
+
+async def require_admin_health_details(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+) -> None:
+    """Hide the detailed health endpoint unless the configured admin token matches."""
+    admin_token = getattr(settings, "admin_token", "")
+    if not admin_token or x_admin_token is None or not secrets.compare_digest(x_admin_token, admin_token):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
 
 def _combine_statuses(*statuses: str) -> str:
@@ -197,5 +207,8 @@ async def ready(request: Request) -> JSONResponse:
 
 
 @router.get("/details")
-async def health_details(request: Request) -> dict[str, Any]:
+async def health_details(
+    request: Request,
+    _: None = Depends(require_admin_health_details),
+) -> dict[str, Any]:
     return await build_health_payload(request.app)

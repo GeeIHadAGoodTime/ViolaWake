@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 
@@ -18,6 +19,7 @@ from app.health import router as health_router
 from app.job_queue import init_job_queue, shutdown_job_queue
 from app.middleware import (
     ErrorHandlingMiddleware,
+    MaxBodySizeMiddleware,
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
     configure_logging,
@@ -112,6 +114,7 @@ init_monitoring_state(app)
 register_exception_handlers(app)
 
 app.add_middleware(ErrorHandlingMiddleware)
+app.add_middleware(MaxBodySizeMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
@@ -151,7 +154,7 @@ async def _require_admin(x_admin_token: str | None = Header(default=None)) -> No
     admin_token: str = getattr(settings, "admin_token", "")
     if not admin_token:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    if x_admin_token != admin_token:
+    if not secrets.compare_digest(x_admin_token or "", admin_token):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
 

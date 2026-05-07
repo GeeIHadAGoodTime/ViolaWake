@@ -15,6 +15,7 @@ export default function LoginPage() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const sessionExpired = params.get("expired") === "1";
+  const registrationPending = params.get("registered") === "1";
   const registerLink = location.search
     ? `/register${location.search}`
     : "/register";
@@ -59,6 +60,11 @@ export default function LoginPage() {
           {sessionExpired && !error && (
             <div className="auth-error">
               Your session has expired. Please sign in again.
+            </div>
+          )}
+          {registrationPending && !sessionExpired && !error && (
+            <div className="auth-error">
+              Check your email. If an account exists for that address, we&apos;ve sent next steps.
             </div>
           )}
           {error && (

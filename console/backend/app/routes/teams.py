@@ -3,7 +3,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,6 +17,7 @@ from app.auth import (
 from app.database import get_db
 from app.email_service import get_email_service
 from app.models import Team, TeamMember, TrainedModel, User
+from app.rate_limit import TEAM_INVITE_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.schemas import (
     MessageResponse,
     TeamCreateRequest,
@@ -64,6 +65,15 @@ def _team_response(team: Team) -> TeamResponse:
         owner_id=team.owner_id,
         members=[_member_response(m) for m in team.members if m.joined_at is not None],
     )
+
+
+async def _verified_user_with_rate_key(
+    request: Request,
+    current_user: Annotated[User, Depends(get_verified_user)],
+) -> User:
+    """Resolve the verified user and stash the ID for per-user rate limiting."""
+    set_rate_limit_user(request, current_user.id)
+    return current_user
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -137,10 +147,12 @@ async def get_team(
 
 
 @router.post("/{team_id}/invite", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit(TEAM_INVITE_LIMIT, key_func=key_by_user)
 async def invite_member(
     team_id: int,
+    request: Request,
     body: TeamInviteRequest,
-    current_user: Annotated[User, Depends(get_verified_user)],
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
     _member: Annotated[TeamMember, Depends(make_get_team_member(["owner", "admin"]))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MessageResponse:

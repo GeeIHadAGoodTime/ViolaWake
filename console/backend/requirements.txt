@@ -2,10 +2,11 @@ fastapi>=0.110
 slowapi>=0.1.9
 uvicorn[standard]>=0.27
 sqlalchemy>=2.0
+alembic>=1.13
 aiosqlite>=0.19
 # Optional: needed when VIOLAWAKE_DB_URL points to PostgreSQL, such as Railway.
 asyncpg>=0.29
-python-jose[cryptography]>=3.3
+PyJWT[crypto]>=2.8
 bcrypt>=4.0
 python-multipart>=0.0.9
 sse-starlette>=1.6

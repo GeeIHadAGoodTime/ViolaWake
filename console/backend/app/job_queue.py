@@ -21,7 +21,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database import async_session_factory
-from app.models import Recording, TrainedModel
+from app.models import Recording, TrainedModel, User
 from app.monitoring import log_exception
 from app.services.training_service import TrainingCancelledError, run_training_job_sync
 from app.storage import build_companion_config_identifier, build_model_key, get_storage
@@ -29,6 +29,8 @@ from app.storage import build_companion_config_identifier, build_model_key, get_
 logger = logging.getLogger("violawake.jobs")
 
 QUEUE_MAX_SIZE = 50
+PER_USER_MAX_PENDING = 3
+MAX_SUBSCRIBERS_PER_JOB = 5
 FAILURE_THRESHOLD = 3
 FAILURE_BACKOFF_SECONDS = 300
 ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS = 30.0
@@ -128,6 +130,14 @@ class QueueFullError(RuntimeError):
     """Raised when the persistent queue is at capacity."""
 
 
+class TooManyPendingJobsError(RuntimeError):
+    """Raised when a user already has too many active jobs."""
+
+
+class TooManySubscribersError(RuntimeError):
+    """Raised when a job already has too many SSE subscribers."""
+
+
 class JobQueue:
     """Persistent async training job queue."""
 
@@ -147,6 +157,7 @@ class JobQueue:
         self._cancel_events: dict[int, threading.Event] = {}
         self._inflight_tasks: set[asyncio.Task[None]] = set()
         self._retry_tasks: dict[int, asyncio.Task[None]] = {}
+        self._submission_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._refill_lock = asyncio.Lock()
         self._worker_task: asyncio.Task[None] | None = None
@@ -210,43 +221,63 @@ class JobQueue:
         created_at = _utcnow()
         payload = json.dumps(recording_ids)
 
-        async with self._connect() as conn:
-            cursor = await conn.execute(
-                """
-                INSERT INTO jobs (
-                    user_id,
-                    wake_word,
-                    status,
-                    created_at,
-                    started_at,
-                    completed_at,
-                    error,
-                    progress_pct,
-                    recording_ids,
-                    epochs,
-                    model_id,
-                    d_prime,
-                    priority
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    user_id,
-                    wake_word,
-                    JobStatus.PENDING.value,
-                    _serialize_datetime(created_at),
-                    None,
-                    None,
-                    None,
-                    0.0,
-                    payload,
-                    epochs,
-                    None,
-                    None,
-                    priority,
-                ),
-            )
-            await conn.commit()
-            job_id = int(cursor.lastrowid)
+        async with self._submission_lock:
+            async with self._connect() as conn:
+                async with conn.execute(
+                    """
+                    SELECT COUNT(*) AS count
+                    FROM jobs
+                    WHERE user_id = ? AND status IN (?, ?)
+                    """,
+                    (
+                        user_id,
+                        JobStatus.PENDING.value,
+                        JobStatus.RUNNING.value,
+                    ),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                active_job_count = int(row["count"]) if row is not None else 0
+                if active_job_count >= PER_USER_MAX_PENDING:
+                    raise TooManyPendingJobsError(
+                        "Too many pending jobs. Wait for current jobs to complete."
+                    )
+
+                cursor = await conn.execute(
+                    """
+                    INSERT INTO jobs (
+                        user_id,
+                        wake_word,
+                        status,
+                        created_at,
+                        started_at,
+                        completed_at,
+                        error,
+                        progress_pct,
+                        recording_ids,
+                        epochs,
+                        model_id,
+                        d_prime,
+                        priority
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        wake_word,
+                        JobStatus.PENDING.value,
+                        _serialize_datetime(created_at),
+                        None,
+                        None,
+                        None,
+                        0.0,
+                        payload,
+                        epochs,
+                        None,
+                        None,
+                        priority,
+                    ),
+                )
+                await conn.commit()
+                job_id = int(cursor.lastrowid)
 
         logger.info(
             "Queued training job %s for user %s (priority=%s)",
@@ -473,6 +504,8 @@ class JobQueue:
         """Subscribe to SSE-style job updates."""
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         listeners = self._subscribers.setdefault(job_id, [])
+        if len(listeners) >= MAX_SUBSCRIBERS_PER_JOB:
+            raise TooManySubscribersError("Too many subscribers for this job.")
         listeners.append(queue)
         return queue
 
@@ -752,6 +785,25 @@ class JobQueue:
                 },
             )
             logger.info("Training job %s completed for user %s", job_id, job.user_id)
+
+            # Best-effort training-complete email notification.
+            try:
+                from app.email_service import get_email_service
+
+                email_svc = get_email_service()
+                if email_svc.enabled:
+                    async with async_session_factory() as session:
+                        user = await session.get(User, job.user_id)
+                    if user is not None:
+                        download_url = f"/models/{model_id}/download"
+                        await email_svc.send_training_complete(
+                            to=user.email,
+                            model_name=job.wake_word,
+                            download_url=download_url,
+                        )
+            except Exception as email_exc:
+                log_exception(logger, email_exc, message="Training-complete email failed", source="email")
+
         except TrainingCancelledError as exc:
             current_job = await self.get_job(job_id)
             completed_at = _utcnow()

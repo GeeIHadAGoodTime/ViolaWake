@@ -41,6 +41,25 @@ def _ensure_schema_updates(connection: Connection) -> None:
         connection.execute(
             text("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE")
         )
+    if "failed_login_count" not in user_columns:
+        try:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS "
+                    "failed_login_count INTEGER DEFAULT 0 NOT NULL"
+                )
+            )
+        except Exception:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0 NOT NULL")
+            )
+    if "locked_until" not in user_columns:
+        try:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMP")
+            )
+        except Exception:
+            connection.execute(text("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP"))
 
     # Team FK columns on recordings and trained_models (nullable, so no default needed)
     if "recordings" in table_names:

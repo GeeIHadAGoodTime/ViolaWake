@@ -125,7 +125,7 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
   }
 
   async function handleDownload() {
-    const url = await await getModelDownloadUrl(model.id);
+    const url = await getModelDownloadUrl(model.id);
     const a = document.createElement("a");
     a.href = url;
     a.download = `${model.wake_word}.onnx`;

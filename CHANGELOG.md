@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Use bounded OrderedDict for download token JTIs (10K cap + TTL pruning)
 - Make usage counter atomic (SQL-level `SET count = count + 1`, no read-modify-write race)
 - Cancel Stripe subscription on account deletion
+- Replace abandoned `python-jose[cryptography]` dependency with `PyJWT[crypto]>=2.8`
 
 ### Fixed
 - Fix SSE training stream (use `addEventListener("training", ...)` instead of `onmessage`)

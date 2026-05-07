@@ -47,6 +47,13 @@ function getPostAuthRedirect(search: string): string {
   return `${returnPath}${separator}${remainingQuery}`;
 }
 
+function getPostRegisterRedirect(search: string): string {
+  const params = new URLSearchParams(search);
+  params.set("registered", "1");
+  const query = params.toString();
+  return query ? `/login?${query}` : "/login";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,10 +105,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
       try {
-        const { user: userData } = await api.register(email, password, name);
-        setUser(userData);
+        const data = await api.register(email, password, name);
+        if (data.token) {
+          setUser(data.user);
+          setIsLoading(false);
+          navigate(getPostAuthRedirect(location.search), { replace: true });
+          return;
+        }
+
+        setUser(null);
         setIsLoading(false);
-        navigate(getPostAuthRedirect(location.search), { replace: true });
+        navigate(getPostRegisterRedirect(location.search), { replace: true });
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Registration failed";

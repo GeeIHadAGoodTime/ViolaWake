@@ -40,6 +40,10 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=1)
+
+
 class UserResponse(BaseModel):
     id: int
     email: str
@@ -182,7 +186,7 @@ class ModelConfigResponse(BaseModel):
 
 class ModelPerformanceResponse(BaseModel):
     model_name: str
-    cohen_d: float | None = None
+    d_prime: float | None = None
     threshold: float | None = None
     file_size: int
     created_at: datetime

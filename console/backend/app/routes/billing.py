@@ -1,17 +1,20 @@
 """Billing routes: Stripe checkout, webhook, subscription management, usage."""
 
 import logging
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_verified_user
 from app.config import settings
 from app.database import get_db
 from app.models import Subscription, UsageRecord, User
+from app.rate_limit import CHECKOUT_LIMIT, PORTAL_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.schemas import (
     BillingPortalResponse,
     CheckoutRequest,
@@ -40,6 +43,14 @@ TIER_PRICE_MAP: dict[str, str] = {
     "business": "stripe_price_business",
 }
 
+# ---------------------------------------------------------------------------
+# Webhook idempotency — deduplicate Stripe event deliveries within a single
+# process lifetime.  Bounded to the most recent 1000 event IDs.
+# ---------------------------------------------------------------------------
+
+_PROCESSED_EVENTS_MAX = 1000
+_processed_events: OrderedDict[str, None] = OrderedDict()
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,6 +74,15 @@ def _get_stripe():
     import stripe
     stripe.api_key = settings.stripe_secret_key
     return stripe
+
+
+async def _verified_user_with_rate_key(
+    request: Request,
+    current_user: Annotated[User, Depends(get_verified_user)],
+) -> User:
+    """Resolve the verified user and stash the ID for per-user rate limiting."""
+    set_rate_limit_user(request, current_user.id)
+    return current_user
 
 
 def _current_period_start() -> datetime:
@@ -148,27 +168,50 @@ async def record_usage(db: AsyncSession, user_id: int, action: str = "training_j
     """Increment the usage counter for the current billing period.
 
     Creates the UsageRecord row if it does not exist yet.
+
+    Uses atomic SQL to avoid a read-modify-write race where two concurrent
+    requests could both pass the quota check before either increments.
     """
     period_start = _current_period_start()
+
+    # Attempt atomic UPDATE first: SET count = count + 1 in SQL, not Python.
     result = await db.execute(
-        select(UsageRecord).where(
+        update(UsageRecord)
+        .where(
             UsageRecord.user_id == user_id,
             UsageRecord.action == action,
             UsageRecord.period_start == period_start,
         )
+        .values(count=UsageRecord.count + 1)
     )
-    record = result.scalar_one_or_none()
-    if record is None:
-        record = UsageRecord(
-            user_id=user_id,
-            action=action,
-            period_start=period_start,
-            count=1,
-        )
-        db.add(record)
+
+    if result.rowcount == 0:
+        # No existing row — insert one.  If a concurrent request races us and
+        # inserts between our UPDATE and this INSERT, the unique constraint
+        # (user_id, action, period_start) will raise IntegrityError; retry
+        # with the atomic UPDATE which is now guaranteed to match.
+        try:
+            db.add(UsageRecord(
+                user_id=user_id,
+                action=action,
+                period_start=period_start,
+                count=1,
+            ))
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
+            await db.execute(
+                update(UsageRecord)
+                .where(
+                    UsageRecord.user_id == user_id,
+                    UsageRecord.action == action,
+                    UsageRecord.period_start == period_start,
+                )
+                .values(count=UsageRecord.count + 1)
+            )
+            await db.flush()
     else:
-        record.count += 1
-    await db.flush()
+        await db.flush()
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +235,27 @@ async def check_training_quota(
         return current_user
 
     used = await _get_usage_count(db, current_user.id)
+
+    # Warn at 80% of limit (best-effort, non-blocking).
+    if limit and used == int(limit * 0.8):
+        try:
+            from app.email_service import get_email_service
+
+            email_svc = get_email_service()
+            if email_svc.enabled:
+                import asyncio
+
+                asyncio.create_task(
+                    email_svc.send_quota_warning(
+                        to=current_user.email,
+                        used=used,
+                        limit=limit,
+                        tier=sub.tier,
+                    )
+                )
+        except Exception:
+            pass  # non-critical — don't block training
+
     if used >= limit:
         tier_name = sub.tier.capitalize()
         if sub.tier == "free":
@@ -218,9 +282,11 @@ async def check_training_quota(
 # ---------------------------------------------------------------------------
 
 @router.post("/checkout", response_model=CheckoutResponse)
+@limiter.limit(CHECKOUT_LIMIT, key_func=key_by_user)
 async def create_checkout_session(
+    request: Request,
     body: CheckoutRequest,
-    current_user: Annotated[User, Depends(get_verified_user)],
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CheckoutResponse:
     """Create a Stripe Checkout Session for upgrading to a paid tier."""
@@ -316,9 +382,20 @@ async def stripe_webhook(
             detail="Invalid webhook signature.",
         )
 
+    # Deduplicate: Stripe may deliver the same event more than once.
+    event_id = event.get("id")
+    if event_id and event_id in _processed_events:
+        logger.debug("Duplicate webhook event ignored: %s", event_id)
+        return {"status": "ok"}
+    if event_id:
+        _processed_events[event_id] = None
+        # Evict oldest entries to stay within the bound.
+        while len(_processed_events) > _PROCESSED_EVENTS_MAX:
+            _processed_events.popitem(last=False)
+
     event_type = event["type"]
     data = event["data"]["object"]
-    logger.info("Stripe webhook received: %s (id=%s)", event_type, event.get("id"))
+    logger.info("Stripe webhook received: %s (id=%s)", event_type, event_id)
 
     if event_type == "checkout.session.completed":
         await _handle_checkout_completed(db, data)
@@ -376,8 +453,10 @@ async def get_subscription(
 
 
 @router.post("/portal", response_model=BillingPortalResponse)
+@limiter.limit(PORTAL_LIMIT, key_func=key_by_user)
 async def create_billing_portal(
-    current_user: Annotated[User, Depends(get_verified_user)],
+    request: Request,
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> BillingPortalResponse:
     """Create a Stripe Billing Portal session for managing the subscription."""

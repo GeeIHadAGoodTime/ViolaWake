@@ -23,14 +23,17 @@ __pycache__
 
 # Environment and secrets
 .env
-.env.*
+.env.local
+.env.*.local
 !.env.example
+!.env.production
 
 # Docs and non-runtime files
 docs/
-*.md
-LICENSE
 CLAUDE.md
+CHANGELOG.md
+ACCURACY_MISSION.md
+!README.md
 
 # Test data (large)
 data/

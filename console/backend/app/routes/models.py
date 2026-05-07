@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import decode_download_token, decode_token, get_current_user
 from app.database import get_db
-from app.models import TrainedModel, User
+from app.models import TeamMember, TrainedModel, User
 from app.schemas import (
     ModelConfigResponse,
     ModelPerformanceResponse,
@@ -24,12 +24,12 @@ from app.storage import LocalStorageBackend, build_companion_config_identifier, 
 router = APIRouter(prefix="/api/models", tags=["models"])
 logger = logging.getLogger("violawake.models")
 
-_COHEN_D_KEYS = (
+_D_PRIME_KEYS = (
+    "d_prime",
+    "dprime",
     "cohen_d",
     "cohens_d",
     "cohen-d",
-    "d_prime",
-    "dprime",
 )
 _THRESHOLD_KEYS = (
     "threshold",
@@ -50,7 +50,7 @@ _NEGATIVE_SCORE_KEYS = (
     "neg_scores",
 )
 _EVALUATION_KEYS = {
-    *_COHEN_D_KEYS,
+    *_D_PRIME_KEYS,
     *_THRESHOLD_KEYS,
     *_POSITIVE_SCORE_KEYS,
     *_NEGATIVE_SCORE_KEYS,
@@ -198,6 +198,40 @@ async def _resolve_download_user(
     return user
 
 
+async def _get_model_for_user(
+    db: AsyncSession,
+    model_id: int,
+    user_id: int,
+) -> TrainedModel:
+    """Fetch a model if the user owns it OR is a member of its team.
+
+    Raises HTTPException 404 when neither condition is met.
+    """
+    result = await db.execute(
+        select(TrainedModel).where(TrainedModel.id == model_id)
+    )
+    model = result.scalar_one_or_none()
+    if model is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+
+    # Owner always has access.
+    if model.user_id == user_id:
+        return model
+
+    # Team members have access to team-shared models.
+    if model.team_id is not None:
+        membership = await db.execute(
+            select(TeamMember.id).where(
+                TeamMember.team_id == model.team_id,
+                TeamMember.user_id == user_id,
+            )
+        )
+        if membership.scalar_one_or_none() is not None:
+            return model
+
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+
+
 @router.get("", response_model=list[TrainedModelResponse])
 async def list_models(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -237,15 +271,7 @@ async def download_model(
     """
     current_user = await _resolve_download_user(request, token, db, model_id=model_id)
 
-    result = await db.execute(
-        select(TrainedModel).where(
-            TrainedModel.id == model_id,
-            TrainedModel.user_id == current_user.id,
-        )
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+    model = await _get_model_for_user(db, model_id, current_user.id)
 
     storage = get_storage()
     if not storage.exists(model.file_path):
@@ -275,15 +301,7 @@ async def get_model_config(
 
     Requires the standard ``Authorization: Bearer <token>`` header.
     """
-    result = await db.execute(
-        select(TrainedModel).where(
-            TrainedModel.id == model_id,
-            TrainedModel.user_id == current_user.id,
-        )
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Model not found")
+    model = await _get_model_for_user(db, model_id, current_user.id)
 
     training_config = _load_model_metadata(model)
 
@@ -309,30 +327,19 @@ async def get_model_performance(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ModelPerformanceResponse:
     """Get performance details and any stored evaluation data for a model."""
-    result = await db.execute(
-        select(TrainedModel).where(
-            TrainedModel.id == model_id,
-            TrainedModel.user_id == current_user.id,
-        )
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Model not found",
-        )
+    model = await _get_model_for_user(db, model_id, current_user.id)
 
     metadata = _load_model_metadata(model)
     positive_scores = _extract_scores(metadata, _POSITIVE_SCORE_KEYS)
     negative_scores = _extract_scores(metadata, _NEGATIVE_SCORE_KEYS)
-    cohen_d = model.d_prime
-    if cohen_d is None:
-        cohen_d = _extract_float(metadata, _COHEN_D_KEYS)
+    d_prime = model.d_prime
+    if d_prime is None:
+        d_prime = _extract_float(metadata, _D_PRIME_KEYS)
     threshold = _extract_float(metadata, _THRESHOLD_KEYS)
 
     return ModelPerformanceResponse(
         model_name=model.wake_word,
-        cohen_d=cohen_d,
+        d_prime=d_prime,
         threshold=threshold,
         file_size=model.size_bytes,
         created_at=model.created_at,

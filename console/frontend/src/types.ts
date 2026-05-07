@@ -26,6 +26,7 @@ export interface Recording {
 export interface UploadResponse {
   recording_id: number;
   filename: string;
+  wake_word: string;
   duration_s: number;
 }
 
@@ -80,7 +81,7 @@ export interface ModelConfig {
 
 export interface ModelPerformanceResponse {
   model_name: string;
-  cohen_d: number | null;
+  d_prime: number | null;
   threshold: number | null;
   file_size: number;
   created_at: string;
@@ -101,6 +102,8 @@ export interface SubscriptionResponse {
   tier: string;
   status: string;
   current_period_end: string;
+  trial_active: boolean;
+  trial_end: string | null;
   usage: UsageResponse;
 }
 

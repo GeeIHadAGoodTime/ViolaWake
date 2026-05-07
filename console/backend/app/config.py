@@ -9,6 +9,11 @@ from typing import Annotated, Any, Self
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 
 def _generate_dev_secret_key() -> str:
     """Generate a development-only JWT key."""
@@ -41,14 +46,11 @@ class Settings(BaseSettings):
     # Auth
     secret_key: str = ""
     algorithm: str = "HS256"
-    access_token_expire_hours: int = 24
+    access_token_expire_hours: int = 2
     trusted_proxy_count: int = 0
 
     # CORS
-    cors_origins: Annotated[list[str], NoDecode] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
+    cors_origins: Annotated[list[str], NoDecode] = DEFAULT_CORS_ORIGINS.copy()
 
     # Training
     training_timeout: int = 1800  # seconds (30 minutes)
@@ -167,17 +169,19 @@ class Settings(BaseSettings):
 
     @property
     def effective_cors_origins(self) -> list[str]:
-        """Return CORS origins with production domains appended when in production."""
-        origins = list(self.cors_origins)
+        """Return CORS origins.
+
+        If ``cors_origins`` was explicitly set via env var, use exactly those.
+        Otherwise fall back to sensible defaults based on the environment.
+        """
+        if self.cors_origins != DEFAULT_CORS_ORIGINS:
+            return list(self.cors_origins)
         if self.is_production:
-            prod_origins = [
+            return [
                 "https://console.violawake.com",
                 "https://violawake.com",
             ]
-            for origin in prod_origins:
-                if origin not in origins:
-                    origins.append(origin)
-        return origins
+        return list(DEFAULT_CORS_ORIGINS)
 
     @property
     def billing_enabled(self) -> bool:

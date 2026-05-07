@@ -211,6 +211,72 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 
+MAX_BODY_SIZE = 15 * 1024 * 1024  # 15 MB
+
+
+class MaxBodySizeMiddleware:
+    """Reject requests whose body exceeds MAX_BODY_SIZE.
+
+    Works for both advertised Content-Length and chunked transfers by
+    wrapping the ASGI ``receive`` channel to count bytes as they arrive.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # Fast rejection when Content-Length is declared up front.
+        headers = dict(scope.get("headers") or [])
+        cl = headers.get(b"content-length")
+        if cl is not None and int(cl) > MAX_BODY_SIZE:
+            await _send_413(send)
+            return
+
+        # Streaming guard: count bytes as they are received.
+        bytes_received = 0
+        exceeded = False
+
+        async def receive_wrapper() -> dict[str, Any]:
+            nonlocal bytes_received, exceeded
+            message = await receive()
+            if message.get("type") == "http.request":
+                body = message.get("body", b"")
+                bytes_received += len(body)
+                if bytes_received > MAX_BODY_SIZE:
+                    exceeded = True
+                    raise HTTPException(status_code=413, detail="Request body too large")
+            return message
+
+        try:
+            await self.app(scope, receive_wrapper, send)
+        except HTTPException as exc:
+            if exceeded and exc.status_code == 413:
+                await _send_413(send)
+            else:
+                raise
+
+
+async def _send_413(send: Any) -> None:
+    """Send a minimal HTTP 413 response over the ASGI send channel."""
+    body = json.dumps({"detail": "Request body too large"}).encode()
+    await send({
+        "type": "http.response.start",
+        "status": 413,
+        "headers": [
+            [b"content-type", b"application/json"],
+            [b"content-length", str(len(body)).encode()],
+        ],
+    })
+    await send({
+        "type": "http.response.body",
+        "body": body,
+    })
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to every response."""
 
@@ -220,6 +286,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if settings.is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
         return response
 
 

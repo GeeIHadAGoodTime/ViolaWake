@@ -170,6 +170,12 @@ export default function BillingPage() {
                 <span className="billing-info-label">Current period ends</span>
                 <strong>{formatDate(subscription.current_period_end)}</strong>
               </div>
+              {subscription.trial_active && subscription.trial_end && (
+                <div className="billing-info-item">
+                  <span className="billing-info-label">Trial ends</span>
+                  <strong>{formatDate(subscription.trial_end)}</strong>
+                </div>
+              )}
             </div>
 
             {tier.toLowerCase() === "free" && (

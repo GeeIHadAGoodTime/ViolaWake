@@ -3,6 +3,7 @@
 import io
 import re
 import struct
+import uuid
 import wave
 from typing import Annotated
 
@@ -37,6 +38,7 @@ MIN_DURATION_S = 0.5
 MAX_DURATION_S = 5.0
 TARGET_SAMPLE_RATE = 16000
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_RECORDINGS_PER_USER = 500
 MIN_RMS_ENERGY = 10.0  # ~-70dBFS — any real speech is well above this
 
 
@@ -190,6 +192,21 @@ async def upload_recording(
     if not wake_word:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wake word contains no valid characters")
 
+    total_recordings_result = await db.execute(
+        select(func.count())
+        .select_from(Recording)
+        .where(
+            Recording.user_id == current_user.id,
+            Recording.deleted_at.is_(None),
+        )
+    )
+    total_recordings = int(total_recordings_result.scalar_one())
+    if total_recordings >= MAX_RECORDINGS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recording limit reached. Delete old recordings to upload new ones.",
+        )
+
     # Read file content
     content = await file.read()
     if len(content) == 0:
@@ -225,23 +242,8 @@ async def upload_recording(
         )
 
     storage = get_storage()
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(Recording)
-        .where(
-            Recording.user_id == current_user.id,
-            Recording.wake_word == wake_word,
-        )
-    )
-    idx = int(count_result.scalar_one()) + 1
-    filename = f"{wake_word}_{idx:04d}.wav"
+    filename = f"{wake_word}_{uuid.uuid4().hex[:8]}.wav"
     storage_key = build_recording_key(current_user.id, wake_word, filename)
-
-    # Avoid collision
-    while storage.exists(storage_key):
-        idx += 1
-        filename = f"{wake_word}_{idx:04d}.wav"
-        storage_key = build_recording_key(current_user.id, wake_word, filename)
 
     storage.upload(storage_key, content, "audio/wav")
 

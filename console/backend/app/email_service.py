@@ -69,6 +69,20 @@ class EmailService:
         )
         return await self._send_email(to, "Welcome to ViolaWake Console", html)
 
+    async def send_existing_account_notice(self, to: str, name: str) -> bool:
+        """Notify a user when someone tries to register an email that already exists."""
+        html = self._render_email(
+            heading="You already have an account",
+            intro=(
+                f"Hi {escape(name)}, someone tried to register with your email. "
+                "If this was you, try logging in instead."
+            ),
+            button_label="Log In",
+            button_url=self._console_url("/login"),
+            footer="If this was not you, no action is required and your account is unchanged.",
+        )
+        return await self._send_email(to, "Your ViolaWake account already exists", html)
+
     async def send_training_complete(self, to: str, model_name: str, download_url: str) -> bool:
         """Send a training completion email with a download CTA."""
         html = self._render_email(

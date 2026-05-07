@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +26,9 @@ EMAIL_VERIFICATION_TOKEN_HOURS = 48
 PASSWORD_RESET_TOKEN_HOURS = 2
 DOWNLOAD_TOKEN_SECONDS = 60
 TEAM_INVITE_TOKEN_HOURS = 72
-_download_token_jtis: dict[str, datetime] = {}
+_TOKEN_JTI_MAX_SIZE = 10_000
+_download_token_jtis: OrderedDict[str, datetime] = OrderedDict()
+_reset_token_jtis: OrderedDict[str, datetime] = OrderedDict()
 
 
 def _prep_password(password: str) -> bytes:
@@ -85,29 +89,52 @@ def create_email_verification_token(user_id: int) -> str:
 
 
 def create_password_reset_token(user_id: int) -> str:
-    """Create a JWT password reset token for the given user ID."""
-    return _create_action_token(
-        user_id,
-        purpose="reset_password",
-        expires_in=timedelta(hours=PASSWORD_RESET_TOKEN_HOURS),
-    )
+    """Create a JWT password reset token for the given user ID.
+
+    Includes a JTI so the token can only be used once.
+    """
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(hours=PASSWORD_RESET_TOKEN_HOURS)
+    jti = secrets.token_urlsafe(16)
+    payload = {
+        "sub": str(user_id),
+        "purpose": "reset_password",
+        "jti": jti,
+        "exp": expires_at,
+        "iat": now,
+    }
+    _prune_jti_store(_reset_token_jtis, now)
+    _reset_token_jtis[jti] = expires_at
+    return jwt.encode(payload, settings.secret_key, algorithm=settings.algorithm)
+
+
+def _prune_jti_store(
+    store: OrderedDict[str, datetime],
+    now: datetime | None = None,
+) -> None:
+    """Drop expired entries and evict oldest if the store exceeds its bound."""
+    current_time = now or datetime.now(timezone.utc)
+    expired = [
+        jti
+        for jti, expires_at in store.items()
+        if expires_at <= current_time
+    ]
+    for jti in expired:
+        store.pop(jti, None)
+    # Evict oldest entries when the store exceeds its size bound.
+    while len(store) > _TOKEN_JTI_MAX_SIZE:
+        store.popitem(last=False)
 
 
 def _prune_download_tokens(now: datetime | None = None) -> None:
     """Drop expired one-time download token identifiers."""
-    current_time = now or datetime.now(timezone.utc)
-    expired = [
-        jti
-        for jti, expires_at in _download_token_jtis.items()
-        if expires_at <= current_time
-    ]
-    for jti in expired:
-        _download_token_jtis.pop(jti, None)
+    _prune_jti_store(_download_token_jtis, now)
 
 
 def reset_download_tokens() -> None:
-    """Clear tracked one-time download tokens. Used by test fixtures."""
+    """Clear tracked one-time download and reset tokens. Used by test fixtures."""
     _download_token_jtis.clear()
+    _reset_token_jtis.clear()
 
 
 def create_download_token(
@@ -150,7 +177,7 @@ def decode_token(token: str) -> int:
                 detail="Invalid token: missing subject",
             )
         return int(user_id_str)
-    except JWTError as e:
+    except InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {e}",
@@ -176,10 +203,43 @@ def decode_action_token(token: str, expected_purpose: str) -> int:
         return int(user_id_str)
     except HTTPException:
         raise
-    except JWTError as e:
+    except InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid token: {e}",
+        ) from e
+
+
+def decode_reset_token(token: str) -> int:
+    """Decode a password-reset JWT and consume its one-time JTI.
+
+    Returns the user ID.  Raises HTTPException if the token is invalid,
+    expired, has the wrong purpose, or has already been used.
+    """
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        user_id_str: str | None = payload.get("sub")
+        purpose: str | None = payload.get("purpose")
+        jti: str | None = payload.get("jti")
+        if user_id_str is None or purpose != "reset_password" or not isinstance(jti, str):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid reset token",
+            )
+        _prune_jti_store(_reset_token_jtis)
+        expires_at = _reset_token_jtis.pop(jti, None)
+        if expires_at is None or expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Reset token has expired or was already used",
+            )
+        return int(user_id_str)
+    except HTTPException:
+        raise
+    except InvalidTokenError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid reset token: {e}",
         ) from e
 
 
@@ -222,7 +282,7 @@ def decode_team_invite_token(token: str) -> dict:
         }
     except HTTPException:
         raise
-    except JWTError as e:
+    except InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid invite token: {e}",
@@ -269,7 +329,7 @@ def decode_download_token(
         return int(user_id_str)
     except HTTPException:
         raise
-    except JWTError as e:
+    except InvalidTokenError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid download token: {e}",

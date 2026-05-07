@@ -15,12 +15,16 @@ limiter = Limiter(key_func=get_remote_address)
 # Limit strings (centralised so routes and tests can reference them)
 # ---------------------------------------------------------------------------
 LOGIN_LIMIT = "5/minute"
-REGISTER_LIMIT = "100/hour"
+REGISTER_LIMIT = "10/hour"
 VERIFY_EMAIL_LIMIT = "20/5 minutes"
 FORGOT_PASSWORD_LIMIT = "5/5 minutes"
 RESET_PASSWORD_LIMIT = "10/5 minutes"
+CHANGE_PASSWORD_LIMIT = "5/minute"
 RECORDING_UPLOAD_LIMIT = "50/hour"
 TRAINING_SUBMIT_LIMIT = "5/hour"
+CHECKOUT_LIMIT = "10/hour"
+PORTAL_LIMIT = "10/hour"
+TEAM_INVITE_LIMIT = "20/hour"
 
 
 # ---------------------------------------------------------------------------

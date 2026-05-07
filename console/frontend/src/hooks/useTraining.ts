@@ -60,6 +60,7 @@ function isTerminal(status: TrainingStatus): boolean {
 export function useTraining(jobId: number) {
   const [state, setState] = useState<TrainingState>(INITIAL_STATE);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const trainingHandlerRef = useRef<EventListener | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const clearPolling = useCallback(() => {
@@ -120,7 +121,10 @@ export function useTraining(jobId: number) {
           setState((prev) => ({ ...prev, connected: true }));
         };
 
-        es.onmessage = (event) => {
+        // Backend emits named SSE events: "training" for progress and
+        // "ping" for keepalives. Named events require addEventListener —
+        // onmessage only fires for events without an event: field.
+        const handleTraining = (event: MessageEvent) => {
           try {
             const data: TrainingEvent = JSON.parse(event.data);
             setState((prev) => ({
@@ -146,7 +150,14 @@ export function useTraining(jobId: number) {
           }
         };
 
+        trainingHandlerRef.current = handleTraining as EventListener;
+        es.addEventListener("training", trainingHandlerRef.current);
+
         es.onerror = () => {
+          if (trainingHandlerRef.current) {
+            es.removeEventListener("training", trainingHandlerRef.current);
+            trainingHandlerRef.current = null;
+          }
           setState((prev) => ({ ...prev, connected: false }));
           es.close();
           startPolling();
@@ -159,6 +170,13 @@ export function useTraining(jobId: number) {
     return () => {
       disposed = true;
       if (eventSourceRef.current) {
+        if (trainingHandlerRef.current) {
+          eventSourceRef.current.removeEventListener(
+            "training",
+            trainingHandlerRef.current,
+          );
+          trainingHandlerRef.current = null;
+        }
         eventSourceRef.current.close();
         eventSourceRef.current = null;
       }
