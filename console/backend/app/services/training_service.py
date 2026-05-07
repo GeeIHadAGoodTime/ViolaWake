@@ -99,7 +99,6 @@ def run_training_job_sync(
         # -- Production pipeline: full auto-corpus (matching CLI train) --
         from violawake_sdk.tools.train import (
             _generate_confusable_negatives,
-            _generate_speech_negatives,
             _generate_tts_positives,
             _train_temporal_cnn,
         )
@@ -138,7 +137,7 @@ def run_training_job_sync(
                 "total_epochs": epochs,
                 "train_loss": 0.0,
                 "val_loss": 0.0,
-                "message": "Corpus: %s positives. Generating negatives..." % len(pos_files),
+                "message": "Corpus: %s positives. Generating wake-word negatives..." % len(pos_files),
                 "error": None,
             })
         neg_tag_map: dict[str, list[Path]] = {}
@@ -203,33 +202,17 @@ def run_training_job_sync(
             "total_epochs": epochs,
             "train_loss": 0.0,
             "val_loss": 0.0,
-            "message": "Generated confusables. Generating speech negatives...",
+            "message": "Generated confusables. Loading corpus speech negatives...",
             "error": None,
         })
-
-        # Source 3: Auto-generated speech negatives (common phrases)
-        # 5 voices matching CLI production pipeline (was 3)
-        speech_dir = neg_temp_dir / "speech"
-        try:
-            speech_files = _generate_speech_negatives(
-                speech_dir,
-                n_voices=5,
-                verbose=False,
-            )
-            if speech_files:
-                neg_tag_map["neg_speech"] = speech_files
-        except Exception as exc:
-            logger.error(
-                "Speech neg generation FAILED for job %s: %s — "
-                "model will have higher false positive rate on general speech",
-                job_id, exc,
-            )
 
         _ensure_not_cancelled()
 
         # Source 4: Universal corpus (LibriSpeech, MUSAN) if available
+        service_file = Path(__file__).resolve()
         _CORPUS_SEARCH_PATHS = [
-            Path(__file__).resolve().parent.parent.parent.parent / "corpus",  # repo root
+            Path("/app/corpus"),
+            *([service_file.parents[4] / "corpus"] if len(service_file.parents) > 4 else []),
             Path.home() / ".violawake" / "corpus",
             Path("corpus"),
         ]
@@ -263,10 +246,20 @@ def run_training_job_sync(
             all_neg_files.extend(files)
 
         total_neg = len(all_neg_files)
-        if total_neg < 5:
+        speech_neg_tags = {
+            "neg_user",
+            "neg_librispeech",
+            "neg_musan_speech",
+            "neg_musan_music",
+            "neg_musan_noise",
+        }
+        total_speech_neg = sum(
+            len(files) for tag, files in neg_tag_map.items() if tag in speech_neg_tags
+        )
+        if total_speech_neg < 5 or total_neg < 5:
             raise RuntimeError(
-                "Only %s negative files generated. "
-                "edge-tts may not be installed or network unavailable." % total_neg
+                "No speech negatives available. Mount LibriSpeech + MUSAN corpus at "
+                "/app/corpus or run `violawake download-corpus`."
             )
 
         progress_callback({
