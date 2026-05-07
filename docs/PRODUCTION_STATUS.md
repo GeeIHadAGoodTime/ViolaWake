@@ -58,7 +58,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 
 These are tracked as separate work; none of them affect the live user journey.
 
-1. **~25 stale test mocks** in `console/tests/test_backend.py`, `test_teams.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_billing.py`. Same pattern as the 5 fixed in `test_auth_email_routes.py`: `FakeEmailService` missing `enabled` / `send_existing_account_notice`, `FakeSession` missing `commit`/`rollback`, route signatures changed `(body, request, db)` → `(request, body, db)`. CI is failing because of these.
+1. ~~~25 stale test mocks~~ **RESOLVED 2026-05-07.** All 28 failures + 7 errors fixed across `test_backend.py`, `test_billing.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_teams.py`. Final: `136 passed, 2 skipped, 0 failed, 0 errors`. The 2 skips are intentional (rate-limit-header tests; conftest disables the limiter globally for the suite).
 2. ~~Five ruff lint errors~~ **RESOLVED 2026-05-07.** `ruff check src/` and `ruff format --check src/` are now clean. CI's lint job for the SDK should pass.
 3. **Pages docs workflow** fails because GitHub Pages isn't enabled on the repo. Either enable it or remove the `docs.yml` workflow.
 4. **`tools/fetch_release_models.py`** uses `gh` CLI primary + GitHub API fallback. If GitHub Releases for the SDK package are populated correctly, releases work; verify on next tag-push.
