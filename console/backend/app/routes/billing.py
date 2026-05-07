@@ -336,11 +336,19 @@ async def create_checkout_session(
             detail=f"You are already on the {sub.tier} plan (or higher).",
         )
 
+    # Mitigation for shared-Stripe-account branding (the account display name
+    # is "Viola Voice Assistant" because NOVVIOLA shares this Stripe account).
+    # The header brand cannot be overridden per-session without Stripe Connect,
+    # but `subscription_data.description` (shown on receipts) and
+    # `custom_text.submit.message` (shown above the pay button) make it
+    # unambiguous that the user is subscribing to ViolaWake.
+    tier_label = body.tier.capitalize()
     subscription_data: dict = {
         "metadata": {
             "violawake_user_id": str(current_user.id),
             "tier": body.tier,
         },
+        "description": f"ViolaWake {tier_label} subscription (violawake.com)",
     }
 
     # Add free trial period if configured (VIOLAWAKE_TRIAL_DAYS, default 14, 0 to disable)
@@ -362,6 +370,15 @@ async def create_checkout_session(
             "tier": body.tier,
         },
         subscription_data=subscription_data,
+        custom_text={
+            "submit": {
+                "message": (
+                    "You're subscribing to ViolaWake (violawake.com). "
+                    "ViolaWake bills via the same Stripe account as Viola Voice Assistant; "
+                    "your charge will appear under that account name."
+                )
+            },
+        },
     )
 
     logger.info(

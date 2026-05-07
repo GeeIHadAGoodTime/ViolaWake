@@ -13,9 +13,17 @@ function formatLabel(value: string): string {
     .join(" ");
 }
 
-function formatDate(value: string): string {
+function formatDate(value: string | null | undefined): string {
+  // Guard against null / "" / 0. `new Date(null).getTime() === 0` (Jan 1 1970,
+  // which renders as "Dec 31, 1969" in negative-UTC timezones), so checking
+  // Number.isNaN alone leaks epoch-0 dates into the UI for free-tier users
+  // whose subscription has no current_period_end.
+  if (!value) {
+    return "Unavailable";
+  }
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const ts = date.getTime();
+  if (Number.isNaN(ts) || ts === 0) {
     return "Unavailable";
   }
 

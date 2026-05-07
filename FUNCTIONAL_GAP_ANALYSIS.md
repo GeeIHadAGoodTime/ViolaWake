@@ -5,6 +5,8 @@
 **Method:** Full source read of every system referenced in the audit checklist
 
 > **Updated 2026-04-05:** Many items resolved during security hardening sprint (20 fixes across 2 adversarial audit rounds). Resolved items marked with ~~strikethrough~~.
+>
+> **Updated 2026-05-07:** Live Playwright + source audit found 7 more items resolved in code that this doc had still listed OPEN. Resolved-since-2026-04-05 items: P0-2 (WASM built and demo serves models 200), P1-1 (Teams UI shipped), P1-2 (team-invite endpoint calls `send_team_invite`; raw-token leak gated behind a test-mode helper), P1-5 (`scripts/verify_models.py` exists), P1-6 (`scripts/generate_docs.py` exists), P1-8 (WASM demo no longer double-processes audio), P2-7 (forgot-password link + page exist).
 
 ---
 
@@ -26,24 +28,14 @@ ViolaWake is approximately **70% ready for production use as an open-source SDK*
 
 ---
 
-### P0-2: WASM package has never been built
+### ~~P0-2: WASM package has never been built~~ RESOLVED (2026-05-07)
 
-**What:** The `wasm/` directory has TypeScript source, a `package.json`, a `rollup.config.mjs`, and a demo `index.html`. But:
+**Status:** WASM bundle and demo are deployed at `https://violawake.com/wasm/demo/` and serve all three ONNX models with HTTP 200. Verified live: page loads with title "ViolaWake — Browser Demo", default model URL pre-filled (`../models`), assets resolve.
 
-1. `wasm/dist/` does not exist -- the build has never been run
-2. `wasm/node_modules/` does not exist -- `npm install` has never been run
-3. The demo HTML imports from `../dist/violawake.js` which does not exist
-4. The demo expects model files at `./models/` which do not exist
-5. No CI job builds or tests the WASM package
-
-**Why it matters:** Anyone cloning the repo and opening the demo will get a blank page with a console error. The WASM SDK is advertised in the README and represents the browser deployment story -- the most differentiating feature vs competitors. A non-functional demo is worse than no demo.
-
-**Effort:** M (run `npm install && npm run build`, create a `wasm/demo/models/` directory with instructions or symlinks, add a CI job for the WASM build)
-
-**Files:**
-- `wasm/package.json`
-- `wasm/demo/index.html`
-- `.github/workflows/ci.yml` (needs a WASM build job)
+**Files (now present in deployed `dist/`):**
+- `console/frontend/public/wasm/dist/violawake.js`, `violawake.cjs`, `index.d.ts`, `detector.d.ts`, `features.d.ts`
+- `console/frontend/public/wasm/models/temporal_cnn.onnx`, `melspectrogram.onnx`, `embedding_model.onnx`
+- `console/frontend/public/wasm/demo/index.html`
 
 ---
 
@@ -98,40 +90,15 @@ These are marked DEPRECATED and labeled "never released", so the impact is conta
 
 ## Important Gaps (P1) -- Hurt credibility or prevent real use
 
-### P1-1: Frontend has no Teams UI despite backend having full Teams API
+### ~~P1-1: Frontend has no Teams UI despite backend having full Teams API~~ RESOLVED (2026-05-07)
 
-**What:** The backend has a complete teams system: create team, invite member, join via token, remove member, change roles, share models, list team models (8 endpoints in `console/backend/app/routes/teams.py`). The frontend has zero team pages. The only mention of teams is on the Pricing page: `"Team management (coming soon)"`.
-
-**Why it matters:** The backend investment is wasted if users cannot access it. The pricing page advertises it as a Business-tier feature. Users who upgrade expecting team management will be disappointed.
-
-**Effort:** L (new pages: TeamList, TeamDetail, TeamInvite, TeamSettings; new API client functions; new routes in App.tsx)
-
-**Files:**
-- `console/frontend/src/App.tsx` (no team routes)
-- `console/frontend/src/api.ts` (no team API functions)
-- `console/frontend/src/pages/` (no team pages)
-- `console/backend/app/routes/teams.py` (backend is complete)
+**Status:** Teams UI is shipped end-to-end. Routes registered in `App.tsx:101-122` (`/teams`, `/teams/accept`, `/teams/:teamId`). Pages: `Teams.tsx` (list + create modal + empty state), `TeamDetail.tsx` (detail + invite + member management), `TeamAccept.tsx` (token-based acceptance). Nav link in `Layout.tsx:28`. All Teams API client functions wired in `api.ts:361-451` (`createTeam`, `listTeams`, `getTeam`, `inviteMember`, `joinTeam`, `acceptTeamInvite`, `removeMember`, `updateMemberRole`, `leaveTeam`, `shareModel`, `listTeamModels`, `deleteTeam`).
 
 ---
 
-### P1-2: Team invite does not send an email -- returns token in HTTP response
+### ~~P1-2: Team invite does not send an email -- returns token in HTTP response~~ RESOLVED (2026-05-07)
 
-**What:** In `console/backend/app/routes/teams.py`, the `invite_member` endpoint:
-```python
-# In production, this token would be emailed. We return it in the response
-# so callers can forward it (e.g., the email service layer).
-return MessageResponse(message=f"Invite token issued: {invite_token}")
-```
-
-The `EmailService` has methods for verification, password reset, welcome, training complete, and quota warning -- but NOT for team invites. The invite token is returned raw in the JSON response body.
-
-**Why it matters:** Team invites only work if someone manually copies the token from the API response and sends it to the invitee. This is not a viable user flow.
-
-**Effort:** S (add `send_team_invite()` to `EmailService`, call it from the invite endpoint)
-
-**Files:**
-- `console/backend/app/routes/teams.py` (line 186)
-- `console/backend/app/email_service.py` (missing `send_team_invite`)
+**Status:** `EmailService.send_team_invite()` is implemented (`email_service.py:100-117`) and called from the invite endpoint (`routes/teams.py:259`). In production the response message is just "Invitation sent" via `_test_invite_message()` which only includes the raw token under the test-mode helper path. Note: actual email delivery still requires `VIOLAWAKE_RESEND_API_KEY` to be set (separate operational gap, see P1-7).
 
 ---
 
@@ -168,51 +135,15 @@ These map to `settings.stripe_price_developer` and `settings.stripe_price_busine
 
 ---
 
-### P1-5: No `verify_models.py` script exists
+### ~~P1-5: No `verify_models.py` script exists~~ RESOLVED (2026-05-07)
 
-**What:** The `model-verify.yml` CI workflow runs:
-```yaml
-- name: Verify all models
-  run: python scripts/verify_models.py --ci
-```
-
-But `scripts/verify_models.py` does not exist in the `scripts/` directory. The directory listing shows:
-```
-audit_deps.py, benchmark.py, benchmark_regression_check.py, build_clean_eval_set.py,
-far_frr_analysis.py, fetch_release_models.py, live_head_to_head.py, merge_worktrees.py,
-quality_gate.py, setup_github_repo.sh, update_model_registry.py
-```
-
-No `verify_models.py`.
-
-**Why it matters:** The model-verify CI workflow will fail on every run with `FileNotFoundError`.
-
-**Effort:** S (create the script; it should iterate MODEL_REGISTRY, download each, verify SHA-256, and report)
-
-**Files:**
-- `.github/workflows/model-verify.yml` (line 79)
-- `scripts/` (missing `verify_models.py`)
+**Status:** `scripts/verify_models.py` is present.
 
 ---
 
-### P1-6: No `generate_docs.py` script exists
+### ~~P1-6: No `generate_docs.py` script exists~~ RESOLVED (2026-05-07)
 
-**What:** The CI workflow `ci.yml` (console-backend job, line 135) and `docs.yml` (line 46) both run:
-```yaml
-- name: Verify API docs generation
-  run: python scripts/generate_docs.py
-```
-
-This script does not exist in the `scripts/` directory.
-
-**Why it matters:** The console-backend CI job and the docs deployment workflow both fail.
-
-**Effort:** S (create the script; likely just calls `pdoc` on the SDK source)
-
-**Files:**
-- `.github/workflows/ci.yml` (line 135)
-- `.github/workflows/docs.yml` (line 46)
-- `scripts/` (missing `generate_docs.py`)
+**Status:** `scripts/generate_docs.py` is present.
 
 ---
 
@@ -242,22 +173,9 @@ The registration flow still returns a JWT token, so users can log in. But they c
 
 ---
 
-### P1-8: WASM demo double-processes audio frames
+### ~~P1-8: WASM demo double-processes audio frames~~ RESOLVED (2026-05-07)
 
-**What:** In `wasm/demo/index.html`, the audio processing loop calls both `getScore()` and `detect()` on the same frame:
-```javascript
-const score = await detector.getScore(frame);
-const detected = await detector.detect(frame);
-```
-
-Both methods internally call `backbone.pushAudio()`, which advances the streaming state. This means each 20ms frame is fed through the pipeline twice, producing incorrect scores and potentially doubling the internal embedding buffer position.
-
-**Why it matters:** The demo -- the primary showcase for browser detection -- will produce wrong scores and unreliable detection.
-
-**Effort:** S (call `detect()` only, and read `detector.lastScore` for the display, or restructure to call `getScore()` and apply the decision gate manually)
-
-**Files:**
-- `wasm/demo/index.html` (lines 344-345)
+**Status:** `console/frontend/public/wasm/demo/index.html:349-352` now calls `detector.detect(frame)` once and reads `detector.lastScore` for display, with an explicit comment: `// detect() already advances the streaming detector state. Read lastScore instead of calling getScore(frame) for the same audio.`
 
 ---
 
@@ -338,16 +256,9 @@ Both methods internally call `backbone.pushAudio()`, which advances the streamin
 
 ---
 
-### P2-7: Console has no forgot-password link on the login page
+### ~~P2-7: Console has no forgot-password link on the login page~~ RESOLVED (2026-05-07)
 
-**What:** The backend has a full forgot-password flow (`/api/auth/forgot-password`, `/api/auth/reset-password`). The frontend has a `ResetPassword.tsx` page. But there is no link from the Login page to trigger the forgot-password flow -- users must navigate to `/reset-password` manually. Also there is no `ForgotPassword.tsx` page that asks for the email address; the existing `ResetPassword.tsx` only handles the token-based reset step.
-
-**Effort:** S (add a ForgotPassword page and link it from Login)
-
-**Files:**
-- `console/frontend/src/pages/Login.tsx` (missing link)
-- `console/frontend/src/pages/` (missing ForgotPassword page)
-- `console/frontend/src/App.tsx` (missing route)
+**Status:** `Login.tsx:128-131` links to `/forgot-password`. `ForgotPassword.tsx` is a real page that posts to `/api/auth/forgot-password` and shows a security-aware "If an account exists for that email, a reset link has been sent" response. Route registered in `App.tsx:49`.
 
 ---
 
@@ -388,24 +299,24 @@ Both methods internally call `backbone.pushAudio()`, which advances the streamin
 | ID | Gap | Severity | Effort | Blocks Users? | Status |
 |----|-----|----------|--------|---------------|--------|
 | P0-1 | ~~Alembic migration missing teams tables~~ | Critical | S | ~~Yes~~ | **RESOLVED** |
-| P0-2 | WASM package never built | Critical | M | Yes -- demo is broken | OPEN |
+| P0-2 | ~~WASM package never built~~ | Critical | M | ~~Yes~~ | **RESOLVED** (2026-05-07) |
 | P0-3 | ~~Release model pipeline is TODO stub~~ | Critical | M | Yes -- no new model releases | RESOLVED |
 | P0-4 | ~~Placeholder SHA-256 hashes in registry~~ | Critical | S | No -- deprecated models, but CI noise | RESOLVED |
-| P1-1 | No Teams frontend UI | Important | L | Partially -- backend works, no UI | OPEN |
-| P1-2 | Team invite returns token, no email | Important | S | Yes -- unusable invite flow | OPEN |
+| P1-1 | ~~No Teams frontend UI~~ | Important | L | ~~Partially~~ | **RESOLVED** (2026-05-07) |
+| P1-2 | ~~Team invite returns token, no email~~ | Important | S | Email path wired; delivery requires Resend (P1-7) | **RESOLVED** (2026-05-07) |
 | P1-3 | ~~Docker serves Vite dev server~~ | Important | S | ~~No~~ | **RESOLVED** |
-| P1-4 | Stripe price IDs need manual setup | Important | S | Yes -- billing always 503 | OPEN |
-| P1-5 | Missing verify_models.py script | Important | S | No -- CI fails silently | OPEN |
-| P1-6 | Missing generate_docs.py script | Important | S | No -- CI fails, no docs deployed | OPEN |
-| P1-7 | Email requires Resend with no dev fallback | Important | S | Yes -- new users locked out | OPEN |
-| P1-8 | WASM demo double-processes frames | Important | S | No -- wrong scores in demo | OPEN |
+| P1-4 | Stripe price IDs need manual setup | Important | S | No -- LIVE prices configured 2026-05-07 | RESOLVED |
+| P1-5 | ~~Missing verify_models.py script~~ | Important | S | ~~No~~ | **RESOLVED** (2026-05-07) |
+| P1-6 | ~~Missing generate_docs.py script~~ | Important | S | ~~No~~ | **RESOLVED** (2026-05-07) |
+| P1-7 | Email requires Resend with no dev fallback | Important | S | Yes -- production deploy still has Resend unset | OPEN |
+| P1-8 | ~~WASM demo double-processes frames~~ | Important | S | ~~No~~ | **RESOLVED** (2026-05-07) |
 | P2-1 | No WASM CI job | Nice-to-have | S | No | OPEN |
 | P2-2 | mypy non-blocking | Nice-to-have | S | No | OPEN |
 | P2-3 | 50% coverage floor | Nice-to-have | M | No | OPEN |
 | P2-4 | No OAuth / social login | Nice-to-have | L | No | OPEN |
 | P2-5 | No model comparison UI | Nice-to-have | M | No | OPEN |
 | P2-6 | No GPU training lane | Nice-to-have | L | No | OPEN |
-| P2-7 | No forgot-password link on login | Nice-to-have | S | No | OPEN |
+| P2-7 | ~~No forgot-password link on login~~ | Nice-to-have | S | ~~No~~ | **RESOLVED** (2026-05-07) |
 | P2-8 | 130+ test MP3s in repo root | Nice-to-have | S | No | OPEN |
 | P2-9 | ~~Deprecated docker-compose version key~~ | Nice-to-have | S | ~~No~~ | **RESOLVED** |
 | P2-10 | No rate limit documentation | Nice-to-have | S | No | OPEN |

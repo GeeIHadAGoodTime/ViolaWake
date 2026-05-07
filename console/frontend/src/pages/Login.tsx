@@ -63,8 +63,8 @@ export default function LoginPage() {
             </div>
           )}
           {registrationPending && !sessionExpired && !error && (
-            <div className="auth-error">
-              Check your email. If an account exists for that address, we&apos;ve sent next steps.
+            <div className="auth-status auth-status-success" role="status">
+              Account created. Sign in below to continue.
             </div>
           )}
           {error && (
