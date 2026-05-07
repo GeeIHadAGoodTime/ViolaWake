@@ -37,7 +37,7 @@ def evaluate_onnx_model(
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="violawake-eval",
-        description="Evaluate a ViolaWake ONNX model using Cohen's d plus FAR/FRR.",
+        description="Evaluate a ViolaWake ONNX model using d' plus FAR/FRR.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -45,7 +45,7 @@ def main() -> None:
         "--model",
         required=True,
         metavar="PATH",
-        help="Path to the ONNX model file (for example: viola_mlp_oww.onnx)",
+        help="Path to the ONNX model file (for example: temporal_cnn.onnx)",
     )
     parser.add_argument(
         "--test-dir",
@@ -126,7 +126,7 @@ def main() -> None:
     n_neg = results["n_negatives"]
 
     print(f"Architecture:         {arch} (auto-detected)")
-    print(f"Cohen's d:            {d_prime:.2f} (synthetic negatives may inflate this metric)")
+    print(f"d' (d-prime):         {d_prime:.2f} (synthetic negatives may inflate this metric)")
     print(f"False Accept Rate:    {far_per_hour:.2f}/hr (at threshold={args.threshold:.2f})")
     print(f"False Reject Rate:    {frr:.1f}% (at threshold={args.threshold:.2f})")
     print(f"ROC AUC:              {roc_auc:.3f}")
@@ -167,10 +167,10 @@ def main() -> None:
     elif d_prime >= 5.0:
         grade = "FAIR (may need more training data, augmentation, or better negatives)"
     else:
-        grade = "POOR (Cohen's d < 5.0; collect more positive samples)"
+        grade = "POOR (d' < 5.0; collect more positive samples)"
 
     print(f"Grade: {grade}")
-    print("Metric note: this score is Cohen's d over the supplied negatives.")
+    print("Metric note: this score is d' over the supplied negatives.")
     print("Synthetic-only negatives can materially inflate it versus speech/background corpora.")
 
     if args.report:

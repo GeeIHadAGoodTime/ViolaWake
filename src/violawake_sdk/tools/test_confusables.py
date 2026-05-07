@@ -3,7 +3,7 @@
 Usage::
 
     python -m violawake_sdk.tools.test_confusables \
-        --model models/viola_mlp_oww.onnx \
+        --model models/temporal_cnn.onnx \
         --wake-word viola \
         --threshold 0.80
 """

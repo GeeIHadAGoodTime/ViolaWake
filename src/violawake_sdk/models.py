@@ -53,7 +53,6 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         description="Temporal CNN on OWW embeddings — production default, best live recall + lowest FP",
         version="0.1.0",
     ),
-    # viola_mlp_oww removed — was never uploaded to GitHub Releases.
     "oww_backbone": ModelSpec(
         name="oww_backbone",
         # Not directly downloadable — bundled inside the openwakeword package.
@@ -64,7 +63,6 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
         description="OpenWakeWord embedding backbone — installed with openwakeword package, not separately downloadable",
         version="0.6.0",
     ),
-    # viola_cnn_v4 removed — was never uploaded to GitHub Releases.
     # Kokoro TTS models hosted upstream at thewh1teagle/kokoro-onnx (Apache 2.0).
     # These are large (325MB + 28MB) so they're not bundled in the PyPI package —
     # they auto-download on first TTSEngine use.

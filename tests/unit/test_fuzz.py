@@ -58,7 +58,7 @@ def _create_detector(score: float = 0.50) -> WakeDetector:
         )),
     ):
         return WakeDetector(
-            model="viola_mlp_oww",
+            model="temporal_cnn",
             threshold=0.80,
             cooldown_s=0.0,
         )
@@ -374,7 +374,7 @@ class TestFuzzConstructor:
             )),
         ):
             detector = WakeDetector(
-                model="viola_mlp_oww", threshold=threshold,
+                model="temporal_cnn", threshold=threshold,
                 cooldown_s=0.0,
             )
             assert detector.threshold == threshold
@@ -401,7 +401,7 @@ class TestFuzzConstructor:
         ):
             with pytest.raises(ValueError, match="cooldown"):
                 WakeDetector(
-                    model="viola_mlp_oww", threshold=0.80,
+                    model="temporal_cnn", threshold=0.80,
                     cooldown_s=cooldown,
                 )
 
@@ -436,6 +436,6 @@ def _create_detector_with_threshold(threshold: float) -> WakeDetector:
         )),
     ):
         return WakeDetector(
-            model="viola_mlp_oww", threshold=threshold,
+            model="temporal_cnn", threshold=threshold,
             cooldown_s=0.0,
         )

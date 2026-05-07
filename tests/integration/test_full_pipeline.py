@@ -79,7 +79,7 @@ def _create_detector_with_mocks(
         )),
     ):
         detector = WakeDetector(
-            model="viola_mlp_oww",
+            model="temporal_cnn",
             threshold=threshold,
             cooldown_s=cooldown_s,
         )
