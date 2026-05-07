@@ -250,7 +250,7 @@ export default function PricingPage() {
             {tier.popular && (
               <div className="pricing-popular-badge">POPULAR</div>
             )}
-            <h3 className="pricing-card-name">{tier.name}</h3>
+            <h2 className="pricing-card-name">{tier.name}</h2>
             <div className="pricing-card-price">
               <span className="pricing-amount">{tier.price}</span>
               {tier.period && (

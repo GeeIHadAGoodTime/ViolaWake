@@ -6,7 +6,9 @@
   --text-primary: #e8e8e8;
   --text-secondary: #a0a0b0;
   --accent: #6c5ce7;
-  --accent-hover: #7c6cf7;
+  --accent-hover: #5b4bd8;
+  --link-accent: #a29bfe;
+  --link-accent-hover: #c4bbff;
   --success: #00cec9;
   --warning: #fdcb6e;
   --error: #e17055;
@@ -41,13 +43,13 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--link-accent);
   text-decoration: none;
   transition: color var(--transition);
 }
 
 a:hover {
-  color: var(--accent-hover);
+  color: var(--link-accent-hover);
 }
 
 /* ===== Layout ===== */
@@ -315,8 +317,10 @@ a:hover {
 }
 
 .auth-link {
-  color: var(--accent);
+  color: var(--link-accent);
   font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .auth-status {
@@ -1304,11 +1308,11 @@ a:hover {
 }
 
 .comparison-table th.comparison-highlight {
-  color: var(--accent);
+  color: var(--link-accent);
 }
 
 .comparison-table td.comparison-highlight {
-  color: var(--accent);
+  color: var(--link-accent);
   font-weight: 600;
 }
 
@@ -1634,7 +1638,9 @@ a:hover {
 
 .pricing-feature-excluded {
   color: var(--text-secondary);
-  opacity: 0.5;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(160, 160, 176, 0.7);
 }
 
 .pricing-feature-icon {
@@ -1800,12 +1806,13 @@ a:hover {
 }
 
 .legal-section a {
-  color: var(--accent);
+  color: var(--link-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .legal-section a:hover {
-  color: var(--accent-hover);
-  text-decoration: underline;
+  color: var(--link-accent-hover);
 }
 
 .legal-footer-nav {
@@ -1817,9 +1824,11 @@ a:hover {
 }
 
 .legal-footer-nav a {
-  color: var(--accent);
+  color: var(--link-accent);
   font-weight: 600;
   font-size: 0.95rem;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 /* ===== Landing / Pricing Responsive ===== */
