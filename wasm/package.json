@@ -5,12 +5,12 @@
   "type": "module",
   "main": "./dist/violawake.cjs",
   "module": "./dist/violawake.js",
-  "types": "./dist/violawake.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": "./dist/violawake.js",
       "require": "./dist/violawake.cjs",
-      "types": "./dist/violawake.d.ts"
+      "types": "./dist/index.d.ts"
     }
   },
   "files": [
@@ -19,11 +19,11 @@
   "scripts": {
     "build": "rollup -c rollup.config.mjs",
     "dev": "rollup -c rollup.config.mjs --watch",
-    "demo": "npx serve demo -p 5000",
+    "demo": "npx --yes serve . -p 5000",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "onnxruntime-web": "^1.20.1"
+    "onnxruntime-web": "^1.25.1"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.2.3",

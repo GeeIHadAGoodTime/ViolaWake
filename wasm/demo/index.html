@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ViolaWake — Browser Demo</title>
+  <link rel="icon" href="data:," />
   <style>
     :root {
       --bg: #0f1117;
@@ -223,14 +224,18 @@
     &mdash; Apache 2.0
   </footer>
 
-  <!--
-    Load onnxruntime-web from CDN so we don't need to bundle its WASM assets.
-    The violawake module is loaded as an ES module from the built dist/.
-  -->
-  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/ort.all.min.mjs"
+      }
+    }
+  </script>
   <script type="module">
+    // Load ONNX Runtime Web from CDN and ViolaWake from the pre-built dist bundle.
+    import * as ort from "onnxruntime-web";
     // When loaded via npm build, import from the dist bundle.
-    // When running the demo directly (npx serve), we use the pre-built dist.
+    // When running the demo directly (npm run demo), we use the pre-built dist.
     // Adjust the path to point at your build output.
     import { WakeDetector } from "../dist/violawake.js";
 
@@ -290,8 +295,8 @@
       const cooldownS = parseFloat($("cooldownSlider").value);
 
       try {
-        // Configure ort WASM paths (CDN loaded ort sets this globally)
-        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
+        // Configure ort WASM paths for the CDN-hosted runtime.
+        ort.env.wasm.wasmPaths = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.25.1/dist/";
 
         detector = new WakeDetector({
           threshold,
@@ -342,6 +347,8 @@
 
             try {
               const detected = await detector.detect(frame);
+              // detect() already advances the streaming detector state.
+              // Read lastScore instead of calling getScore(frame) for the same audio.
               const score = detector.lastScore;
 
               // Update score bar

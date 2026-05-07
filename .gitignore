@@ -51,6 +51,11 @@ dmypy.json
 *.whl
 CHANGELOG.md.bak
 
+# WASM SDK
+wasm/node_modules/
+!wasm/dist/
+!wasm/dist/**
+
 # Generated API docs
 docs/api/html/
 

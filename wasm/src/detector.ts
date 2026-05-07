@@ -137,21 +137,16 @@ export class WakeDetector {
     );
     this.classifierInputName = this.classifierSession.inputNames[0];
 
-    // Detect temporal vs MLP from input shape
-    const inputMeta = this.classifierSession.inputNames[0];
-    // onnxruntime-web exposes inputMetadata via classifierSession.inputMetadata
-    // We detect shape from a dry run is unnecessary — use the declared shape.
-    // The temporal_cnn model has a 3-D input: (batch, seq_len, embedding_dim).
-    // We probe by inspecting the model metadata if available, otherwise default.
-    try {
-      const meta = (this.classifierSession as any).inputMetadata ?? {};
-      const shape = meta[inputMeta]?.dimensions ?? null;
-      if (shape && shape.length === 3) {
-        this.isTemporal = true;
-        this.temporalSeqLen = typeof shape[1] === "number" && shape[1] > 0 ? shape[1] : 9;
-      }
-    } catch {
-      // Fallback: assume temporal (temporal_cnn is the production model)
+    // Detect temporal vs MLP from input shape. onnxruntime-web has exposed
+    // inputMetadata as both an object keyed by input name and an array of
+    // { name, shape } entries across releases, so support both forms.
+    const shape = this._getClassifierInputShape(this.classifierInputName);
+    if (shape?.length === 3) {
+      this.isTemporal = true;
+      this.temporalSeqLen = typeof shape[1] === "number" && shape[1] > 0 ? shape[1] : 9;
+    } else if (shape?.length === 2) {
+      this.isTemporal = false;
+    } else if (this._classifierLooksTemporal()) {
       this.isTemporal = true;
       this.temporalSeqLen = 9;
     }
@@ -291,6 +286,23 @@ export class WakeDetector {
     const results = await this.classifierSession.run(feeds);
     const output = results[this.classifierSession.outputNames[0]];
     return (output.data as Float32Array)[0];
+  }
+
+  private _getClassifierInputShape(inputName: string): unknown[] | null {
+    const metadata = (this.classifierSession as any)?.inputMetadata;
+    if (!metadata) {
+      return null;
+    }
+
+    const inputMeta = Array.isArray(metadata)
+      ? metadata.find((entry: any) => entry?.name === inputName) ?? metadata[0]
+      : metadata[inputName];
+    const shape = inputMeta?.dimensions ?? inputMeta?.shape;
+    return Array.isArray(shape) ? shape : null;
+  }
+
+  private _classifierLooksTemporal(): boolean {
+    return /temporal|convgru|gru/i.test(this.classifierModelUrl);
   }
 
   private _computeRms(audioBuffer: Float32Array): number {
