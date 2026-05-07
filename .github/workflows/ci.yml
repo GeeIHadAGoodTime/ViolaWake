@@ -127,9 +127,10 @@ jobs:
           pip install onnxruntime numpy scipy
           pip install -r console/backend/requirements.txt
           pip install -e ".[audio,training,docs]"
+          pip install pytest pytest-asyncio httpx pytest-timeout
 
       - name: Run console backend tests
-        run: cd console && python -m pytest tests/ -q --ignore=tests/e2e
+        run: cd console && python -m pytest tests/ -q --ignore=tests/e2e --timeout=60 --no-cov
 
       - name: Verify API docs generation
         run: python scripts/generate_docs.py

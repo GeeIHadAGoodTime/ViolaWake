@@ -125,3 +125,6 @@ tests/live/.smoke_last_output.txt
 # WASM browser SDK shipped to violawake.com via Cloudflare Pages
 !console/frontend/public/wasm/dist/
 !console/frontend/public/wasm/dist/**
+!console/frontend/public/wasm/models/
+!console/frontend/public/wasm/models/**
+.wrangler/

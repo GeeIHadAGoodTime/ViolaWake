@@ -117,11 +117,32 @@ def resolve_openwakeword_backbone_paths(backend_name: str = "onnx") -> OpenWakeW
 
     missing = [path.name for path in (melspectrogram, embedding_model) if not path.exists()]
     if missing:
-        missing_str = ", ".join(missing)
-        raise ModelNotFoundError(
-            "OpenWakeWord backbone files are missing from the installed package: "
-            f"{missing_str}. Reinstall or upgrade openwakeword."
-        )
+        # Recent openwakeword wheels do not bundle the ONNX backbone files; instead,
+        # the user is expected to call openwakeword.utils.download_models() once.
+        # We do that automatically here so `pip install violawake[oww]` works
+        # without surprises. Only triggered on the missing path; subsequent calls
+        # short-circuit because the files exist.
+        try:
+            from openwakeword.utils import download_models  # type: ignore[import-not-found]
+
+            logger.info(
+                "OpenWakeWord backbone files missing (%s); fetching via openwakeword.utils.download_models()",
+                ", ".join(missing),
+            )
+            download_models()
+        except Exception as exc:  # pragma: no cover - best-effort
+            logger.warning("Auto-download of OpenWakeWord backbone failed: %s", exc)
+
+        # Re-check after download attempt
+        missing = [path.name for path in (melspectrogram, embedding_model) if not path.exists()]
+        if missing:
+            missing_str = ", ".join(missing)
+            raise ModelNotFoundError(
+                "OpenWakeWord backbone files are missing from the installed package: "
+                f"{missing_str}. Tried to auto-download via openwakeword.utils.download_models() "
+                "but files are still missing. Try: "
+                "`python -c \"from openwakeword.utils import download_models; download_models()\"`."
+            )
 
     return OpenWakeWordBackbonePaths(
         melspectrogram=melspectrogram,

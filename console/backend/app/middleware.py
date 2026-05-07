@@ -280,12 +280,34 @@ async def _send_413(send: Any) -> None:
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to every response."""
 
+    # Conservative CSP for an API + console SaaS:
+    # - default-src 'none' to deny by default
+    # - frame-ancestors 'none' to deny iframe embedding (defence-in-depth alongside X-Frame-Options)
+    # - connect-src to api.violawake.com + Stripe (checkout/portal redirects originate browser-side)
+    # - img-src/style-src/script-src 'self' for the React bundle; 'unsafe-inline' for Tailwind+Vite hash css
+    _CSP = (
+        "default-src 'none'; "
+        "script-src 'self' https://js.stripe.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https://*.stripe.com; "
+        "font-src 'self' data:; "
+        "connect-src 'self' https://api.violawake.com https://api.stripe.com; "
+        "frame-src https://checkout.stripe.com https://js.stripe.com; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self' https://checkout.stripe.com"
+    )
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # CSP is a backend concern even for a frontend SPA: the API endpoints
+        # also serve CORS preflight + occasional HTML (errors). Frontend gets
+        # CSP via Cloudflare Pages headers separately.
+        response.headers.setdefault("Content-Security-Policy", self._CSP)
         if settings.is_production:
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
         return response

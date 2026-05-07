@@ -55,12 +55,15 @@ MODEL_REGISTRY: dict[str, ModelSpec] = {
     ),
     "oww_backbone": ModelSpec(
         name="oww_backbone",
-        # Not directly downloadable — bundled inside the openwakeword package.
-        # URL is a reference only; download is blocked by _PACKAGE_MANAGED_MODELS.
+        # Not directly downloadable — fetched at runtime by openwakeword.utils.download_models()
+        # on first WakeDetector use. URL is a reference only; download is blocked by
+        # _PACKAGE_MANAGED_MODELS. The pinned sha256 is the combined SHA-256 of
+        # (mel_sha256 + emb_sha256) — see oww_backbone._verify_backbone_integrity.
+        # Updated 2026-05-07 to track current upstream openwakeword release.
         url="https://github.com/dscripka/openWakeWord/tree/main/openwakeword/resources",
-        sha256="70d164290c1d095d1d4ee149bc5e00543250a7316b59f31d056cff7bd3075c1f",
+        sha256="e8444299a314fbb2971d33b39ff6fce4838be0f4a8d98aa4cf87537ee1350454",
         size_bytes=1_326_578,
-        description="OpenWakeWord embedding backbone — installed with openwakeword package, not separately downloadable",
+        description="OpenWakeWord embedding backbone — installed with openwakeword package, downloaded at runtime",
         version="0.6.0",
     ),
     # Kokoro TTS models hosted upstream at thewh1teagle/kokoro-onnx (Apache 2.0).

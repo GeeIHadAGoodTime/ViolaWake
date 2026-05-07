@@ -195,7 +195,10 @@ for frame in mic_stream():
           <p className="proof-text">
             Built by the makers of Viola, an AI voice assistant. Powered by the
             same wake word technology running 24/7 in production. Metrics from
-            our TemporalCNN(96,9) production model evaluated on 25,409 parameters.
+            our TemporalCNN(96,9) production reference model evaluated on 25,409
+            parameters. <em>Your custom model&apos;s accuracy varies with sample
+            quantity and quality;</em> the figures above are the upper bound we&apos;ve
+            measured on a fully-tuned production model.
           </p>
         </div>
       </section>
