@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-05-07
+
+### SDK
+- `violawake_sdk.__version__` now reads from `importlib.metadata.version("violawake")` instead of a hardcoded constant. v0.2.4 was published to PyPI as `0.2.4` but reported `__version__ == "0.2.2"` because the constant had not been bumped — this kind of drift is now impossible.
+- Quality gate (`tools.train`) — silence subgrade now uses a near-silence (1e-4 RMS gaussian) fallback when pure-silence audio is rejected by the OWW backbone. Previously, `silence_window_count == 0` left `silence_max_score` defaulted to 0.0, which silently passed the silence subgrade for Grade A/B even though no silence test had run. Models now actually have to be checked against a low-energy input. If both pure silence and near-silence produce zero embeddings, the gate forces Grade F as a safety floor. Adds `silence_source` field to the model `config_json` (`"silence" | "near_silence" | "none"`) so downstream tools can audit which path ran.
+
+### Console (SaaS)
+- Per-event progress dispatch in the training job queue (`console/backend/app/job_queue.py`) is now tolerant of transient stalls: a single progress write that takes >10s (e.g. during backend restart warmup) used to abort the entire training job with `error_reason=timeout`. Bumped to 60s and TimeoutError is now caught — a stalled progress event drops the event but keeps the job running. Job 51 on 2026-05-07 was killed this way after a backend recreate; future restarts no longer have this blast radius.
+
+### CI
+- `release.yml` (introduced in v0.2.4 fix) now actually verified end-to-end by this release (v0.2.4 had to be manually uploaded via twine because the workflow was untested).
+
 ## [0.2.4] - 2026-05-07
 
 ### SDK

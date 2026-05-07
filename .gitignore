@@ -99,6 +99,12 @@ benchmark-results/
 logs/
 .codex_log.txt
 
+# Codex investigation/dispatch logs (session artifacts, not source)
+.codex_*.txt
+.codex_inv*.txt
+.codex_log_*.txt
+.codex_prompt_*.txt
+
 # Ruff
 .ruff_cache/
 

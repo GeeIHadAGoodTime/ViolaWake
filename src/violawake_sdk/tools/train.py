@@ -1776,15 +1776,43 @@ def _run_quality_gate(
         silence_path = quality_dir / "qc_silence.wav"
         _save_wav(silence_audio, silence_path)
 
+        # Fallback near-silence: very-low-amplitude white noise. The OWW
+        # backbone has an energy threshold and rejects pure silence, which
+        # leaves the silence subgrade untested when the input is exactly
+        # zero. Near-silence (RMS ≈ 1e-4, ~80 dB below speech) is non-zero
+        # so OWW produces embeddings and we still verify the model does not
+        # fire on pseudo-silent input.
+        np_rng = np.random.default_rng(seed=42)
+        near_silence_audio = np_rng.standard_normal(16000 * 10).astype(np.float32) * 1e-4
+        near_silence_path = quality_dir / "qc_near_silence.wav"
+        _save_wav(near_silence_audio, near_silence_path)
+
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_scores = _score_files([silence_path], "qc_silence")
+        near_silence_scores = _score_files([near_silence_path], "qc_near_silence")
 
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
-    # If silence produced no embeddings, the OWW backbone (correctly) rejected
-    # the zero-energy audio — the model can never trigger on silence. Score = 0.
-    silence_max_score = float(silence_scores.max()) if len(silence_scores) else 0.0
+    # If pure silence produced no embeddings (OWW backbone rejected zero-energy
+    # audio), fall back to the near-silence score so the silence subgrade is
+    # actually exercised. Pre-v0.2.5 behavior assumed score=0 when silence
+    # was untested, which let overfit models pass Grade A/B without ever
+    # being checked against a low-energy input. If both pure silence AND
+    # near-silence produce zero embeddings, force Grade F as a safety floor.
+    if len(silence_scores) > 0:
+        silence_max_score = float(silence_scores.max())
+        silence_source = "silence"
+        silence_window_count = int(len(silence_scores))
+    elif len(near_silence_scores) > 0:
+        silence_max_score = float(near_silence_scores.max())
+        silence_source = "near_silence"
+        silence_window_count = int(len(near_silence_scores))
+    else:
+        # No silence-class input could be scored — conservative: force Grade F.
+        silence_max_score = 1.0
+        silence_source = "none"
+        silence_window_count = 0
     grade = _grade_quality(speech_fp_rate, confusable_fp_rate, silence_max_score)
 
     metrics: dict[str, Any] = {
@@ -1795,7 +1823,8 @@ def _run_quality_gate(
         "confusable_fp_rate": confusable_fp_rate,
         "confusable_sample_count": int(len(confusable_scores)),
         "silence_max_score": silence_max_score,
-        "silence_window_count": int(len(silence_scores)),
+        "silence_window_count": silence_window_count,
+        "silence_source": silence_source,
     }
 
     print(f"Model Quality Grade: {grade} ({_grade_label(grade)})")

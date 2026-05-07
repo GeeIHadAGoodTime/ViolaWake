@@ -30,7 +30,20 @@ See README.md or https://github.com/GeeIHadAGoodTime/ViolaWake for full document
 
 from __future__ import annotations
 
-__version__ = "0.2.2"
+# Read the installed distribution version so __version__ never drifts from
+# pyproject.toml/PyPI. The fallback covers running from a source checkout
+# without an editable install (rare in user code, common in CI before
+# `pip install -e .`).
+try:
+    from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
+    try:
+        __version__ = _pkg_version("violawake")
+    except PackageNotFoundError:
+        __version__ = "0.0.0+source"
+except ImportError:  # pragma: no cover - Python < 3.8 (unsupported)
+    __version__ = "0.0.0+source"
+
 __author__ = "ViolaWake Contributors"
 __license__ = "Apache-2.0"
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import logging
 import shutil
@@ -714,7 +715,22 @@ class JobQueue:
                     self._handle_progress_event(job_id, job.epochs, event),
                     loop,
                 )
-                future.result(timeout=10)
+                # 60s tolerates transient DB / SSE stalls that previously
+                # killed otherwise-healthy training jobs (Job 51 on
+                # 2026-05-07 went straight to status=failed/timeout after a
+                # backend restart because a single progress write stalled
+                # >10s while the new container warmed up). The training
+                # itself is still bounded by `settings.training_timeout`
+                # (default 900s) below, so this only affects per-event
+                # back-pressure, not total job duration.
+                try:
+                    future.result(timeout=60)
+                except concurrent.futures.TimeoutError:
+                    logger.warning(
+                        "Progress event for job %s took >60s; dropping event but keeping job alive",
+                        job_id,
+                    )
+                    future.cancel()
 
             artifact = await asyncio.to_thread(
                 run_training_job_sync,

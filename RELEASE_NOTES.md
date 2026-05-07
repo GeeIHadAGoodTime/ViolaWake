@@ -2,6 +2,18 @@
 
 Update this file before each release. These notes are used as the GitHub Release body in `.github/workflows/release.yml`.
 
+## v0.2.5 — Quality Gate Hardening + Self-Reporting Version
+
+### Highlights
+
+- **Quality gate silence subgrade now actually runs.** Pre-v0.2.5, when the OpenWakeWord backbone correctly rejected zero-energy audio, the silence test counted zero windows and `silence_max_score` defaulted to 0.0 — which silently passed the silence threshold for Grade A and Grade B. Models that overfit on thin TTS positive sets could ship without ever being checked against a low-energy input. v0.2.5 falls back to near-silence (1e-4 RMS gaussian noise) so the OWW backbone still produces embeddings and the silence subgrade actually exercises the model. If even near-silence produces zero embeddings, the gate forces Grade F.
+- **`__version__` is now derived from package metadata.** v0.2.4 shipped to PyPI as `0.2.4` but `violawake_sdk.__version__` still reported `"0.2.2"` because the constant was hardcoded. Now it reads from `importlib.metadata.version("violawake")` and cannot drift.
+- **Training job queue tolerates transient stalls.** A single slow progress write (e.g. during a backend restart warmup) used to kill the whole training job with `error_reason=timeout`. Per-event timeout bumped from 10s to 60s, and timeouts are now caught — the stalled event is dropped, the job keeps running.
+
+### Breaking Changes
+
+- None.
+
 ## v0.2.4 — ONNX Export Compatibility With torch 2.10+
 
 ### Highlights
