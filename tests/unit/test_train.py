@@ -51,6 +51,59 @@ class TestTrainHelpers:
         assert saved["wake_word"] == "viola"
         assert saved["auto_eval"]["status"] == "ok"
 
+    def test_edge_tts_synthesize_decodes_with_soundfile(self, tmp_path: Path) -> None:
+        import numpy as np
+
+        class FakeCommunicate:
+            def __init__(self, text: str, voice: str) -> None:
+                self.text = text
+                self.voice = voice
+
+            async def stream(self):
+                yield {"type": "audio", "data": b"fake mp3 bytes" * 20}
+
+        edge_tts_module = ModuleType("edge_tts")
+        edge_tts_module.Communicate = FakeCommunicate
+        soundfile_module = ModuleType("soundfile")
+        soundfile_module.read = MagicMock(
+            return_value=(np.zeros(16000, dtype=np.float32), 16000)
+        )
+
+        out_path = tmp_path / "tts.wav"
+        with patch.dict(
+            sys.modules,
+            {"edge_tts": edge_tts_module, "soundfile": soundfile_module},
+        ):
+            assert train._edge_tts_synthesize("hello", "en-US-JennyNeural", out_path)
+
+        assert out_path.stat().st_size > 44
+        soundfile_module.read.assert_called_once()
+
+    def test_confusable_generation_logs_zero_edge_tts_outputs(
+        self, caplog: pytest.LogCaptureFixture, tmp_path: Path
+    ) -> None:
+        train._LAST_EDGE_TTS_ERROR = "pydub decode failed: missing ffprobe"
+
+        with (
+            caplog.at_level("ERROR", logger=train.logger.name),
+            patch(
+                "violawake_sdk.tools.confusables.generate_confusables",
+                return_value=["violas"],
+            ),
+            patch("violawake_sdk.tools.train._edge_tts_synthesize", return_value=False),
+        ):
+            generated = train._generate_confusable_negatives(
+                "viola",
+                tmp_path,
+                n_confusables=1,
+                voices_per_word=1,
+                verbose=False,
+            )
+
+        assert generated == []
+        assert "edge-tts confusable negative generation produced 0 files" in caplog.text
+        assert "missing ffprobe" in caplog.text
+
 
 class TestTrainMainValidation:
     def test_main_exits_when_positives_dir_is_missing(

@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import math
 import os
 import shutil
@@ -67,10 +68,14 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import numpy as np
 
+logger = logging.getLogger(__name__)
+
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
 _TMP_DIR: str | None = None
+_LAST_EDGE_TTS_ERROR: str | None = None
+_REPORTED_EDGE_TTS_ERRORS: set[str] = set()
 
 # ---------------------------------------------------------------------------
 # Edge-TTS voice pool for diverse positive and negative generation
@@ -259,6 +264,26 @@ def get_best_provider(device: str | None = None) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
+    """Record and log an edge-tts failure while preserving the bool API."""
+    global _LAST_EDGE_TTS_ERROR
+
+    summary = f"{type(detail).__name__}: {detail}" if isinstance(detail, BaseException) else detail
+    _LAST_EDGE_TTS_ERROR = summary
+
+    # A missing decoder causes hundreds of identical per-sample failures. Log
+    # the actual exception once, then the generator summary logs the zero count.
+    if summary not in _REPORTED_EDGE_TTS_ERRORS:
+        _REPORTED_EDGE_TTS_ERRORS.add(summary)
+        logger.error(
+            "edge-tts synthesis failed for voice %s text %.80r: %s",
+            voice,
+            text,
+            summary,
+        )
+    return False
+
+
 def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
     """Synthesize a single phrase with edge-tts and save as WAV at 16kHz.
 
@@ -268,11 +293,20 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
     import io
     import tempfile
 
+    global _LAST_EDGE_TTS_ERROR
+    _LAST_EDGE_TTS_ERROR = None
+
     try:
         import edge_tts
-    except ImportError:
-        print("WARNING: edge-tts not installed. pip install edge-tts", file=sys.stderr)
-        return False
+    except ImportError as exc:
+        message = "edge-tts is not installed. Install with: pip install edge-tts"
+        if exc:
+            message = f"{message} ({type(exc).__name__}: {exc})"
+        return _edge_tts_fail(
+            text,
+            voice,
+            message,
+        )
 
     async def _synth():
         communicate = edge_tts.Communicate(text, voice)
@@ -295,47 +329,82 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
                 mp3_data = loop.run_until_complete(_synth())
         except RuntimeError:
             mp3_data = asyncio.run(_synth())
+    except Exception as exc:
+        return _edge_tts_fail(text, voice, exc)
 
-        if not mp3_data or len(mp3_data) < 100:
-            return False
+    if not mp3_data or len(mp3_data) < 100:
+        return _edge_tts_fail(
+            text,
+            voice,
+            f"edge-tts returned too little audio data ({len(mp3_data) if mp3_data else 0} bytes)",
+        )
 
-        # Convert MP3 to WAV at 16kHz using pydub or ffmpeg
-        try:
-            from pydub import AudioSegment
+    conversion_errors: list[str] = []
 
-            seg = AudioSegment.from_mp3(io.BytesIO(mp3_data))
-            seg = seg.set_channels(1).set_frame_rate(16000).set_sample_width(2)
-            seg.export(str(output_path), format="wav")
-            return True
-        except ImportError:
-            pass
+    # First try libsndfile via soundfile. The backend image already gets this
+    # through the training stack, and it avoids a hard ffmpeg dependency.
+    try:
+        import numpy as np
+        import soundfile as sf
 
-        # Fallback: write MP3 to temp, load with torchaudio/scipy
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp3", dir=_TMP_DIR)
-        try:
-            os.write(tmp_fd, mp3_data)
-        finally:
-            os.close(tmp_fd)
-        os.chmod(tmp_path, 0o600)
+        audio, sr = sf.read(io.BytesIO(mp3_data), dtype="float32")
+        audio = np.asarray(audio, dtype=np.float32)
+        if audio.size == 0:
+            raise RuntimeError("decoded MP3 contained no audio samples")
+        if audio.ndim > 1:
+            audio = audio.mean(axis=1)
+        if sr != 16000:
+            audio = _resample_audio(audio, sr, 16000)
+        _save_wav(audio, output_path, 16000)
+        return output_path.exists() and output_path.stat().st_size > 44
+    except ImportError as exc:
+        conversion_errors.append(f"soundfile unavailable: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        conversion_errors.append(f"soundfile decode failed: {type(exc).__name__}: {exc}")
 
-        try:
-            import torchaudio
+    # Fallback: pydub with ffmpeg/ffprobe when available.
+    try:
+        from pydub import AudioSegment
 
-            waveform, sr = torchaudio.load(tmp_path)
-            if waveform.shape[0] > 1:
-                waveform = waveform.mean(dim=0, keepdim=True)
-            if sr != 16000:
-                waveform = torchaudio.transforms.Resample(sr, 16000)(waveform)
-            torchaudio.save(str(output_path), waveform, 16000)
-            return True
-        except Exception:
-            pass
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+        seg = AudioSegment.from_mp3(io.BytesIO(mp3_data))
+        seg = seg.set_channels(1).set_frame_rate(16000).set_sample_width(2)
+        seg.export(str(output_path), format="wav")
+        return output_path.exists() and output_path.stat().st_size > 44
+    except ImportError as exc:
+        conversion_errors.append(f"pydub unavailable: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        conversion_errors.append(f"pydub decode failed: {type(exc).__name__}: {exc}")
 
-        return False
-    except Exception:
-        return False
+    # Fallback: write MP3 to temp, load with torchaudio.
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp3", dir=_TMP_DIR)
+    try:
+        os.write(tmp_fd, mp3_data)
+    finally:
+        os.close(tmp_fd)
+    os.chmod(tmp_path, 0o600)
+
+    try:
+        import torchaudio
+
+        waveform, sr = torchaudio.load(tmp_path)
+        if waveform.shape[0] > 1:
+            waveform = waveform.mean(dim=0, keepdim=True)
+        if sr != 16000:
+            waveform = torchaudio.transforms.Resample(sr, 16000)(waveform)
+        torchaudio.save(str(output_path), waveform, 16000)
+        return output_path.exists() and output_path.stat().st_size > 44
+    except ImportError as exc:
+        conversion_errors.append(f"torchaudio unavailable: {type(exc).__name__}: {exc}")
+    except Exception as exc:
+        conversion_errors.append(f"torchaudio decode failed: {type(exc).__name__}: {exc}")
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+    return _edge_tts_fail(
+        text,
+        voice,
+        "MP3-to-WAV conversion failed; " + "; ".join(conversion_errors),
+    )
 
 
 def _resample_audio(audio: np.ndarray, source_rate: int, target_rate: int) -> np.ndarray:
@@ -551,6 +620,15 @@ def _generate_confusable_negatives(
         if verbose and (word_idx + 1) % 10 == 0:
             print(f"    {word_idx + 1}/{len(confusable_words)} words done ({len(generated)} files)")
 
+    if not generated and confusable_words and voices_subset:
+        logger.error(
+            "edge-tts confusable negative generation produced 0 files for wake word %.80r "
+            "after %s attempts; last error: %s",
+            wake_word,
+            len(confusable_words) * len(voices_subset),
+            _LAST_EDGE_TTS_ERROR or "unknown",
+        )
+
     if verbose:
         print(f"  Confusable negatives generated: {len(generated)} files")
 
@@ -592,6 +670,14 @@ def _generate_speech_negatives(
             print(
                 f"    {phrase_idx + 1}/{len(SPEECH_NEGATIVE_PHRASES)} phrases done ({len(generated)} files)"
             )
+
+    if not generated and SPEECH_NEGATIVE_PHRASES and voices_subset:
+        logger.error(
+            "edge-tts speech negative generation produced 0 files after %s attempts; "
+            "last error: %s",
+            len(SPEECH_NEGATIVE_PHRASES) * len(voices_subset),
+            _LAST_EDGE_TTS_ERROR or "unknown",
+        )
 
     if verbose:
         print(f"  Speech negatives generated: {len(generated)} files")
@@ -1411,6 +1497,13 @@ def _train_temporal_cnn(
         verbose=verbose,
     )
 
+    # Optional test-mode bypass. Setting VIOLAWAKE_SKIP_QUALITY_GATE=1 exports
+    # the model regardless of grade, with a loud warning. This exists for E2E
+    # tests + dev iterations where verifying the full export+download chain
+    # matters more than blocking a low-quality model. NEVER set this in a
+    # customer-facing deploy — it would let unfit models ship.
+    skip_gate = os.environ.get("VIOLAWAKE_SKIP_QUALITY_GATE", "").lower() in ("1", "true", "yes")
+
     if quality_grade == "F":
         print(
             "\n" + "!" * 72 + "\nQUALITY GATE FAILED: model is not ready for deployment.\n"
@@ -1425,8 +1518,15 @@ def _train_temporal_cnn(
             + "!"
             * 72
         )
+        if skip_gate:
+            print(
+                "\n" + "*" * 72 + "\n"
+                "WARNING: VIOLAWAKE_SKIP_QUALITY_GATE=1 — exporting failing model anyway.\n"
+                "         This is for E2E testing only. NEVER set this in production.\n"
+                + "*" * 72
+            )
 
-    model_exported = quality_grade != "F"
+    model_exported = (quality_grade != "F") or skip_gate
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # -- Export to ONNX ------------------------------------------------------
@@ -1507,7 +1607,7 @@ def _train_temporal_cnn(
             print(f"Model saved: {output_path}")
             print(f"Load with:  WakeDetector(model='{output_path}')")
 
-    if quality_grade == "F":
+    if quality_grade == "F" and not skip_gate:
         raise RuntimeError(
             "Model failed the quality gate with grade F; ONNX export was blocked. "
             f"See {config_path} for quality metrics."
