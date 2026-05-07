@@ -109,3 +109,4 @@ nul
 
 # Test artifacts
 test_model.config.json
+tests/live/.smoke_last_output.txt

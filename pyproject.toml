@@ -193,6 +193,9 @@ markers = [
     "benchmark: performance benchmark tests",
     "hardware: requires microphone hardware",
     "e2e: end-to-end tests that require live console servers or browsers",
+    "live: probes the deployed ViolaWake site/API and must be opt-in",
+    "smoke: fast live smoke subset for deployment verification",
+    "rate_limit: intentionally burns live rate-limit budget",
 ]
 
 [tool.ruff]
