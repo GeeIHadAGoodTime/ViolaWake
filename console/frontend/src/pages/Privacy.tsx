@@ -5,7 +5,7 @@ export default function PrivacyPage() {
     <div className="legal-page">
       <div className="legal-content">
         <h1 className="legal-title">Privacy Policy</h1>
-        <p className="legal-updated">Last updated: March 28, 2026</p>
+        <p className="legal-updated">Last updated: May 7, 2026</p>
 
         <section className="legal-section">
           <h2>1. Introduction</h2>
@@ -32,16 +32,17 @@ export default function PrivacyPage() {
             When you record samples in the Console, those recordings are
             uploaded to the Console server and stored on the server filesystem
             so they can be used for the training job you requested. You can
-            delete your recordings from the dashboard at any time. Automatic
-            retention cleanup is now active: recordings are deleted after 90
-            days by default. Recordings linked to an in-progress training job
-            are never deleted until that job completes.
+            delete your recordings from the dashboard at any time. Voice
+            recordings are automatically deleted 30 days after upload. Source
+            recordings used for a completed training job are deleted 72 hours
+            after training completion.
           </p>
 
           <h3>2.3 Trained Models</h3>
           <p>
-            Models produced for your account are stored with your account until
-            you delete them or delete your account.
+            Models produced for your account are stored with your account for 90
+            days after creation unless you delete them or delete your account
+            sooner.
           </p>
 
           <h3>2.4 Billing Information</h3>
@@ -103,62 +104,83 @@ export default function PrivacyPage() {
           <h2>7. Data Retention</h2>
           <ul>
             <li>
-              Account information is retained while your account remains active.
+              Account information is retained while your account remains active
+              unless you delete your account.
             </li>
             <li>
-              Recordings remain stored until you delete them or delete your
-              account.
+              Voice recordings are automatically deleted 30 days after upload.
             </li>
             <li>
-              Trained models remain stored until you delete them or delete your
-              account.
+              Source recordings used for training are deleted 72 hours after the
+              training job completes.
             </li>
             <li>
-              Recordings are automatically deleted after 90 days. Recordings
-              tied to an active training job are retained until that job
-              completes.
+              Trained models are automatically deleted 90 days after creation.
             </li>
             <li>
-              Trained models are automatically deleted after 365 days.
+              Account deletion hard-deletes your user account, recordings, and
+              trained models and cancels your active subscription within 24
+              hours.
             </li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2>8. Third-Party Services</h2>
-          <ul>
-            <li>
-              <strong>Stripe</strong> processes payments and subscription events.
-              Stripe&apos;s privacy policy is available at{" "}
-              <a
-                href="https://stripe.com/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                stripe.com/privacy
-              </a>
-              .
-            </li>
-          </ul>
+          <h2>8. Payment Processing</h2>
+          <p>
+            Payment processing is provided by Stripe. When you start or manage a
+            paid subscription, we share the information needed to create and
+            manage the Stripe Checkout or billing session, including your email
+            address and any billing address collected by Stripe Checkout. Stripe
+            processes payment details under its own privacy policy, available at{" "}
+            <a
+              href="https://stripe.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              stripe.com/privacy
+            </a>
+            .
+          </p>
         </section>
 
         <section className="legal-section">
-          <h2>9. Your Rights</h2>
+          <h2>9. Email Service</h2>
+          <p>
+            We use Resend to send transactional emails on our behalf, including
+            account verification, password reset, billing, and training status
+            messages. Resend receives the email address and message content
+            needed to deliver those emails. Resend&apos;s privacy policy is
+            available at{" "}
+            <a
+              href="https://resend.com/legal/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              resend.com/legal/privacy-policy
+            </a>
+            .
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2>10. Your Rights</h2>
           <ul>
             <li>Access the account information we hold about you</li>
             <li>Correct inaccurate account details</li>
             <li>Delete recordings, trained models, or your account</li>
           </ul>
           <p>
-            You can delete your account from the service API, and you can also
-            contact{" "}
+            You can delete your account at any time from the Account Settings
+            page. Account deletion cancels your Stripe subscription and purges
+            your recordings and trained models. You can also contact{" "}
             <a href="mailto:privacy@violawake.com">privacy@violawake.com</a> for
             privacy-related requests.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2>10. Changes to This Policy</h2>
+          <h2>11. Changes to This Policy</h2>
           <p>
             We may update this Privacy Policy from time to time. When we make
             material changes, we will update the date above and publish the
@@ -167,7 +189,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="legal-section">
-          <h2>11. Contact</h2>
+          <h2>12. Contact</h2>
           <p>
             For questions about this Privacy Policy or our data practices,
             contact us at{" "}

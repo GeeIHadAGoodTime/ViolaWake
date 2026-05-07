@@ -5,7 +5,7 @@ export default function TermsPage() {
     <div className="legal-page">
       <div className="legal-content">
         <h1 className="legal-title">Terms of Service</h1>
-        <p className="legal-updated">Last updated: March 28, 2026</p>
+        <p className="legal-updated">Last updated: May 7, 2026</p>
 
         <section className="legal-section">
           <h2>1. Service Description</h2>
@@ -110,10 +110,28 @@ export default function TermsPage() {
           <h3>5.2 Paid Subscriptions</h3>
           <p>
             Developer and Business subscriptions are billed through Stripe on a
-            recurring basis until cancelled.
+            recurring basis until cancelled. We do not store full card numbers
+            or CVV values.
           </p>
 
-          <h3>5.3 Refunds</h3>
+          <h3>5.3 Stripe Checkout</h3>
+          <p>
+            When you start or manage a paid subscription, we share the
+            information needed to create and manage the Stripe Checkout or
+            billing session, including your email address and any billing address
+            collected by Stripe Checkout. Stripe&apos;s privacy policy is
+            available at{" "}
+            <a
+              href="https://stripe.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              stripe.com/privacy
+            </a>
+            .
+          </p>
+
+          <h3>5.4 Refunds</h3>
           <p>
             If a service problem on our side materially prevents you from using
             a paid allocation, contact{" "}
@@ -123,7 +141,46 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>6. Service Availability</h2>
+          <h2>6. Email Service</h2>
+          <p>
+            We use Resend to send transactional emails on our behalf, including
+            account verification, password reset, billing, and training status
+            messages. Resend&apos;s privacy policy is available at{" "}
+            <a
+              href="https://resend.com/legal/privacy-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              resend.com/legal/privacy-policy
+            </a>
+            .
+          </p>
+        </section>
+
+        <section className="legal-section">
+          <h2>7. Data Retention and Account Deletion</h2>
+          <ul>
+            <li>
+              Voice recordings are automatically deleted 30 days after upload.
+            </li>
+            <li>
+              Source recordings used for training are deleted 72 hours after the
+              training job completes.
+            </li>
+            <li>
+              Trained models are automatically deleted 90 days after creation.
+            </li>
+            <li>
+              You can delete your account at any time from the Account Settings
+              page. Account deletion hard-deletes your user account, recordings,
+              and trained models and cancels your active Stripe subscription
+              within 24 hours.
+            </li>
+          </ul>
+        </section>
+
+        <section className="legal-section">
+          <h2>8. Service Availability</h2>
           <p>
             We aim to keep the Console available, but we do not guarantee
             uninterrupted service. The Console may be unavailable because of
@@ -133,7 +190,7 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>7. Limitation of Liability</h2>
+          <h2>9. Limitation of Liability</h2>
           <p>
             TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, VIOLAWAKE AND ITS
             AFFILIATES WILL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL,
@@ -149,7 +206,7 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>8. Indemnification</h2>
+          <h2>10. Indemnification</h2>
           <p>
             You agree to indemnify and hold ViolaWake harmless from claims,
             damages, losses, and expenses arising from your use of the service,
@@ -159,33 +216,35 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>9. Termination</h2>
+          <h2>11. Termination</h2>
 
-          <h3>9.1 By You</h3>
+          <h3>11.1 By You</h3>
           <p>
-            You may close your account by using the available Console/API
-            account-deletion flow or by contacting{" "}
+            You may close your account from the Account Settings page or by
+            contacting{" "}
             <a href="mailto:hello@violawake.com">hello@violawake.com</a>. If
             you want to keep trained models, download them before deleting your
             account.
           </p>
 
-          <h3>9.2 By Us</h3>
+          <h3>11.2 By Us</h3>
           <p>
             We may suspend or terminate your account if you violate these Terms,
             abuse the service, or if we are required to do so by law.
           </p>
 
-          <h3>9.3 Effect of Termination</h3>
+          <h3>11.3 Effect of Termination</h3>
           <p>
             When an account is deleted, access to the Console ends and the
-            account data we still store for that account is removed through our
-            deletion workflow. Models you already downloaded remain yours.
+            user account, recordings, and trained models we still store for that
+            account are hard-deleted within 24 hours. Any active Stripe
+            subscription is cancelled as part of the same deletion workflow.
+            Models you already downloaded remain yours.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2>10. Changes to These Terms</h2>
+          <h2>12. Changes to These Terms</h2>
           <p>
             We may update these Terms from time to time. When changes are
             material, we will update the date above and publish the revised
@@ -194,7 +253,7 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>11. Governing Law</h2>
+          <h2>13. Governing Law</h2>
           <p>
             These Terms are governed by the laws of the State of Delaware,
             United States, without regard to conflict of law principles.
@@ -202,7 +261,7 @@ export default function TermsPage() {
         </section>
 
         <section className="legal-section">
-          <h2>12. Contact</h2>
+          <h2>14. Contact</h2>
           <p>
             For questions about these Terms, contact{" "}
             <a href="mailto:legal@violawake.com">legal@violawake.com</a>.
