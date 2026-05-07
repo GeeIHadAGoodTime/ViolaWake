@@ -1213,7 +1213,7 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 **v1.1 (Q3 2026) -- Hosted Console + Streaming:**
 - [ ] Hosted Console infrastructure (Modal GPU training, R2 storage, Supabase auth)
 - [x] Streaming STT (faster-whisper generator mode)
-- [ ] WASM build for ViolaWake (source ready, dist not built) (see [`wasm/`](wasm/))
+- [x] WASM build for ViolaWake (browser SDK bundle + demo dist) (see [`wasm/`](wasm/))
 - [ ] JavaScript/Node SDK wrapper
 
 **v2.0 (Q1 2027) -- Multi-platform:**

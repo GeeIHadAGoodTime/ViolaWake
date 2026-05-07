@@ -51,7 +51,10 @@ await detector.load(); // Fetches and initialises all three ONNX sessions
 
 // Feed 20ms audio frames (320 float32 samples at 16 kHz, range [-1, 1]):
 const detected: boolean = await detector.detect(float32Frame);
-const score: number     = await detector.getScore(float32Frame); // 0.0–1.0, no gates
+const score: number     = detector.lastScore; // score from the same frame
+
+// For custom thresholding without detection gates, call getScore() instead of detect().
+const rawScore: number  = await detector.getScore(otherFrame); // 0.0–1.0, no gates
 
 // Clean up
 detector.dispose();
@@ -115,6 +118,10 @@ Process one 20ms frame (320 float32 samples at 16 kHz, range [-1, 1]).
 Returns `true` if all four decision gates pass (RMS floor, threshold,
 confirmation count, cooldown). The frame is also scored internally.
 
+Read `detector.lastScore` after `detect()` to display the score for that same
+frame. Do not call `getScore()` on the same frame after `detect()`, because that
+pushes the audio through the streaming backbone a second time.
+
 ### `detector.getScore(audioBuffer: Float32Array): Promise<number>`
 
 Same as `detect()` but returns the raw classifier score (0.0–1.0) without
@@ -139,11 +146,11 @@ Release ONNX inference sessions and reset state. Call when done to free WASM mem
 cd wasm
 npm install
 npm run build
-npm run demo    # serves demo/ on http://localhost:5000
+npm run demo    # serves wasm/ on http://localhost:5000/demo/
 ```
 
-Open `http://localhost:5000` and allow microphone access. Place the three `.onnx`
-model files in `wasm/demo/models/` before running.
+Open `http://localhost:5000/demo/` and allow microphone access. Place the three
+`.onnx` model files in `wasm/demo/models/` before running.
 
 ## Browser compatibility
 
@@ -180,6 +187,7 @@ Start at 0.80. If false positives are too frequent, increase to 0.85 or add
 cd wasm
 npm install
 npm run build   # outputs to wasm/dist/
+npm run demo    # open http://localhost:5000/demo/
 npm run typecheck
 ```
 
