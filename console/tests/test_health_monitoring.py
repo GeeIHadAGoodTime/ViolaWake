@@ -31,8 +31,7 @@ def client():
     except ImportError as exc:
         pytest.skip(f"Backend not yet built: {exc}")
 
-    with TestClient(app) as test_client:
-        yield test_client
+    return TestClient(app)
 
 
 @pytest.fixture
