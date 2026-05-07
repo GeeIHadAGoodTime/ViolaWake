@@ -287,6 +287,7 @@ async def test_invite_member_sends_email_without_token_in_production_response(mo
 
     resp = await teams_routes.invite_member(
         team_id=10,
+        request=None,
         body=TeamInviteRequest(email=invitee_email, role=TeamMemberRole.member),
         current_user=owner,
         _member=owner_member,
@@ -342,6 +343,7 @@ async def test_invite_member_can_include_token_when_test_env(monkeypatch: pytest
 
     resp = await teams_routes.invite_member(
         team_id=10,
+        request=None,
         body=TeamInviteRequest(email="bob@example.com", role=TeamMemberRole.member),
         current_user=owner,
         _member=owner_member,
@@ -374,6 +376,7 @@ async def test_invite_owner_role_forbidden() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await teams_routes.invite_member(
             team_id=10,
+            request=None,
             body=TeamInviteRequest(email="x@example.com", role=TeamMemberRole.owner),
             current_user=owner,
             _member=owner_member,
@@ -410,6 +413,7 @@ async def test_invite_already_joined_member_raises_conflict() -> None:
     with pytest.raises(HTTPException) as exc_info:
         await teams_routes.invite_member(
             team_id=10,
+            request=None,
             body=TeamInviteRequest(email="bob@example.com", role=TeamMemberRole.member),
             current_user=owner,
             _member=owner_member,
