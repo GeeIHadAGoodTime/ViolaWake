@@ -98,6 +98,13 @@ training = [
     "edge-tts>=6.1",
     "pydub>=0.25",
     "onnx>=1.15",
+    # Required for ONNX export of the trained TemporalCNN — torch.onnx.export
+    # uses onnxscript internally for newer opsets. Was missing from the
+    # extra; surfaced as a runtime ModuleNotFoundError on first export.
+    "onnxscript>=0.6",
+    # Required for the augmentation step in _train_temporal_cnn (MP3
+    # codec-based time-stretch + pitch-shift augmentation). Was missing.
+    "fast_mp3_augment>=0.2",
 ]
 
 # Documentation: API reference generation
