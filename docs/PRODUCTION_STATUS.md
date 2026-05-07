@@ -1,6 +1,6 @@
 # Production Status
 
-Living doc. Last verified end-to-end: **2026-05-07**. Update this file's date and the relevant rows whenever the live state changes.
+Living doc. Last verified end-to-end: **2026-05-07** (post-deploy includes rate-limit fix + lint cleanup + WASM browser SDK now reachable at violawake.com/wasm/demo/). Update this file's date and the relevant rows whenever the live state changes.
 
 This is the **canonical** post-launch status. Do not add running notes to `LAUNCH_READINESS.md`, `PROGRESS.md`, or `FUNCTIONAL_GAP_ANALYSIS.md` for post-launch state — those captured the pre-launch sprint. New facts go here.
 
@@ -41,7 +41,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 - ❌ **Account lockout actually triggers.** New code adds `failed_login_count` + `locked_until` columns and sets them on bad attempts. We confirmed the rate-limit (slowapi) blocks after 4 attempts, but we have NOT confirmed the per-account lockout (which would persist across IP changes). To verify: 5 wrong logins on one account, then a 6th from a fresh IP should still 401 with "Account temporarily locked".
 - ❌ **Full training pipeline against the live console.** Upload 10 silent/synthetic WAVs → start training → wait for SSE completion → download ONNX → load locally → push silence → expect score < 0.5. Blocked previously by the registration rate limit (10/hour) eating the test budget; do this when bumping the limit.
 - ❌ **True-positive wake detection.** Verified: silence/sine/noise score < 0.5 (no false positives). NOT verified: an actual "Viola" utterance scores > 0.5 (true positive). Needs a recorded sample or live mic.
-- ❌ **WASM browser SDK on the live site.** `wasm/dist/` is built and committed in the repo. The live site does NOT serve a WASM demo at `/wasm-demo/` or `/demo`. To deploy: either add a Cloudflare Pages route for a static demo subdir, or embed it as a component on the marketing site.
+- ⚠️ **WASM browser SDK demo loads at `https://violawake.com/wasm/demo/`** (deployed 2026-05-07 — files copied into `console/frontend/public/wasm/`). However the demo requires the user to manually paste a "Model base URL" pointing at OWW backbone files; there is no default URL. To make it click-to-run, host `melspectrogram.onnx`, `embedding_model.onnx`, `temporal_cnn.onnx` somewhere CORS-friendly and default the URL field to that.
 
 ## Operational levers (only the operator can change)
 
@@ -49,7 +49,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 |---|---|---|---|
 | `VIOLAWAKE_RESEND_API_KEY` | `.env.production` | unset | set + verify domain in Resend dashboard |
 | `VIOLAWAKE_STRIPE_SECRET_KEY` mode | Stripe dashboard | TEST (`sk_test_*`) | flip to LIVE when accepting real payments |
-| Registration rate limit | `console/backend/app/rate_limit.py` `REGISTER_LIMIT` | `10/hour` | bump to ~100/hour or add a test-mode bypass; 10/hour blocks any onboarding burst and the live test suite |
+| Registration rate limit | `console/backend/app/rate_limit.py` `REGISTER_LIMIT` | `100/hour` (raised from 10/hour 2026-05-07) — and now correctly per-end-user-IP via `CF-Connecting-IP` instead of per-CF-edge-IP | leave unless you start seeing register spam |
 | Login rate limit | same file, `LOGIN_LIMIT` | works | leave |
 | Robots / sitemap | `console/frontend/public/robots.txt` | sitemap line points to `console.violawake.com` (typo) | should be `violawake.com/sitemap.xml` |
 | OG image | `console/frontend/public/og-image.png` | placeholder PNG | upgrade to a real branded 1200×630 |
@@ -59,7 +59,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 These are tracked as separate work; none of them affect the live user journey.
 
 1. **~25 stale test mocks** in `console/tests/test_backend.py`, `test_teams.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_billing.py`. Same pattern as the 5 fixed in `test_auth_email_routes.py`: `FakeEmailService` missing `enabled` / `send_existing_account_notice`, `FakeSession` missing `commit`/`rollback`, route signatures changed `(body, request, db)` → `(request, body, db)`. CI is failing because of these.
-2. **Five ruff lint errors** in `src/violawake_sdk/tools/download_model.py` (f-string without placeholders) and `src/violawake_sdk/tools/train.py` (unused numpy import). CI lint job blocks on these.
+2. ~~Five ruff lint errors~~ **RESOLVED 2026-05-07.** `ruff check src/` and `ruff format --check src/` are now clean. CI's lint job for the SDK should pass.
 3. **Pages docs workflow** fails because GitHub Pages isn't enabled on the repo. Either enable it or remove the `docs.yml` workflow.
 4. **`tools/fetch_release_models.py`** uses `gh` CLI primary + GitHub API fallback. If GitHub Releases for the SDK package are populated correctly, releases work; verify on next tag-push.
 5. **Hash-mismatch warning from `openwakeword`** at SDK runtime: `OWW backbone hash mismatch: expected 70d164290c1d095d, got e8444299a314fbb2`. Means the openwakeword package was updated upstream and the hash check warns but does not fail. Could degrade accuracy on real wake detection. Decide: pin a specific openwakeword version, or update the expected hash, or remove the check.
