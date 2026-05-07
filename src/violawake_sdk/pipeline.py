@@ -445,9 +445,7 @@ class VoicePipeline:
             callback(**payload)
             return
 
-        accepted = {
-            name: value for name, value in payload.items() if name in signature.parameters
-        }
+        accepted = {name: value for name, value in payload.items() if name in signature.parameters}
         callback(**accepted)
 
     def _set_state(self, state: str) -> None:
@@ -457,9 +455,7 @@ class VoicePipeline:
 
     def _transition_state(self, expected_state: str | tuple[str, ...], new_state: str) -> bool:
         """Atomically update the pipeline state when it still matches the expected value."""
-        expected_states = (
-            (expected_state,) if isinstance(expected_state, str) else expected_state
-        )
+        expected_states = (expected_state,) if isinstance(expected_state, str) else expected_state
         with self._state_lock:
             # The old code split state reads and writes across different lock scopes,
             # which let stale snapshots overwrite newer RESPONDING/TRANSCRIBING states.

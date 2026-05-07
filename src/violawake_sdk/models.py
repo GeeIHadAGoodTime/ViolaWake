@@ -340,9 +340,7 @@ def get_model_path(
                     f"TFLite version of '{model_name}' not found at {tflite_path}. "
                     f"Convert with: violawake-download --model {model_name} --format tflite"
                 )
-            raise ModelNotFoundError(
-                f"Unknown model '{model_name}'. No TFLite variant found."
-            )
+            raise ModelNotFoundError(f"Unknown model '{model_name}'. No TFLite variant found.")
 
     if effective_name not in MODEL_REGISTRY:
         available = ", ".join(MODEL_REGISTRY.keys())

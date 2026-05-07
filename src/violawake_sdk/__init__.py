@@ -80,7 +80,7 @@ except ImportError:
     TTSEngine = _make_missing_extra_class("TTSEngine", "tts")  # type: ignore[assignment,misc]
 
 try:
-    from violawake_sdk.stt import STTEngine, StreamingSTTEngine
+    from violawake_sdk.stt import StreamingSTTEngine, STTEngine
 except ImportError:
     STTEngine = _make_missing_extra_class("STTEngine", "stt")  # type: ignore[assignment,misc]
     StreamingSTTEngine = _make_missing_extra_class("StreamingSTTEngine", "stt")  # type: ignore[assignment,misc]

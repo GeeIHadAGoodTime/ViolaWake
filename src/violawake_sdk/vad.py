@@ -154,8 +154,7 @@ class SileroVAD:
     def __init__(self) -> None:
         if load_silero_vad is None:
             raise ImportError(
-                "silero-vad is not installed. Install it with: "
-                "pip install 'violawake[vad]'"
+                "silero-vad is not installed. Install it with: pip install 'violawake[vad]'"
             ) from None
 
         try:
@@ -170,8 +169,7 @@ class SileroVAD:
             self._model = load_silero_vad(onnx=True)
         except Exception as e:
             raise RuntimeError(
-                "Failed to load Silero VAD model from the silero-vad package: "
-                f"{e}"
+                f"Failed to load Silero VAD model from the silero-vad package: {e}"
             ) from e
 
         self._torch = torch

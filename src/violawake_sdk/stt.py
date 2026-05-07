@@ -593,10 +593,7 @@ class StreamingSTTEngine:
         arr = np.asarray(chunk, dtype=np.float32)
         if arr.ndim > 1:
             # Best-effort stereo → mono using the shape heuristic from STTEngine
-            if arr.shape[0] < arr.shape[1]:
-                arr = arr.mean(axis=0)
-            else:
-                arr = arr.mean(axis=1)
+            arr = arr.mean(axis=0) if arr.shape[0] < arr.shape[1] else arr.mean(axis=1)
         return arr
 
     def _run_pass(self, *, force: bool = False) -> Iterator[TranscriptSegment]:

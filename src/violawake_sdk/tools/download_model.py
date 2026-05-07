@@ -152,7 +152,7 @@ def _convert_to_tflite(onnx_path, *, quantize: bool = False) -> None:
         extra = " (quantized)" if quantize else ""
         print(f" done: {result} ({size_mb:.1f} MB{extra})")
     except ImportError as e:
-        print(f" FAILED", file=sys.stderr)
+        print(" FAILED", file=sys.stderr)
         print(
             f"  TFLite conversion requires additional dependencies:\n"
             f"    pip install onnx2tf tensorflow\n"
@@ -161,7 +161,7 @@ def _convert_to_tflite(onnx_path, *, quantize: bool = False) -> None:
             file=sys.stderr,
         )
     except Exception as e:
-        print(f" FAILED", file=sys.stderr)
+        print(" FAILED", file=sys.stderr)
         print(f"  Conversion error: {e}", file=sys.stderr)
 
 

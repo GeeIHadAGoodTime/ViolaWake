@@ -812,7 +812,6 @@ def _extract_temporal_embeddings(
         source_indices: Source file index for each embedding (for group-aware split).
         tags: Tag string for each embedding.
     """
-    import numpy as np
 
     from violawake_sdk.audio import load_audio
 
@@ -887,7 +886,7 @@ def _extract_mlp_embeddings(
         # Guard against zero-energy files (corrupted or silent recordings).
         # If these slip through upload validation, they corrupt training:
         # the model learns silence = wake word.
-        audio_rms = float(np.sqrt(np.mean(audio ** 2)))
+        audio_rms = float(np.sqrt(np.mean(audio**2)))
         if audio_rms < 1e-6:
             if verbose and failures == 0:
                 print(f"    WARNING: Skipping zero-energy file: {wav_path.name}")
@@ -1121,9 +1120,7 @@ def _train_temporal_cnn(
             seed=SEED,
         )
         augmented_pos_source_ids = [
-            source_id
-            for source_id in augment_candidate_source_ids
-            for _ in range(copies_per_clip)
+            source_id for source_id in augment_candidate_source_ids for _ in range(copies_per_clip)
         ]
         n_augmented = len(augmented_pos_audio)
         raw_pos_audio.extend(augmented_pos_audio)
@@ -1684,7 +1681,9 @@ def _run_quality_gate(
             "were scored in the quality gate."
         )
     if verbose and len(silence_scores) == 0:
-        print("  NOTE: Silence produced no OWW embeddings (zero-energy rejected by backbone). Score: 0.0")
+        print(
+            "  NOTE: Silence produced no OWW embeddings (zero-energy rejected by backbone). Score: 0.0"
+        )
 
     return grade, metrics
 

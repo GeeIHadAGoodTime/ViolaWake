@@ -6,16 +6,34 @@ from fastapi import Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+
+def _client_ip_key(request: Request) -> str:
+    """Return the real end-user IP for rate-limit keying.
+
+    Behind Cloudflare (Pages + Tunnel), ``request.client.host`` is the
+    Cloudflare edge IP, which collapses all end users into a small pool of
+    addresses and effectively makes per-IP limits global. Cloudflare passes
+    the real client IP in ``CF-Connecting-IP``; that header is trustworthy
+    here because the backend is reachable ONLY through the Cloudflare
+    Tunnel (no public origin port). Fall back to remote_addr for local/dev
+    runs that bypass Cloudflare.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+    return get_remote_address(request)
+
+
 # ---------------------------------------------------------------------------
-# Core limiter instance -- keyed by client IP by default
+# Core limiter instance -- keyed by real end-user IP (CF-Connecting-IP)
 # ---------------------------------------------------------------------------
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=_client_ip_key)
 
 # ---------------------------------------------------------------------------
 # Limit strings (centralised so routes and tests can reference them)
 # ---------------------------------------------------------------------------
 LOGIN_LIMIT = "5/minute"
-REGISTER_LIMIT = "10/hour"
+REGISTER_LIMIT = "100/hour"
 VERIFY_EMAIL_LIMIT = "20/5 minutes"
 FORGOT_PASSWORD_LIMIT = "5/5 minutes"
 RESET_PASSWORD_LIMIT = "10/5 minutes"
