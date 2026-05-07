@@ -135,6 +135,28 @@ VIOLAWAKE_ACCESS_TOKEN_EXPIRE_HOURS=24
 
 If a key is missing, the backend either no-ops the feature gracefully (Stripe → 503 with "Billing features require a configured Stripe secret key"; Resend → silently auto-verifies users) or fails to start (DB URL, secret key). Check container logs with `docker logs wakeword-backend-1` if the healthcheck fails.
 
+### Corpus
+
+Training requires a mounted universal speech-negative corpus. Generic speech negatives come from LibriSpeech/MUSAN file access, not Edge-TTS. Without this corpus, training fails fast with a clear error instead of silently falling back to flaky network TTS.
+
+Operator default: mount the in-repo corpus directory read-only:
+
+```yaml
+./corpus:/app/corpus:ro
+```
+
+Alternative: download the smaller starter corpus, then mount that path:
+
+```bash
+violawake-download-corpus
+```
+
+```yaml
+~/.violawake/corpus:/app/corpus:ro
+```
+
+`violawake-download-corpus` currently installs LibriSpeech `dev-clean` under `~/.violawake/corpus/librispeech/dev-clean`. MUSAN can be added under the same corpus root when the larger speech/music/noise set is available.
+
 ---
 
 ## Frontend deploy (violawake.com)

@@ -25,10 +25,9 @@ services:
     volumes:
       - backend-data:/app/data
       - ${VIOLAWAKE_NEGATIVES_CORPUS_DIR:-./violawake_data/negatives}:/app/negatives:ro
-      # Universal corpus (LibriSpeech + MUSAN) for training-time negative samples.
-      # training_service searches Path("corpus") (CWD-relative = /app/corpus) when
-      # edge-tts negative generation falls short. Without this mount, training
-      # fails with "Only 0 negative files generated" if upstream TTS is degraded.
+      # REQUIRED — universal corpus (LibriSpeech + MUSAN) for training-time
+      # speech negatives. See docs/DEPLOYMENT.md. If ./corpus is unavailable,
+      # run violawake-download-corpus and mount ~/.violawake/corpus here instead.
       - ./corpus:/app/corpus:ro
     env_file:
       - .env.production
