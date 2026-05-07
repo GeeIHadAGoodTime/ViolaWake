@@ -27,6 +27,7 @@ import ForgotPasswordPage from "./pages/ForgotPassword";
 import ChangePasswordPage from "./pages/ChangePassword";
 import TeamsPage from "./pages/Teams";
 import TeamDetailPage from "./pages/TeamDetail";
+import TeamAcceptPage from "./pages/TeamAccept";
 import CookieConsent from "./components/CookieConsent";
 
 export default function App() {
@@ -102,6 +103,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <TeamsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams/accept"
+                  element={
+                    <ProtectedRoute>
+                      <TeamAcceptPage />
                     </ProtectedRoute>
                   }
                 />

@@ -1,6 +1,7 @@
 """Team management routes."""
 
 import logging
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -14,6 +15,7 @@ from app.auth import (
     get_verified_user,
     make_get_team_member,
 )
+from app.config import settings
 from app.database import get_db
 from app.email_service import get_email_service
 from app.models import Team, TeamMember, TrainedModel, User
@@ -76,6 +78,55 @@ async def _verified_user_with_rate_key(
     return current_user
 
 
+def _test_invite_message(invite_token: str) -> str:
+    """Return the invite response message, exposing the token only in tests."""
+    if settings.env == "test":
+        return f"Invitation sent. Test invite token: {invite_token}"
+    return "Invitation sent"
+
+
+async def _accept_invite(
+    invite: dict,
+    current_user: User,
+    db: AsyncSession,
+) -> TeamResponse:
+    """Attach the current user to the invited team and return the team."""
+    if invite["email"].casefold() != current_user.email.casefold():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This invite was issued for a different email address",
+        )
+
+    team_id = int(invite["team_id"])
+    await _get_team_or_404(team_id, db)
+
+    existing_result = await db.execute(
+        select(TeamMember).where(
+            TeamMember.team_id == team_id,
+            TeamMember.user_id == current_user.id,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+    if existing is not None:
+        if existing.joined_at is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already a team member")
+        existing.joined_at = datetime.now(timezone.utc)
+        existing.role = invite["role"]
+    else:
+        member = TeamMember(
+            team_id=team_id,
+            user_id=current_user.id,
+            role=invite["role"],
+            joined_at=datetime.now(timezone.utc),
+        )
+        db.add(member)
+
+    await db.flush()
+    team = await _get_team_or_404(team_id, db)
+    logger.info("User %s joined team %s with role %s", current_user.id, team_id, invite["role"])
+    return _team_response(team)
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -135,6 +186,17 @@ async def list_teams(
     ]
 
 
+@router.post("/accept", response_model=TeamResponse)
+async def accept_team_invite(
+    token: str,
+    current_user: Annotated[User, Depends(get_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TeamResponse:
+    """Accept a team invitation using a signed invite token."""
+    invite = decode_team_invite_token(token)
+    return await _accept_invite(invite, current_user, db)
+
+
 @router.get("/{team_id}", response_model=TeamResponse)
 async def get_team(
     team_id: int,
@@ -156,7 +218,7 @@ async def invite_member(
     _member: Annotated[TeamMember, Depends(make_get_team_member(["owner", "admin"]))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MessageResponse:
-    """Invite a user to the team by email. Returns a signed invite token."""
+    """Invite a user to the team by email."""
     team = await _get_team_or_404(team_id, db)
 
     # Prevent inviting someone who is already a joined member
@@ -187,21 +249,24 @@ async def invite_member(
     invite_token = create_team_invite_token(
         inviter_id=current_user.id,
         team_id=team_id,
-        email=body.email,
-        role=body.role,
+        email=str(body.email),
+        role=body.role.value,
     )
 
     email_svc = get_email_service()
-    invite_url = email_svc._console_url(f"/teams/{team_id}/join", token=invite_token)
-    await email_svc.send_team_invite(
-        to_email=body.email,
-        team_name=team.name,
-        invite_token=invite_token,
-        invite_url=invite_url,
-    )
+    accept_url = email_svc._console_url("/teams/accept", token=invite_token)
+    try:
+        await email_svc.send_team_invite(
+            to_email=str(body.email),
+            team_name=team.name,
+            inviter_name=current_user.name,
+            accept_url=accept_url,
+        )
+    except Exception:
+        logger.exception("Team invite email attempt failed for %s on team %s", body.email, team_id)
 
     logger.info("Invited %s to team %s by user %s", body.email, team_id, current_user.id)
-    return MessageResponse(message="Invitation sent")
+    return MessageResponse(message=_test_invite_message(invite_token))
 
 
 @router.post("/{team_id}/join", response_model=TeamResponse)
@@ -216,45 +281,7 @@ async def join_team(
 
     if invite["team_id"] != team_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token does not match team")
-
-    if invite["email"] != current_user.email:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This invite was issued for a different email address",
-        )
-
-    # Check team exists
-    await _get_team_or_404(team_id, db)
-
-    # Upsert membership — allow re-joining after removal
-    existing_result = await db.execute(
-        select(TeamMember).where(
-            TeamMember.team_id == team_id,
-            TeamMember.user_id == current_user.id,
-        )
-    )
-    existing = existing_result.scalar_one_or_none()
-    if existing is not None:
-        if existing.joined_at is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already a team member")
-        from datetime import datetime, timezone
-        existing.joined_at = datetime.now(timezone.utc)
-        existing.role = invite["role"]
-    else:
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        member = TeamMember(
-            team_id=team_id,
-            user_id=current_user.id,
-            role=invite["role"],
-            joined_at=now,
-        )
-        db.add(member)
-
-    await db.flush()
-    team = await _get_team_or_404(team_id, db)
-    logger.info("User %s joined team %s with role %s", current_user.id, team_id, invite["role"])
-    return _team_response(team)
+    return await _accept_invite(invite, current_user, db)
 
 
 @router.delete("/{team_id}/members/{user_id}", response_model=MessageResponse)
@@ -288,6 +315,27 @@ async def remove_member(
     await db.delete(target)
     logger.info("User %s removed member %s from team %s", current_user.id, user_id, team_id)
     return MessageResponse(message="Member removed")
+
+
+@router.post("/{team_id}/leave", response_model=MessageResponse)
+async def leave_team(
+    team_id: int,
+    current_user: Annotated[User, Depends(get_verified_user)],
+    _member: Annotated[TeamMember, Depends(make_get_team_member())],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    """Leave a team. Owners must delete the team instead."""
+    team = await _get_team_or_404(team_id, db)
+
+    if team.owner_id == current_user.id or _member.role == "owner":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Team owners must delete the team instead of leaving it",
+        )
+
+    await db.delete(_member)
+    logger.info("User %s left team %s", current_user.id, team_id)
+    return MessageResponse(message="Left team")
 
 
 @router.patch("/{team_id}/members/{user_id}", response_model=TeamMemberResponse)

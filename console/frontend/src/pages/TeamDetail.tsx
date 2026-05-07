@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import type { Team, TeamMemberRole, Model } from "../types";
+import type { Team, TeamMember, TeamMemberRole, Model } from "../types";
 import {
   getTeam,
   inviteMember,
   removeTeamMember,
+  changeTeamMemberRole,
+  leaveTeam,
   shareModel,
   listTeamModels,
   getModels,
@@ -55,6 +57,8 @@ export default function TeamDetailPage() {
   // Delete state
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [changingMemberId, setChangingMemberId] = useState<number | null>(null);
 
   const numericTeamId = Number(teamId);
 
@@ -88,6 +92,12 @@ export default function TeamDetailPage() {
   const canManage =
     currentMember?.role === "owner" || currentMember?.role === "admin";
 
+  function canRemoveMember(member: TeamMember): boolean {
+    if (member.user_id === user?.id || member.role === "owner") return false;
+    if (isOwner) return true;
+    return currentMember?.role === "admin" && member.role === "member";
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
@@ -114,6 +124,32 @@ export default function TeamDetailPage() {
       await loadTeam();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to remove member");
+    }
+  }
+
+  async function handleRoleChange(
+    memberId: number,
+    role: Exclude<TeamMemberRole, "owner">,
+  ) {
+    setChangingMemberId(memberId);
+    try {
+      await changeTeamMemberRole(numericTeamId, memberId, role);
+      await loadTeam();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update role");
+    }
+    setChangingMemberId(null);
+  }
+
+  async function handleLeave() {
+    if (!window.confirm("Leave this team?")) return;
+    setLeaving(true);
+    try {
+      await leaveTeam(numericTeamId);
+      navigate("/teams", { replace: true });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to leave team");
+      setLeaving(false);
     }
   }
 
@@ -194,6 +230,15 @@ export default function TeamDetailPage() {
           </p>
         </div>
         <div className="team-detail-header-actions">
+          {!isOwner && (
+            <button
+              className="btn-danger"
+              onClick={handleLeave}
+              disabled={leaving}
+            >
+              {leaving ? "Leaving..." : "Leave Team"}
+            </button>
+          )}
           {isOwner && (
             <button
               className="btn-danger"
@@ -282,21 +327,37 @@ export default function TeamDetailPage() {
                     <div className="team-member-email">{member.email}</div>
                   </div>
                   <div className="team-member-actions">
-                    <span
-                      className={`team-role-badge role-${member.role}`}
-                    >
-                      {member.role}
-                    </span>
-                    {canManage &&
-                      member.role !== "owner" &&
-                      member.user_id !== user?.id && (
-                        <button
-                          className="btn-remove"
-                          onClick={() => handleRemove(member.user_id)}
-                        >
-                          Remove
-                        </button>
-                      )}
+                    {isOwner && member.role !== "owner" ? (
+                      <select
+                        className="team-role-select"
+                        value={member.role}
+                        disabled={changingMemberId === member.user_id}
+                        onChange={(e) =>
+                          handleRoleChange(
+                            member.user_id,
+                            e.target.value as Exclude<TeamMemberRole, "owner">,
+                          )
+                        }
+                        aria-label={`Change role for ${member.email}`}
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    ) : (
+                      <span
+                        className={`team-role-badge role-${member.role}`}
+                      >
+                        {member.role}
+                      </span>
+                    )}
+                    {canRemoveMember(member) && (
+                      <button
+                        className="btn-remove"
+                        onClick={() => handleRemove(member.user_id)}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

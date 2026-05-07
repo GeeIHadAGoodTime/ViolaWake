@@ -74,43 +74,64 @@ export default function TeamsPage() {
         </div>
         <button
           className="btn btn-primary"
-          onClick={() => setShowCreate(!showCreate)}
+          onClick={() => setShowCreate(true)}
         >
-          {showCreate ? "Cancel" : "+ Create Team"}
+          + Create Team
         </button>
       </div>
 
       {showCreate && (
-        <form className="teams-create-form" onSubmit={handleCreate}>
-          <h2>Create a new team</h2>
-          <div className="teams-create-fields">
-            <div className="form-group">
-              <label htmlFor="team-name">Team name</label>
-              <input
-                id="team-name"
-                type="text"
-                placeholder="e.g. My Company"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={255}
-                required
-                autoFocus
-              />
+        <div
+          className="teams-modal-backdrop"
+          onMouseDown={() => setShowCreate(false)}
+        >
+          <form
+            className="teams-create-form teams-create-modal"
+            onSubmit={handleCreate}
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="create-team-title"
+          >
+            <div className="teams-modal-header">
+              <h2 id="create-team-title">Create a new team</h2>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setShowCreate(false)}
+              >
+                Cancel
+              </button>
             </div>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={creating || !newName.trim()}
-            >
-              {creating ? "Creating..." : "Create"}
-            </button>
-          </div>
-          {createError && (
-            <p style={{ color: "var(--error)", marginTop: "0.75rem", fontSize: "0.9rem" }}>
-              {createError}
-            </p>
-          )}
-        </form>
+            <div className="teams-create-fields">
+              <div className="form-group">
+                <label htmlFor="team-name">Team name</label>
+                <input
+                  id="team-name"
+                  type="text"
+                  placeholder="e.g. My Company"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  maxLength={255}
+                  required
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={creating || !newName.trim()}
+              >
+                {creating ? "Creating..." : "Create"}
+              </button>
+            </div>
+            {createError && (
+              <p style={{ color: "var(--error)", marginTop: "0.75rem", fontSize: "0.9rem" }}>
+                {createError}
+              </p>
+            )}
+          </form>
+        </div>
       )}
 
       {loading && (
