@@ -729,7 +729,11 @@ def _extract_temporal_windows_from_audio(
     if len(audio_clips) != len(source_ids):
         raise ValueError("audio_clips and source_ids must have the same length")
 
-    oww = OWWModel()
+    # Pin ONNX backend explicitly. openwakeword defaults to TFLite when both are
+    # present, but the bundled tflite_runtime in our backend image rejects the
+    # current openwakeword .tflite schema with "Could not open ...". ONNX path
+    # is the canonical production target anyway.
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
 
     all_embeddings: list[np.ndarray] = []
@@ -869,7 +873,7 @@ def _extract_mlp_embeddings(
         print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
         sys.exit(1)
 
-    oww = OWWModel()
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
 
     all_embeddings: list[np.ndarray] = []
@@ -1761,7 +1765,7 @@ def _train_mlp_on_oww(
     if verbose:
         print("Loading OpenWakeWord backbone...")
 
-    oww = OWWModel()
+    oww = OWWModel(inference_framework="onnx")
     preprocessor = oww.preprocessor
 
     def _audio_to_embedding(audio_f32):
