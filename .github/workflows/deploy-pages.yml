@@ -1,0 +1,76 @@
+name: Deploy frontend to Cloudflare Pages
+
+# Deploys console/frontend to violawake.com on every push to master.
+# Requires repo secret CLOUDFLARE_API_TOKEN with permissions:
+#   - Account: Cloudflare Pages: Edit
+#   - User: User Details: Read
+# (Create at https://dash.cloudflare.com/profile/api-tokens — Custom token)
+#
+# CLOUDFLARE_ACCOUNT_ID is hardcoded below (not secret).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "console/frontend/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build + deploy
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      deployments: write
+    defaults:
+      run:
+        working-directory: console/frontend
+    env:
+      VITE_API_URL: https://api.violawake.com/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: console/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify VITE_API_URL was baked in
+        run: |
+          if ! grep -q "https://api.violawake.com/api" dist/assets/*.js; then
+            echo "::error::VITE_API_URL not baked into bundle — same-origin /api fallback would 405 in prod."
+            exit 1
+          fi
+          echo "VITE_API_URL bake-in: confirmed"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 368f46caaf71208619e7734b1823c0e1
+          command: pages deploy console/frontend/dist --project-name=violawake --branch=master --commit-dirty=true
+          workingDirectory: "."
+
+      - name: Smoke test
+        run: |
+          sleep 8
+          for path in / /pricing /privacy /terms /wasm/demo/ /wasm/dist/violawake.js /wasm/models/temporal_cnn.onnx; do
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "https://violawake.com$path")
+            echo "$path: $CODE"
+            if [ "$CODE" != "200" ] && [ "$CODE" != "308" ]; then
+              echo "::warning::$path returned $CODE"
+            fi
+          done
