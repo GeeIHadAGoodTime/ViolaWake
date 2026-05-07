@@ -79,6 +79,45 @@ class TestTrainHelpers:
         assert out_path.stat().st_size > 44
         soundfile_module.read.assert_called_once()
 
+    def test_edge_tts_synthesize_retries_transient_stream_failure(
+        self, tmp_path: Path
+    ) -> None:
+        import numpy as np
+
+        attempts = {"count": 0}
+
+        class FakeCommunicate:
+            def __init__(self, text: str, voice: str) -> None:
+                self.text = text
+                self.voice = voice
+
+            async def stream(self):
+                attempts["count"] += 1
+                if attempts["count"] == 1:
+                    raise RuntimeError("503 Service Unavailable")
+                yield {"type": "audio", "data": b"fake mp3 bytes" * 20}
+
+        edge_tts_module = ModuleType("edge_tts")
+        edge_tts_module.Communicate = FakeCommunicate
+        soundfile_module = ModuleType("soundfile")
+        soundfile_module.read = MagicMock(
+            return_value=(np.zeros(16000, dtype=np.float32), 16000)
+        )
+
+        out_path = tmp_path / "tts.wav"
+        with (
+            patch.dict(
+                sys.modules,
+                {"edge_tts": edge_tts_module, "soundfile": soundfile_module},
+            ),
+            patch("violawake_sdk.tools.train.time.sleep") as sleep_mock,
+        ):
+            assert train._edge_tts_synthesize("hello", "en-US-JennyNeural", out_path)
+
+        assert attempts["count"] == 2
+        sleep_mock.assert_called_once()
+        assert out_path.stat().st_size > 44
+
     def test_confusable_generation_logs_zero_edge_tts_outputs(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:

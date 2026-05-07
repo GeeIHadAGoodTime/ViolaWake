@@ -76,6 +76,10 @@ logger = logging.getLogger(__name__)
 _TMP_DIR: str | None = None
 _LAST_EDGE_TTS_ERROR: str | None = None
 _REPORTED_EDGE_TTS_ERRORS: set[str] = set()
+_EDGE_TTS_MAX_ATTEMPTS = 3
+_EDGE_TTS_RETRY_BASE_SECONDS = 0.75
+_EDGE_TTS_RETRY_MAX_SECONDS = 4.0
+_EDGE_TTS_RETRY_RNG = Random()
 
 # ---------------------------------------------------------------------------
 # Edge-TTS voice pool for diverse positive and negative generation
@@ -316,21 +320,49 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
                 mp3_buf.write(chunk["data"])
         return mp3_buf.getvalue()
 
-    try:
-        # Run the async synthesis
+    def _run_synth() -> bytes:
         try:
             loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    mp3_data = pool.submit(lambda: asyncio.run(_synth())).result(timeout=30)
-            else:
-                mp3_data = loop.run_until_complete(_synth())
         except RuntimeError:
-            mp3_data = asyncio.run(_synth())
-    except Exception as exc:
-        return _edge_tts_fail(text, voice, exc)
+            return asyncio.run(_synth())
+
+        if loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(lambda: asyncio.run(_synth())).result(timeout=30)
+        return loop.run_until_complete(_synth())
+
+    mp3_data: bytes | None = None
+    max_attempts = max(1, _EDGE_TTS_MAX_ATTEMPTS)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            mp3_data = _run_synth()
+            break
+        except Exception as exc:
+            if attempt >= max_attempts:
+                return _edge_tts_fail(
+                    text,
+                    voice,
+                    f"edge-tts failed after {attempt} attempts: {type(exc).__name__}: {exc}",
+                )
+            delay = min(
+                _EDGE_TTS_RETRY_MAX_SECONDS,
+                _EDGE_TTS_RETRY_BASE_SECONDS * (2 ** (attempt - 1)),
+            )
+            delay += _EDGE_TTS_RETRY_RNG.uniform(0.0, _EDGE_TTS_RETRY_BASE_SECONDS)
+            logger.warning(
+                "edge-tts synthesis attempt %s/%s failed for voice %s text %.80r: "
+                "%s: %s; retrying in %.2fs",
+                attempt,
+                max_attempts,
+                voice,
+                text,
+                type(exc).__name__,
+                exc,
+                delay,
+            )
+            time.sleep(delay)
 
     if not mp3_data or len(mp3_data) < 100:
         return _edge_tts_fail(
@@ -640,7 +672,10 @@ def _generate_speech_negatives(
     n_voices: int = 5,
     verbose: bool = True,
 ) -> list[Path]:
-    """Generate speech negative samples via TTS using common phrases.
+    """Deprecated for production training: generate speech negatives via TTS.
+
+    Production training should use the shared LibriSpeech/MUSAN corpus for
+    generic speech negatives. This helper remains for legacy CLI experiments.
 
     Returns list of generated WAV file paths.
     """
