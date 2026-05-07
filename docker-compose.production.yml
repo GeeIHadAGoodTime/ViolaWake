@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: violawake
+      POSTGRES_USER: violawake
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U violawake"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    shm_size: 256mb
+
+  backend:
+    build:
+      context: .
+      dockerfile: console/Dockerfile.backend
+    restart: always
+    expose:
+      - "8000"
+    volumes:
+      - backend-data:/app/data
+      - ${VIOLAWAKE_NEGATIVES_CORPUS_DIR:-./violawake_data/negatives}:/app/negatives:ro
+    env_file:
+      - .env.production
+    environment:
+      - VIOLAWAKE_DB_URL=postgresql+asyncpg://violawake:${POSTGRES_PASSWORD}@postgres:5432/violawake
+      - VIOLAWAKE_NEGATIVES_CORPUS_DIR=/app/negatives
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: console/Dockerfile.frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  backend-data:
