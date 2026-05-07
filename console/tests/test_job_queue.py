@@ -346,8 +346,8 @@ class TestPriorityConstants:
 
     def test_priority_values(self):
         assert PRIORITY_FREE == 0
-        assert PRIORITY_DEVELOPER == 5
-        assert PRIORITY_BUSINESS == 10
+        assert PRIORITY_DEVELOPER == 10
+        assert PRIORITY_BUSINESS == 20
 
 
 async def _submit_with_priority(q, user_id=1, wake_word="test", priority=0):
