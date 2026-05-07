@@ -1,6 +1,6 @@
 # Production Status
 
-Living doc. Last verified end-to-end: **2026-05-07** (post-deploy includes rate-limit fix + lint cleanup + WASM browser SDK now reachable at violawake.com/wasm/demo/). Update this file's date and the relevant rows whenever the live state changes.
+Living doc. Last verified end-to-end: **2026-05-07** (post-deploy includes: Stripe LIVE mode active; daily Postgres backups → R2; CSP/HSTS headers via Cloudflare Pages `_headers`; CSP via backend middleware; WASM browser SDK click-to-run at violawake.com/wasm/demo/; SDK auto-downloads OWW backbones on first init; rate limit raised to 100/hr keyed on CF-Connecting-IP; webhook idempotency Postgres-backed; security regression tests; legal pages updated for Stripe + Resend disclosure + retention windows; accessibility audit completed with trivial fixes applied). Update this file's date and the relevant rows whenever the live state changes.
 
 This is the **canonical** post-launch status. Do not add running notes to `LAUNCH_READINESS.md`, `PROGRESS.md`, or `FUNCTIONAL_GAP_ANALYSIS.md` for post-launch state — those captured the pre-launch sprint. New facts go here.
 
@@ -47,7 +47,8 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 
 | Lever | Where | Current value | Suggested for launch |
 |---|---|---|---|
-| `VIOLAWAKE_RESEND_API_KEY` | `.env.production` | unset | set + verify domain in Resend dashboard |
+| Cloudflare API token | FewerJobs `.env` (`CLOUDFLARE_API_TOKEN`) | active, no expiry | Has DNS:Edit + zone:read scopes — can auto-add Resend DNS records when needed. Lacks Pages:Edit and email_routing — auto-deploy + email routing still need a wider-scoped token, OR keep manual. Stored as GH secret `CLOUDFLARE_API_TOKEN` for the deploy-pages.yml workflow (which currently won't fully succeed without Pages:Edit). |
+| `VIOLAWAKE_RESEND_API_KEY` | `.env.production` | unset | set + verify domain in Resend dashboard. With the Cloudflare API token above, an agent can auto-add the Resend DNS records once you have them. |
 | `VIOLAWAKE_STRIPE_SECRET_KEY` mode | Stripe dashboard | **LIVE** (`sk_live_*`) as of 2026-05-07 | rotate when leaked; do a real $29 self-charge to verify end-to-end before announcing |
 | Registration rate limit | `console/backend/app/rate_limit.py` `REGISTER_LIMIT` | `100/hour` (raised from 10/hour 2026-05-07) — and now correctly per-end-user-IP via `CF-Connecting-IP` instead of per-CF-edge-IP | leave unless you start seeing register spam |
 | Login rate limit | same file, `LOGIN_LIMIT` | works | leave |
@@ -58,7 +59,7 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 
 These are tracked as separate work; none of them affect the live user journey.
 
-1. ~~~25 stale test mocks~~ **RESOLVED 2026-05-07.** All 28 failures + 7 errors fixed across `test_backend.py`, `test_billing.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_teams.py`. Final: `136 passed, 2 skipped, 0 failed, 0 errors`. The 2 skips are intentional (rate-limit-header tests; conftest disables the limiter globally for the suite).
+1. ~~~25 stale test mocks~~ **RESOLVED 2026-05-07.** All 28 failures + 7 errors fixed across `test_backend.py`, `test_billing.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_teams.py`. Final: `147 passed, 2 skipped, 0 failed, 0 errors` (was 136 before security regression tests landed). The 2 skips are intentional (rate-limit-header tests; conftest disables the limiter globally for the suite).
 2. ~~Five ruff lint errors~~ **RESOLVED 2026-05-07.** `ruff check src/` and `ruff format --check src/` are now clean. CI's lint job for the SDK should pass.
 3. **Pages docs workflow** fails because GitHub Pages isn't enabled on the repo. Either enable it or remove the `docs.yml` workflow.
 4. **`tools/fetch_release_models.py`** uses `gh` CLI primary + GitHub API fallback. If GitHub Releases for the SDK package are populated correctly, releases work; verify on next tag-push.
