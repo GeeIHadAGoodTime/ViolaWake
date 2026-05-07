@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-05-07
+
+### SDK
+- Pin `torch.onnx.export` to the legacy (non-dynamo) exporter in `export_temporal_onnx`. torch 2.10+ defaults to the dynamo exporter, which has no ONNX dispatcher for `aten.adaptive_max_pool2d` (the lowering of `nn.AdaptiveMaxPool1d(1)` used by `TemporalCNN`). Without this pin, training jobs failed at the export step with `DispatchError: No ONNX function found for aten.adaptive_max_pool2d`. The legacy path supports it and matches how the production reference model was originally exported.
+- Add `onnxscript` to the Console backend requirements so the new exporter has its dependency satisfied even when the legacy path is used.
+
+### Tests
+- `tests/live/full_pipeline_e2e.py`: use the literal wake word string (`"viola"`) instead of a unique-per-run identifier. The training pipeline synthesizes additional TTS positives by literally speaking the configured `wake_word` across multiple voices, so a unique identifier produced gibberish positives and degraded the trained model.
+- Extend the live training-status polling deadline from 15 minutes to 60 minutes to match real CPU training time.
+
 ## [0.2.3] - 2026-05-07
 
 ### SDK

@@ -73,7 +73,11 @@ def main() -> int:
     email = f"e2e-{uuid.uuid4().hex[:10]}@violawake-test.example.com"
     password = "E2ETestPass123!"
     name = "E2E Pipeline"
-    wake_word = f"viola_e2e_{int(time.time())}"
+    # MUST be a real word. Edge-TTS synthesizes 27 additional positives via
+    # _generate_tts_positives by literally saying this string in different
+    # voices — using a unique identifier here would train the model on
+    # gibberish for half its positive set.
+    wake_word = "viola"
 
     with httpx.Client(base_url=API, timeout=httpx.Timeout(180.0)) as client:
         # ──────────────────────────────────────────────────────────────────
@@ -132,7 +136,7 @@ def main() -> int:
 
         # ──────────────────────────────────────────────────────────────────
         step("6. Poll training status until completion")
-        deadline = time.time() + 900  # 15 min safety
+        deadline = time.time() + 3600  # 60 min — real training on CPU takes 30-50 min
         last_status = None
         while time.time() < deadline:
             r = client.get(f"/api/training/status/{job_id}")

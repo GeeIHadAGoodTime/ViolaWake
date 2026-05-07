@@ -2,6 +2,18 @@
 
 Update this file before each release. These notes are used as the GitHub Release body in `.github/workflows/release.yml`.
 
+## v0.2.4 — ONNX Export Compatibility With torch 2.10+
+
+### Highlights
+
+- **Restore TemporalCNN ONNX export on torch 2.10+.** torch 2.10 changed `torch.onnx.export` to default to the dynamo-based exporter, which lacks an ONNX dispatcher for `aten.adaptive_max_pool2d` — the lowering used by `nn.AdaptiveMaxPool1d(1)` inside `TemporalCNN`. Training jobs failed at the export step with `DispatchError: No ONNX function found for aten.adaptive_max_pool2d`. v0.2.4 pins `export_temporal_onnx` to the legacy exporter, matching how the production reference model was originally exported.
+- **Console backend dependency:** add `onnxscript` so torch's exporter machinery has its required dependency satisfied.
+- **Live e2e test fixes:** use the literal wake-word string instead of a per-run unique identifier, and extend the training-status polling deadline to match real CPU training duration.
+
+### Breaking Changes
+
+- None.
+
 ## v0.2.2 — Quality Gate & Training Parity
 
 ### Highlights

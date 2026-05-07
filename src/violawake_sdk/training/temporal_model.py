@@ -279,6 +279,12 @@ if _TORCH_AVAILABLE:
                 "score": {0: "batch"},
             },
             opset_version=opset_version,
+            # Pin to the legacy exporter. torch 2.10+ defaults to the dynamo
+            # exporter, which has no ONNX dispatcher for `aten.adaptive_max_pool2d`
+            # (the lowering of `nn.AdaptiveMaxPool1d(1)` used in TemporalCNN).
+            # The legacy path supports it; this is the same path the production
+            # `big_chungus_production.onnx` was exported with.
+            dynamo=False,
         )
 
 else:
