@@ -18,6 +18,8 @@
 
 | Document | Path | Scope | Last Updated | Staleness Signals |
 |----------|------|-------|-------------|-------------------|
+| **Production Status** | `docs/PRODUCTION_STATUS.md` | Current live state, what's verified, operational levers — read FIRST after any deploy | 2026-05-07 | Any deploy, env-var change, or smoke-test result |
+| **Deployment** | `docs/DEPLOYMENT.md` | How frontend + backend + tunnel actually deploy. Manual steps, not auto. | 2026-05-07 | Hosting platform change, tunnel reconfig, env-var schema change |
 | Product Requirements | `docs/PRD.md` | What we build, feature priorities, metrics | 2026-03-17 | New competitive entrant, market shift, major pivot |
 | Test Strategy | `docs/TEST_STRATEGY.md` | Testing philosophy, tiers, coverage requirements | 2026-03-17 | New test tier added, CI pipeline change |
 | Business Plan | `docs/BUSINESS_PLAN.md` | Revenue model, pricing, growth | 2026-03-26 | Pricing or market strategy change |

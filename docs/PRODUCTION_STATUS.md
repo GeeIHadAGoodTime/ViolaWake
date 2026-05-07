@@ -1,0 +1,77 @@
+# Production Status
+
+Living doc. Last verified end-to-end: **2026-05-07**. Update this file's date and the relevant rows whenever the live state changes.
+
+This is the **canonical** post-launch status. Do not add running notes to `LAUNCH_READINESS.md`, `PROGRESS.md`, or `FUNCTIONAL_GAP_ANALYSIS.md` for post-launch state — those captured the pre-launch sprint. New facts go here.
+
+---
+
+## What's live
+
+| Layer | Status | Where | Last deploy |
+|---|---|---|---|
+| Frontend | ✅ live | Cloudflare Pages, project `violawake`, `violawake.com` | 2026-05-07 (commit `5d7ac2a` via `wrangler pages deploy`) |
+| Backend | ✅ live | Local Docker via Cloudflare Tunnel `violawake-api`, `api.violawake.com` | 2026-05-07 (image rebuilt from commit `5d7ac2a`) |
+| Postgres | ✅ live | Local Docker `wakeword-postgres-1`, internal to `wakeword_default` network | 11+ days uptime |
+| Cloudflare Tunnel | ✅ live | Container `wakeword-tunnel-1`, tunnel UUID `7dbef1da-...` | 11+ days uptime |
+| SDK on PyPI | ✅ live | `violawake` v0.2.2 | 2026-04-05 |
+
+## Verified end-to-end (2026-05-07)
+
+- ✅ `pip install violawake[oww]` on a clean venv → import + load `temporal_cnn` model + score silence/sine/noise. All scored < 0.5 (no false positives).
+- ✅ `https://violawake.com/` renders the polished landing page; pricing tiers Free/$29/$99/Custom show; cookie banner + privacy + terms render.
+- ✅ Frontend bundle has `https://api.violawake.com/api` baked in (no same-origin `/api` fallback).
+- ✅ `GET /api/health` → 200.
+- ✅ `POST /api/auth/register` with new email → 201, returns user without token (verification flow placeholder).
+- ✅ `POST /api/auth/login` with valid creds → 200 + JWT.
+- ✅ `GET /api/auth/me` with token → 200.
+- ✅ `POST /api/billing/checkout` with token → 200 with `cs_test_*` Stripe Checkout URL. **Stripe is configured in TEST MODE.**
+- ✅ `GET /api/billing/subscription` → returns user's free-tier state.
+- ✅ `GET /api/recordings` (authed) → `[]` for new user.
+- ✅ `POST /api/auth/login` with 4 wrong passwords → 401, then 5+ → 429 (slowapi rate limit).
+- ✅ `DELETE /api/auth/account` without password body → 422 (security sprint enforces password confirm).
+- ✅ `DELETE /api/auth/account` with wrong password → 401.
+- ✅ `POST /api/recordings/upload` with 16 MB body → 413.
+- ✅ Total live API routes: 44 (includes new `/api/teams/accept`, `/api/teams/{team_id}/leave`, `/api/auth/change-password`).
+
+## NOT verified (and what would verify it)
+
+- ❌ **Email actually sends.** Resend is **not configured** as of 2026-05-07. Symptom: new users are auto-verified at first login (the `email_svc.enabled` fallback fires) and no verification email is sent. To enable: set `VIOLAWAKE_RESEND_API_KEY` in `.env.production`, verify the sending domain in Resend dashboard (DKIM/SPF), restart backend. To verify: register a new user, check inbox for "ViolaWake — Verify your email" within 60s.
+- ❌ **Stripe checkout completes end-to-end.** We confirmed checkout URL is issued. We have NOT confirmed: webhook receipt, subscription status update, quota changes after payment. To verify: drive Playwright through checkout with `4242 4242 4242 4242`, then `GET /api/billing/subscription` should show `tier=developer` within 30s.
+- ❌ **Account lockout actually triggers.** New code adds `failed_login_count` + `locked_until` columns and sets them on bad attempts. We confirmed the rate-limit (slowapi) blocks after 4 attempts, but we have NOT confirmed the per-account lockout (which would persist across IP changes). To verify: 5 wrong logins on one account, then a 6th from a fresh IP should still 401 with "Account temporarily locked".
+- ❌ **Full training pipeline against the live console.** Upload 10 silent/synthetic WAVs → start training → wait for SSE completion → download ONNX → load locally → push silence → expect score < 0.5. Blocked previously by the registration rate limit (10/hour) eating the test budget; do this when bumping the limit.
+- ❌ **True-positive wake detection.** Verified: silence/sine/noise score < 0.5 (no false positives). NOT verified: an actual "Viola" utterance scores > 0.5 (true positive). Needs a recorded sample or live mic.
+- ❌ **WASM browser SDK on the live site.** `wasm/dist/` is built and committed in the repo. The live site does NOT serve a WASM demo at `/wasm-demo/` or `/demo`. To deploy: either add a Cloudflare Pages route for a static demo subdir, or embed it as a component on the marketing site.
+
+## Operational levers (only the operator can change)
+
+| Lever | Where | Current value | Suggested for launch |
+|---|---|---|---|
+| `VIOLAWAKE_RESEND_API_KEY` | `.env.production` | unset | set + verify domain in Resend dashboard |
+| `VIOLAWAKE_STRIPE_SECRET_KEY` mode | Stripe dashboard | TEST (`sk_test_*`) | flip to LIVE when accepting real payments |
+| Registration rate limit | `console/backend/app/rate_limit.py` `REGISTER_LIMIT` | `10/hour` | bump to ~100/hour or add a test-mode bypass; 10/hour blocks any onboarding burst and the live test suite |
+| Login rate limit | same file, `LOGIN_LIMIT` | works | leave |
+| Robots / sitemap | `console/frontend/public/robots.txt` | sitemap line points to `console.violawake.com` (typo) | should be `violawake.com/sitemap.xml` |
+| OG image | `console/frontend/public/og-image.png` | placeholder PNG | upgrade to a real branded 1200×630 |
+
+## Known follow-ups (test debt, not blocking launch)
+
+These are tracked as separate work; none of them affect the live user journey.
+
+1. **~25 stale test mocks** in `console/tests/test_backend.py`, `test_teams.py`, `test_health_monitoring.py`, `test_job_queue.py`, `test_billing.py`. Same pattern as the 5 fixed in `test_auth_email_routes.py`: `FakeEmailService` missing `enabled` / `send_existing_account_notice`, `FakeSession` missing `commit`/`rollback`, route signatures changed `(body, request, db)` → `(request, body, db)`. CI is failing because of these.
+2. **Five ruff lint errors** in `src/violawake_sdk/tools/download_model.py` (f-string without placeholders) and `src/violawake_sdk/tools/train.py` (unused numpy import). CI lint job blocks on these.
+3. **Pages docs workflow** fails because GitHub Pages isn't enabled on the repo. Either enable it or remove the `docs.yml` workflow.
+4. **`tools/fetch_release_models.py`** uses `gh` CLI primary + GitHub API fallback. If GitHub Releases for the SDK package are populated correctly, releases work; verify on next tag-push.
+5. **Hash-mismatch warning from `openwakeword`** at SDK runtime: `OWW backbone hash mismatch: expected 70d164290c1d095d, got e8444299a314fbb2`. Means the openwakeword package was updated upstream and the hash check warns but does not fail. Could degrade accuracy on real wake detection. Decide: pin a specific openwakeword version, or update the expected hash, or remove the check.
+
+## How to keep this doc honest
+
+When you deploy or change live state:
+
+1. Update the **Last verified** date at the top.
+2. Update the relevant row(s) under "What's live" with the new commit / version / date.
+3. Move items between "Verified" and "NOT verified" as facts change.
+4. If an "Operational lever" changes (e.g., you turn on Resend), update its row and add a new line under "Verified end-to-end" describing what now works.
+5. If a "Known follow-up" gets resolved, delete it.
+
+If you ever discover the live state has drifted from this doc, **trust the live probe (`curl`, OpenAPI, smoke suite) over this file** and update the doc to match what you observed.

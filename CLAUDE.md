@@ -18,6 +18,17 @@ This file provides AI assistants with context, patterns, and rules for the Viola
 - `J:\PROJECTS\NOVVIOLA_fixed3_patched\NOVVIOLA\.viola\agents\audit_viola_inventory.md`
 - `J:\PROJECTS\NOVVIOLA_fixed3_patched\NOVVIOLA\.viola\agents\audit_gap_analysis.md`
 
+## Relationship to NOVVIOLA (Viola assistant)
+
+ViolaWake is **standalone**. NOVVIOLA can use ViolaWake as a Python dependency (the wake-word SDK), but ViolaWake's API, database, infrastructure, and secrets are NOT shared with NOVVIOLA. Concretely:
+
+- ViolaWake runs in its own Docker stack: `wakeword-backend-1` + `wakeword-postgres-1` + `wakeword-tunnel-1` (Cloudflare Tunnel `violawake-api`, UUID `7dbef1da-74e3-4d7f-bba9-aad4a3e72150`)
+- ViolaWake env vars use `VIOLAWAKE_*` prefix; NOVVIOLA uses `VIOLA_*`. No crossover.
+- ViolaWake's frontend is on Cloudflare Pages (project `violawake`, domain `violawake.com`); NOVVIOLA's UI is separate.
+- Cross-project edits should use the SDK as the only contract. **Never hardcode NOVVIOLA URLs, env vars, or DB references into the ViolaWake repo.**
+
+Full architecture and deploy mechanics: `docs/DEPLOYMENT.md`. Current live state and what's verified: `docs/PRODUCTION_STATUS.md`.
+
 ## Repository Layout
 
 ```
@@ -26,9 +37,13 @@ violawake/
 ├── CLAUDE.md                   # This file — AI context
 ├── pyproject.toml              # Package metadata, deps, tool config
 ├── .gitignore
+├── docker-compose.production.yml  # Backend + postgres + tunnel stack (production)
+├── .env.production             # Production env vars (NOT in git — gitignored)
 ├── docs/
 │   ├── REGISTRY.md             # Doc routing table — consult before reading docs
 │   ├── PRD.md                  # Product requirements — source of truth for WHAT we build
+│   ├── DEPLOYMENT.md           # How the live deploy actually works (frontend + backend + tunnel)
+│   ├── PRODUCTION_STATUS.md    # Current live state, what's verified, known issues
 │   ├── TEST_STRATEGY.md        # Testing philosophy, tiers, CI integration
 │   └── adr/
 │       ├── ADR-001-onnx-runtime.md         # Why ONNX Runtime for inference
@@ -36,6 +51,14 @@ violawake/
 │       ├── ADR-003-python-first.md          # Why Python SDK first, not C
 │       ├── ADR-004-open-core.md             # Open-core licensing strategy
 │       └── ADR-005-packaging.md             # PyPI packaging + model distribution
+├── console/                    # SaaS console — NOT the SDK
+│   ├── backend/                # FastAPI backend (auth, billing, recordings, training, models, teams)
+│   ├── frontend/               # React+Vite frontend (deployed to Cloudflare Pages)
+│   ├── docker-compose.yml      # Local-dev compose
+│   └── Dockerfile.backend      # Production backend image (referenced from ../docker-compose.production.yml)
+├── tests/
+│   ├── live/                   # Live smoke + E2E tests against deployed instance — see tests/live/README.md
+│   └── ...
 ├── src/
 │   └── violawake_sdk/
 │       ├── __init__.py         # Public API surface
@@ -165,6 +188,60 @@ All project docs are listed in `docs/REGISTRY.md`. When creating new docs:
 1. Add to `docs/REGISTRY.md` first
 2. Follow the `<!-- doc-meta -->` frontmatter pattern from existing docs
 3. Set appropriate authority level (LIVING / ARCHIVED / ADR)
+
+## Deployment (next-time quick reference)
+
+Both the SaaS frontend and the SaaS backend are **manual deploys** — push to GitHub does not auto-deploy anything. Full details in `docs/DEPLOYMENT.md`.
+
+### Backend (api.violawake.com)
+
+Runs in Docker on the developer machine, exposed to the internet via a Cloudflare Tunnel container in the same stack.
+
+```bash
+cd /j/CLAUDE/PROJECTS/Wakeword
+docker compose -f docker-compose.production.yml build backend
+docker compose -f docker-compose.production.yml up -d backend
+# Wait ~30s for healthcheck and tunnel reconnect
+curl -sS https://api.violawake.com/api/health   # 200 = live
+```
+
+Verify the new code is actually live (e.g., after a security patch):
+```bash
+curl -sS https://api.violawake.com/openapi.json | python -c "import sys,json; d=json.load(sys.stdin); print('routes:', len(d['paths']))"
+```
+
+The stack is three containers (project name `wakeword`):
+- `wakeword-backend-1` — uvicorn FastAPI from `console/Dockerfile.backend`
+- `wakeword-postgres-1` — Postgres 16
+- `wakeword-tunnel-1` — `cloudflare/cloudflared` running tunnel `violawake-api`
+
+NOVVIOLA's containers (`viola-api`, `viola-postgres-local`, etc.) are unrelated — never restart them when deploying ViolaWake.
+
+### Frontend (violawake.com)
+
+Cloudflare Pages, project `violawake`. Built locally with the production API URL baked into the bundle, then deployed via Wrangler CLI.
+
+```bash
+cd /j/CLAUDE/PROJECTS/Wakeword/console/frontend
+VITE_API_URL=https://api.violawake.com/api npm run build
+wrangler pages deploy dist --project-name violawake --branch master --commit-dirty=true
+```
+
+`VITE_API_URL` MUST be set at build time — Vite bakes it into the JS bundle. Without it, the bundle defaults to same-origin `/api`, which 405s on Cloudflare Pages because there's no API on that domain. (Confirmed live bug 2026-05-07; fixed by always passing the env var to `npm run build`.)
+
+### SDK (PyPI)
+
+`pip install violawake` installs base SDK. For wake detection, users need:
+```bash
+pip install "violawake[oww]"
+python -c "from openwakeword.utils import download_models; download_models()"
+```
+
+The `openwakeword` PyPI wheel does not bundle ONNX backbone files; `download_models()` fetches them on first use. Document this in the README's quickstart so users don't hit `ModelNotFoundError`.
+
+### Living-doc convention
+
+When the deploy state changes (new env var added, new domain, tunnel rerouted, etc.), update **`docs/PRODUCTION_STATUS.md`** with the date and what changed. Don't add it as a one-off note in random docs.
 
 ## Agent Coordination
 
