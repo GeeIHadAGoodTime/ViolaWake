@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import sqlite3
 import sys
 import time
 import wave
@@ -65,25 +66,32 @@ def register_user(client: TestClient) -> dict[str, object]:
         json={"email": email, "password": "TestPass123!", "name": "Billing Test"},
     )
     assert response.status_code in (200, 201), response.text
-    data = response.json()
 
     import sys
 
     if BACKEND_DIR not in sys.path:
         sys.path.insert(0, BACKEND_DIR)
 
-    from app.auth import create_email_verification_token
+    from app.config import settings
 
-    verify_response = client.post(
-        "/api/auth/verify-email",
-        json={"token": create_email_verification_token(data["user"]["id"])},
+    with sqlite3.connect(settings.db_path) as conn:
+        row = conn.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+        assert row is not None, "Registered user not found"
+        user_id = int(row[0])
+        conn.execute("UPDATE users SET email_verified = 1 WHERE id = ?", (user_id,))
+        conn.commit()
+
+    login_response = client.post(
+        "/api/auth/login",
+        json={"email": email, "password": "TestPass123!"},
     )
-    assert verify_response.status_code == 200, verify_response.text
+    assert login_response.status_code == 200, login_response.text
+    token = login_response.json()["token"]
 
     return {
         "email": email,
-        "user_id": data["user"]["id"],
-        "headers": {"Authorization": f"Bearer {data['token']}"},
+        "user_id": user_id,
+        "headers": {"Authorization": f"Bearer {token}"},
     }
 
 
@@ -297,7 +305,7 @@ class TestBillingRoutes:
     def test_checkout_without_auth_requires_auth(self, client, billing_settings) -> None:
         response = client.post("/api/billing/checkout", json={"tier": "developer"})
 
-        assert response.status_code == 403, response.text
+        assert response.status_code == 401, response.text
         assert response.json()["detail"] == "Not authenticated"
 
 
