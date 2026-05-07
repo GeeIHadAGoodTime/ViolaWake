@@ -9,11 +9,12 @@ name: Deploy frontend to Cloudflare Pages
 # CLOUDFLARE_ACCOUNT_ID is hardcoded below (not secret).
 
 on:
-  push:
-    branches: [master]
-    paths:
-      - "console/frontend/**"
-      - ".github/workflows/deploy-pages.yml"
+  # Manual trigger only — until the CLOUDFLARE_API_TOKEN secret has Pages:Edit.
+  # The current FewerJobs token is DNS-scoped (works for DNS/R2 only). To enable
+  # push-triggered deploy, create a new token at
+  # https://dash.cloudflare.com/profile/api-tokens with permission
+  # "Account → Cloudflare Pages → Edit", store as CLOUDFLARE_API_TOKEN repo secret,
+  # then re-add "push: branches: [master]" below.
   workflow_dispatch:
 
 concurrency:
