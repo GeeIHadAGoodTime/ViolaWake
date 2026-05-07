@@ -13,6 +13,8 @@ MANIFEST
 
 # Virtual environments
 .env
+.env.production
+.env.staging
 .venv
 env/
 venv/
@@ -90,6 +92,7 @@ benchmark-results/
 # Logs
 *.log
 logs/
+.codex_log.txt
 
 # Ruff
 .ruff_cache/
@@ -106,6 +109,9 @@ console/frontend/dist/
 # Temp files
 tmp*/
 nul
+.codex_tmp/
+.codex_prompt.txt
+experiments/embedding_cache.npz.bak_round*
 
 # Test artifacts
 test_model.config.json
