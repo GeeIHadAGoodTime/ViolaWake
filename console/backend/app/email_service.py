@@ -19,9 +19,10 @@ FROM_ADDRESS = "ViolaWake <noreply@violawake.com>"
 class EmailService:
     """Send transactional emails through Resend."""
 
-    def __init__(self, api_key: str, console_base_url: str) -> None:
-        self._api_key = api_key.strip()
-        self._console_base_url = console_base_url.rstrip("/") + "/"
+    def __init__(self, api_key: str | None = None, console_base_url: str | None = None) -> None:
+        self._api_key = (api_key if api_key is not None else settings.resend_api_key).strip()
+        base_url = console_base_url if console_base_url is not None else settings.console_base_url
+        self._console_base_url = base_url.rstrip("/") + "/"
         self._warned_disabled = False
 
         if self.enabled:
@@ -80,19 +81,29 @@ class EmailService:
         )
         return await self._send_email(to, f"Your ViolaWake model {model_name} is ready", html)
 
-    async def send_team_invite(self, to_email: str, team_name: str, invite_token: str, invite_url: str) -> bool:
-        """Send a team invitation email with a join link."""
+    async def send_team_invite(
+        self,
+        to_email: str,
+        team_name: str,
+        inviter_name: str,
+        accept_url: str,
+    ) -> bool:
+        """Send a team invitation email with an accept link."""
         html = self._render_email(
             heading="You've been invited to a team",
             intro=(
-                f"You have been invited to join <strong>{escape(team_name)}</strong> "
-                f"on ViolaWake Console."
+                f"{escape(inviter_name)} invited you to join "
+                f"<strong>{escape(team_name)}</strong> on ViolaWake Console."
             ),
             button_label="Accept Invite",
-            button_url=invite_url,
+            button_url=accept_url,
             footer="If you did not expect this invitation, you can ignore this email.",
         )
-        return await self._send_email(to_email, f"Join {team_name} on ViolaWake", html)
+        return await self._send_email(
+            to_email,
+            f"You've been invited to join {team_name} on ViolaWake",
+            html,
+        )
 
     async def send_quota_warning(self, to: str, used: int, limit: int, tier: str) -> bool:
         """Send a usage warning when the user is near their tier limit."""

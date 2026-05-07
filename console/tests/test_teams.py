@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -15,6 +16,7 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from app.auth import _create_action_token, create_team_invite_token, decode_team_invite_token
+from app.email_service import EmailService
 from app.routes import teams as teams_routes
 from app.schemas import (
     TeamCreateRequest,
@@ -156,6 +158,30 @@ def test_team_invite_token_wrong_purpose_rejected() -> None:
     assert exc_info.value.status_code == 400
 
 
+@pytest.mark.asyncio
+async def test_team_invite_email_uses_accept_url_and_subject(monkeypatch: pytest.MonkeyPatch) -> None:
+    sent: dict[str, Any] = {}
+
+    def fake_send(params: dict[str, Any]) -> None:
+        sent.update(params)
+
+    monkeypatch.setattr("app.email_service.resend.Emails.send", fake_send)
+
+    svc = EmailService(api_key="test-key", console_base_url="https://console.test")
+    result = await svc.send_team_invite(
+        to_email="bob@example.com",
+        team_name="Alpha Team",
+        inviter_name="Owner User",
+        accept_url="https://console.test/teams/accept?token=abc123",
+    )
+
+    assert result is True
+    assert sent["to"] == ["bob@example.com"]
+    assert sent["subject"] == "You've been invited to join Alpha Team on ViolaWake"
+    assert "Owner User invited you to join" in sent["html"]
+    assert "https://console.test/teams/accept?token=abc123" in sent["html"]
+
+
 # ── create_team ───────────────────────────────────────────────────────────────
 
 
@@ -211,13 +237,39 @@ async def test_list_teams_returns_only_joined() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invite_member_returns_token_in_message() -> None:
+async def test_invite_member_sends_email_without_token_in_production_response(monkeypatch: pytest.MonkeyPatch) -> None:
     owner = _make_user(1, "owner@example.com")
     invitee_email = "bob@example.com"
     db = FakeSession()
 
     team = _make_team(10, "Alpha Team", owner)
     owner_member = _make_member(team, owner, "owner")
+    sent_invites: list[dict[str, str]] = []
+
+    class FakeEmailService:
+        def _console_url(self, path: str, **query: str) -> str:
+            token = query["token"]
+            return f"https://console.test{path}?token={token}"
+
+        async def send_team_invite(
+            self,
+            to_email: str,
+            team_name: str,
+            inviter_name: str,
+            accept_url: str,
+        ) -> bool:
+            sent_invites.append(
+                {
+                    "to_email": to_email,
+                    "team_name": team_name,
+                    "inviter_name": inviter_name,
+                    "accept_url": accept_url,
+                }
+            )
+            return True
+
+    monkeypatch.setattr(teams_routes.settings, "env", "production")
+    monkeypatch.setattr(teams_routes, "get_email_service", lambda: FakeEmailService())
 
     call_count = {"n": 0}
 
@@ -240,12 +292,64 @@ async def test_invite_member_returns_token_in_message() -> None:
         _member=owner_member,
         db=db,
     )
-    assert "Invite token issued:" in resp.message
-    # Token should be decodable
-    token = resp.message.split("Invite token issued: ")[1].strip()
+    assert resp.message == "Invitation sent"
+    assert "token" not in resp.message.lower()
+    assert len(sent_invites) == 1
+    assert sent_invites[0]["to_email"] == invitee_email
+    assert sent_invites[0]["team_name"] == "Alpha Team"
+    assert sent_invites[0]["inviter_name"] == owner.name
+    assert sent_invites[0]["accept_url"].startswith("https://console.test/teams/accept?token=")
+
+    token = parse_qs(urlparse(sent_invites[0]["accept_url"]).query)["token"][0]
     decoded = decode_team_invite_token(token)
     assert decoded["email"] == invitee_email
     assert decoded["team_id"] == 10
+
+
+@pytest.mark.asyncio
+async def test_invite_member_can_include_token_when_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    owner = _make_user(1, "owner@example.com")
+    db = FakeSession()
+
+    team = _make_team(10, "Alpha Team", owner)
+    owner_member = _make_member(team, owner, "owner")
+
+    class FakeEmailService:
+        def _console_url(self, path: str, **query: str) -> str:
+            return f"https://console.test{path}?token={query['token']}"
+
+        async def send_team_invite(
+            self,
+            to_email: str,
+            team_name: str,
+            inviter_name: str,
+            accept_url: str,
+        ) -> bool:
+            return True
+
+    monkeypatch.setattr(teams_routes.settings, "env", "test")
+    monkeypatch.setattr(teams_routes, "get_email_service", lambda: FakeEmailService())
+
+    call_count = {"n": 0}
+
+    async def handler(stmt: Any) -> _ScalarResult:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return _ScalarResult(team)
+        return _ScalarResult(None)
+
+    db._execute_handler = handler
+
+    resp = await teams_routes.invite_member(
+        team_id=10,
+        body=TeamInviteRequest(email="bob@example.com", role=TeamMemberRole.member),
+        current_user=owner,
+        _member=owner_member,
+        db=db,
+    )
+    assert "Test invite token:" in resp.message
+    token = resp.message.split("Test invite token: ")[1].strip()
+    assert decode_team_invite_token(token)["team_id"] == 10
 
 
 @pytest.mark.asyncio
@@ -352,6 +456,41 @@ async def test_join_team_success() -> None:
         db=db,
     )
     assert resp.id == 10
+
+
+@pytest.mark.asyncio
+async def test_accept_team_invite_success() -> None:
+    owner = _make_user(1, "owner@example.com")
+    bob = _make_user(2, "bob@example.com")
+
+    token = create_team_invite_token(
+        inviter_id=owner.id, team_id=10, email=bob.email, role="member"
+    )
+
+    team = _make_team(10, "Alpha", owner)
+    _make_member(team, owner, "owner")
+
+    call_count = {"n": 0}
+
+    class AcceptSession(FakeSession):
+        async def execute(self, stmt: Any) -> _ScalarResult:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return _ScalarResult(team)
+            if call_count["n"] == 2:
+                return _ScalarResult(None)
+            if call_count["n"] == 3:
+                _make_member(team, bob, "member")
+                return _ScalarResult(team)
+            return _ScalarResult(None)
+
+    resp = await teams_routes.accept_team_invite(
+        token=token,
+        current_user=bob,
+        db=AcceptSession(),
+    )
+    assert resp.id == 10
+    assert any(m.user_id == bob.id for m in resp.members)
 
 
 @pytest.mark.asyncio
@@ -485,6 +624,46 @@ async def test_admin_cannot_remove_another_admin() -> None:
             user_id=admin2.id,
             current_user=admin1,
             _member=admin1_member,
+            db=db,
+        )
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_member_can_leave_team() -> None:
+    owner = _make_user(1, "owner@example.com")
+    bob = _make_user(2, "bob@example.com")
+    db = FakeSession()
+    team = _make_team(10, "T", owner)
+    _make_member(team, owner, "owner")
+    bob_member = _make_member(team, bob, "member")
+    db._execute_handler = lambda _: _ScalarResult(team)
+
+    resp = await teams_routes.leave_team(
+        team_id=10,
+        current_user=bob,
+        _member=bob_member,
+        db=db,
+    )
+    assert resp.message == "Left team"
+    assert bob_member in db._deleted
+
+
+@pytest.mark.asyncio
+async def test_owner_cannot_leave_team() -> None:
+    from fastapi import HTTPException
+
+    owner = _make_user(1, "owner@example.com")
+    db = FakeSession()
+    team = _make_team(10, "T", owner)
+    owner_member = _make_member(team, owner, "owner")
+    db._execute_handler = lambda _: _ScalarResult(team)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await teams_routes.leave_team(
+            team_id=10,
+            current_user=owner,
+            _member=owner_member,
             db=db,
         )
     assert exc_info.value.status_code == 403
