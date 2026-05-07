@@ -259,14 +259,14 @@ def main():
         pos_arr = np.array(pos_vectors)
         neg_arr = np.array(neg_vectors)
 
-        # Compute Cohen's d for this pooling strategy
+        # Compute d' for this pooling strategy
         pos_mean = pos_arr.mean(axis=0)
         neg_mean = neg_arr.mean(axis=0)
 
         # Multivariate distance (L2 distance between centroids, normalized)
         centroid_dist = np.linalg.norm(pos_mean - neg_mean)
 
-        # Per-dimension Cohen's d and average
+        # Per-dimension d' and average
         pooled_var = 0.5 * (pos_arr.var(axis=0) + neg_arr.var(axis=0))
         per_dim_d = np.where(pooled_var > 1e-10,
                              np.abs(pos_arr.mean(axis=0) - neg_arr.mean(axis=0)) / np.sqrt(pooled_var),
@@ -280,8 +280,8 @@ def main():
         print(f"\n  {strategy}:")
         print(f"    L2 distance between centroids: {centroid_dist:.4f}")
         print(f"    Cosine similarity of centroids: {centroid_cos:.4f}")
-        print(f"    Mean per-dim Cohen's d: {avg_d:.4f}")
-        print(f"    Max per-dim Cohen's d:  {max_d:.4f}")
+        print(f"    Mean per-dim d': {avg_d:.4f}")
+        print(f"    Max per-dim d':  {max_d:.4f}")
         print(f"    Top-10 dims (by |d|): {np.argsort(per_dim_d)[-10:][::-1].tolist()}")
 
     # ========================================================================
@@ -341,7 +341,7 @@ def main():
     seq_avg_d = np.mean(seq_per_dim_d)
 
     print(f"    L2 distance between centroids: {seq_centroid_dist:.4f}")
-    print(f"    Mean per-dim Cohen's d: {seq_avg_d:.4f}")
+    print(f"    Mean per-dim d': {seq_avg_d:.4f}")
 
     # Compare with mean-pooled
     pos_mean_vectors = [frames.mean(axis=0) for frames in pos_all_frames]
@@ -358,7 +358,7 @@ def main():
 
     print(f"\n  Mean-pooled comparison:")
     print(f"    L2 distance between centroids: {mean_centroid_dist:.4f}")
-    print(f"    Mean per-dim Cohen's d: {mean_avg_d:.4f}")
+    print(f"    Mean per-dim d': {mean_avg_d:.4f}")
 
     improvement = seq_avg_d / mean_avg_d if mean_avg_d > 0 else float('inf')
     print(f"\n  Sequence representation improves separability by: {improvement:.2f}x")

@@ -26,17 +26,20 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getQualityState(cohenD: number | null): {
+function getQualityState(dPrime: number | null): {
   label: string;
   className: string;
 } {
-  if (cohenD === null) {
+  if (dPrime === null) {
     return { label: "Unknown", className: "quality-unknown" };
   }
-  if (cohenD < 5) {
+  if (dPrime < 5) {
     return { label: "Needs Work", className: "quality-low" };
   }
-  if (cohenD <= 10) {
+  if (dPrime < 10) {
+    return { label: "Fair", className: "quality-low" };
+  }
+  if (dPrime < 15) {
     return { label: "Good", className: "quality-medium" };
   }
   return { label: "Excellent", className: "quality-high" };
@@ -132,15 +135,19 @@ function getRecommendations(
 ): string[] {
   const recommendations: string[] = [];
 
-  if (performance.cohen_d === null) {
+  if (performance.d_prime === null) {
     recommendations.push(
       "Performance score unavailable. Train a fresh model run to capture evaluation metrics.",
     );
-  } else if (performance.cohen_d < 5) {
+  } else if (performance.d_prime < 5) {
     recommendations.push(
       "Consider recording more samples or improving audio quality.",
     );
-  } else if (performance.cohen_d <= 10) {
+  } else if (performance.d_prime < 10) {
+    recommendations.push(
+      "Fair separation. Consider testing with real-world noise and recording more samples.",
+    );
+  } else if (performance.d_prime < 15) {
     recommendations.push(
       "Good model. Consider testing with real-world noise.",
     );
@@ -222,8 +229,8 @@ export default function ModelPerformancePage() {
   }, [modelId]);
 
   const quality = useMemo(
-    () => getQualityState(performance?.cohen_d ?? null),
-    [performance?.cohen_d],
+    () => getQualityState(performance?.d_prime ?? null),
+    [performance?.d_prime],
   );
 
   const chart = useMemo(
@@ -320,9 +327,9 @@ export default function ModelPerformancePage() {
 
             <div className="model-performance-stats">
               <div className="performance-stat">
-                <span className="performance-stat-label">Cohen&apos;s d</span>
+                <span className="performance-stat-label">d&prime; (d-prime)</span>
                 <strong className={`performance-stat-value ${quality.className}`}>
-                  {formatMetric(performance.cohen_d)}
+                  {formatMetric(performance.d_prime)}
                 </strong>
               </div>
               <div className="performance-stat">

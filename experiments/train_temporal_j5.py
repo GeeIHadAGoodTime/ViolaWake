@@ -285,7 +285,7 @@ def evaluate_scores(
     pos_scores = all_scores[pos_mask]
     neg_scores = all_scores[neg_mask]
 
-    # Cohen's d
+    # d'
     pooled_std = np.sqrt(0.5 * (pos_scores.var() + neg_scores.var()))
     dprime = float((pos_scores.mean() - neg_scores.mean()) / pooled_std) if pooled_std > 1e-10 else 0.0
 

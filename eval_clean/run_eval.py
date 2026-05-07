@@ -37,7 +37,7 @@ def run_eval(model_name: str, model_path: str, csv_name: str) -> dict:
 
     print(f"\n=== {model_name} Results ===")
     print(f"Architecture: {results['architecture']}")
-    print(f"D-prime (Cohen's d): {results['d_prime']:.4f}")
+    print(f"d': {results['d_prime']:.4f}")
     print(f"AUC: {results['roc_auc']:.4f}")
     print(f"FRR at 0.50: {results['frr']:.4f} ({results['frr']*100:.1f}%)")
     print(f"FAR/hr at 0.50: {results['far_per_hour']:.2f}")

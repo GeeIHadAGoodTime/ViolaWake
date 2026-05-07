@@ -1449,7 +1449,7 @@ def _train_temporal_cnn(
             d_prime_result = results["d_prime"]
             far = results["far_per_hour"]
             frr = results["frr"] * 100
-            print(f"Cohen's d: {d_prime_result:.2f}  FAR: {far:.2f}/hr  FRR: {frr:.1f}%")
+            print(f"d': {d_prime_result:.2f}  FAR: {far:.2f}/hr  FRR: {frr:.1f}%")
         except Exception as e:
             print(f"Evaluation failed: {e}")
     elif quality_grade == "F" and verbose and eval_dir and eval_dir.exists():

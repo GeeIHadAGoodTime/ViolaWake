@@ -120,7 +120,7 @@ POLICIES: dict[str, callable] = {
 # -- Metrics --------------------------------------------------------------------
 
 def compute_dprime(pos: np.ndarray, neg: np.ndarray) -> float:
-    """Cohen's d separability metric."""
+    """d' separability metric."""
     if len(pos) == 0 or len(neg) == 0:
         return 0.0
     pooled_std = np.sqrt(0.5 * (pos.var() + neg.var()))

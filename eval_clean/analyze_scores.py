@@ -192,7 +192,7 @@ def analyze_model(csv_path: str, model_name: str):
     ci_low = np.percentile(d_primes, 2.5)
     ci_high = np.percentile(d_primes, 97.5)
     print(f"  D-prime: {pos_scores.mean() - neg_scores.mean():.4f} (raw diff)")
-    print(f"  Cohen's d point estimate: {float((pos_scores.mean() - neg_scores.mean()) / np.sqrt(0.5 * (pos_scores.var() + neg_scores.var()))):.4f}")
+    print(f"  d' point estimate: {float((pos_scores.mean() - neg_scores.mean()) / np.sqrt(0.5 * (pos_scores.var() + neg_scores.var()))):.4f}")
     print(f"  Bootstrap mean: {d_primes.mean():.4f}")
     print(f"  Bootstrap std: {d_primes.std():.4f}")
     print(f"  95% CI: [{ci_low:.4f}, {ci_high:.4f}]")

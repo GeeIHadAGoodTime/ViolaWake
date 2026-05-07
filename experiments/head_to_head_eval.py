@@ -1,7 +1,7 @@
 """Head-to-head evaluation: ViolaWake temporal_cnn vs MLP (r3_10x_s42) vs raw OWW baseline.
 
 Scores each test clip through the full WakeDetector pipeline (OWW backbone -> model)
-to get proper scores, then computes FAR, FRR, Cohen's d, and grades.
+to get proper scores, then computes FAR, FRR, d', and grades.
 
 Usage:
     python experiments/head_to_head_eval.py
@@ -61,10 +61,10 @@ def score_clip_streaming(detector, audio_int16: np.ndarray) -> float:
 
 
 def compute_metrics(pos_scores: np.ndarray, neg_scores: np.ndarray, threshold: float) -> dict:
-    """Compute FAR, FRR, Cohen's d, ROC AUC, confusion matrix."""
+    """Compute FAR, FRR, d', ROC AUC, confusion matrix."""
     from sklearn.metrics import auc, roc_curve
 
-    # Cohen's d
+    # d'
     pooled_std = np.sqrt(0.5 * (pos_scores.var() + neg_scores.var()))
     d_prime = float((pos_scores.mean() - neg_scores.mean()) / pooled_std) if pooled_std > 1e-10 else 0.0
 
@@ -312,7 +312,7 @@ def main():
         ("FAR (rate)",          "far",          ".4f",  True),
         ("FRR (rate)",          "frr",          ".4f",  True),
         ("FAR/hr",              "far_per_hour", ".1f",  True),
-        ("Cohen's d",           "d_prime",      ".2f",  False),
+        ("d'",                  "d_prime",      ".2f",  False),
         ("ROC AUC",             "roc_auc",      ".4f",  False),
         ("Precision",           "precision",    ".3f",  False),
         ("Recall",              "recall",       ".3f",  False),
@@ -358,10 +358,10 @@ def main():
     oww = results["oww_baseline"]
 
     if tc["d_prime"] > mlp["d_prime"]:
-        print(f"temporal_cnn achieves a Cohen's d of {tc['d_prime']:.2f} vs {mlp['d_prime']:.2f} for the MLP,")
+        print(f"temporal_cnn achieves a d' of {tc['d_prime']:.2f} vs {mlp['d_prime']:.2f} for the MLP,")
         print(f"demonstrating {((tc['d_prime'] / mlp['d_prime']) - 1) * 100:.0f}% better score separation.")
     else:
-        print(f"r3_10x_s42 (MLP) achieves a Cohen's d of {mlp['d_prime']:.2f} vs {tc['d_prime']:.2f} for temporal_cnn.")
+        print(f"r3_10x_s42 (MLP) achieves a d' of {mlp['d_prime']:.2f} vs {tc['d_prime']:.2f} for temporal_cnn.")
 
     print(f"\nThe raw OWW backbone (embedding norm only, no trained classifier) achieves d'={oww['d_prime']:.2f},")
     print(f"showing that the trained classifiers add {'significant' if tc['d_prime'] > oww['d_prime'] * 2 else 'some'} value over raw embeddings.")

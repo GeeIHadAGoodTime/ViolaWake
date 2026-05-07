@@ -92,7 +92,7 @@ def compute_dprime(
     pos_scores: list[float] | np.ndarray,
     neg_scores: list[float] | np.ndarray,
 ) -> float:
-    """Compute the repo's historical Cohen's d-style separation metric."""
+    """Compute the repo's historical d-prime style separation metric."""
     pos = np.asarray(pos_scores, dtype=np.float64)
     neg = np.asarray(neg_scores, dtype=np.float64)
 

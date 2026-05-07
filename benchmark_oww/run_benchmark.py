@@ -124,7 +124,7 @@ class BenchResult:
         return float(best_eer)
 
     def bootstrap_ci(self, n_boot: int = 10000, seed: int = 42) -> tuple[float, float, float]:
-        """Bootstrap 95% CI for Cohen's d."""
+        """Bootstrap 95% CI for d'."""
         rng = np.random.default_rng(seed)
         pos = np.array(self.pos_scores)
         neg = np.array(self.neg_scores)
@@ -278,7 +278,7 @@ def generate_report(vw: BenchResult, oww: BenchResult) -> str:
     lines.append("")
     lines.append("| Metric | ViolaWake (viola) | OWW (alexa) |")
     lines.append("|--------|-------------------|-------------|")
-    lines.append(f"| **Cohen's d** | **{vw.cohens_d():.2f}** | **{oww.cohens_d():.2f}** |")
+    lines.append(f"| **d'** | **{vw.cohens_d():.2f}** | **{oww.cohens_d():.2f}** |")
     lines.append(f"| ROC AUC | {vw.roc_auc():.4f} | {oww.roc_auc():.4f} |")
     lines.append(f"| EER | {vw.eer():.4f} | {oww.eer():.4f} |")
     lines.append(f"| FAR | {vw_m['far']*100:.1f}% ({vw_m['fp']}/{len(vw.neg_scores)}) | {oww_m['far']*100:.1f}% ({oww_m['fp']}/{len(oww.neg_scores)}) |")
@@ -319,7 +319,7 @@ def generate_report(vw: BenchResult, oww: BenchResult) -> str:
     oww_boot_mean, oww_lo, oww_hi = oww.bootstrap_ci()
     lines.append("## Bootstrap Confidence Intervals (10,000 resamples)")
     lines.append("")
-    lines.append("| System | Cohen's d | 95% CI |")
+    lines.append("| System | d' | 95% CI |")
     lines.append("|--------|-----------|--------|")
     lines.append(f"| ViolaWake (viola) | {vw.cohens_d():.2f} | [{vw_lo:.2f}, {vw_hi:.2f}] |")
     lines.append(f"| OWW (alexa) | {oww.cohens_d():.2f} | [{oww_lo:.2f}, {oww_hi:.2f}] |")
@@ -384,12 +384,12 @@ def generate_report(vw: BenchResult, oww: BenchResult) -> str:
 
     if oww_d > vw_d:
         ratio = oww_d / vw_d if vw_d > 0 else float('inf')
-        lines.append(f"**OpenWakeWord wins on separability.** OWW's Cohen's d ({oww_d:.2f}) is {ratio:.1f}x higher than ViolaWake's ({vw_d:.2f}).")
+        lines.append(f"**OpenWakeWord wins on separability.** OWW's d' ({oww_d:.2f}) is {ratio:.1f}x higher than ViolaWake's ({vw_d:.2f}).")
     elif vw_d > oww_d:
         ratio = vw_d / oww_d if oww_d > 0 else float('inf')
-        lines.append(f"**ViolaWake wins on separability.** ViolaWake's Cohen's d ({vw_d:.2f}) is {ratio:.1f}x higher than OWW's ({oww_d:.2f}).")
+        lines.append(f"**ViolaWake wins on separability.** ViolaWake's d' ({vw_d:.2f}) is {ratio:.1f}x higher than OWW's ({oww_d:.2f}).")
     else:
-        lines.append(f"**Tie on separability.** Both systems achieve Cohen's d of {vw_d:.2f}.")
+        lines.append(f"**Tie on separability.** Both systems achieve d' of {vw_d:.2f}.")
 
     lines.append("")
     lines.append(f"ROC AUC: ViolaWake {vw_auc:.4f} vs OWW {oww_auc:.4f}.")
@@ -433,7 +433,7 @@ def main():
     print(f"{'='*70}")
     print(f"{'Metric':<25} {'ViolaWake (viola)':<25} {'OWW (alexa)':<25}")
     print(f"{'-'*75}")
-    label = "Cohen's d"
+    label = "d'"
     print(f"{label:<25} {vw.cohens_d():<25.4f} {oww.cohens_d():<25.4f}")
     print(f"{'ROC AUC':<25} {vw.roc_auc():<25.4f} {oww.roc_auc():<25.4f}")
     print(f"{'EER':<25} {vw.eer():<25.4f} {oww.eer():<25.4f}")
