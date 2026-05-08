@@ -31,7 +31,7 @@ const faqs: FaqItem[] = [
   {
     question: "How does this compare to Picovoice?",
     answer:
-      "Picovoice charges $6,000+/year for enterprise access with a proprietary SDK. ViolaWake gives you an Apache 2.0 SDK (free forever) and Console training from $0/mo. We publish our evaluation methodology and provide violawake-eval so you can benchmark on your own data. See the comparison on our homepage.",
+      "Picovoice Porcupine is a mature proprietary wake word platform whose public product page points users to Start Free and Talk to Sales. ViolaWake gives you an Apache 2.0 SDK and published Console pricing from $0/mo. We publish evaluation methodology and provide violawake-eval so you can benchmark on your own data.",
   },
   {
     question: "What model format do I get?",

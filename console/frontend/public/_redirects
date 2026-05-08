@@ -1,1 +1,15 @@
+/login /app.html 200
+/register /app.html 200
+/verify-email /app.html 200
+/forgot-password /app.html 200
+/reset-password /app.html 200
+/dashboard /app.html 200
+/record /app.html 200
+/record/* /app.html 200
+/training/* /app.html 200
+/billing /app.html 200
+/model/* /app.html 200
+/account/* /app.html 200
+/teams /app.html 200
+/teams/* /app.html 200
 /* /index.html 200

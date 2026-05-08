@@ -19,6 +19,7 @@ import type {
   TeamMember,
   TeamMemberRole,
 } from "./types";
+import { trackEvent, trackOncePerSession } from "./analytics";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "/api";
 type DownloadTokenAction = "model_download" | "training_stream";
@@ -166,6 +167,7 @@ export async function register(
   } else {
     clearToken();
   }
+  trackEvent("signup");
   return data;
 }
 
@@ -252,6 +254,20 @@ export async function changePassword(
   });
 }
 
+export async function exportAccount(): Promise<Blob> {
+  const response = await request<Response>("/account/export");
+  return response.blob();
+}
+
+export async function deleteAccount(
+  password: string,
+): Promise<MessageResponse> {
+  return request<MessageResponse>("/account", {
+    method: "DELETE",
+    body: JSON.stringify({ password }),
+  });
+}
+
 // --- Recordings ---
 
 export async function uploadRecording(
@@ -263,10 +279,14 @@ export async function uploadRecording(
   formData.append("file", file, `${wakeWord}_${index}.wav`);
   formData.append("wake_word", wakeWord);
 
-  return request<UploadResponse>("/recordings/upload", {
+  const response = await request<UploadResponse>("/recordings/upload", {
     method: "POST",
     body: formData,
   });
+  trackOncePerSession("first_recording", "first_recording", {
+    upload_mode: "single",
+  });
+  return response;
 }
 
 export async function bulkUploadRecordings(
@@ -282,10 +302,14 @@ export async function bulkUploadRecordings(
   });
   formData.append("wake_word", wakeWord);
 
-  return request<BulkUploadResponse>("/recordings/bulk-upload", {
+  const response = await request<BulkUploadResponse>("/recordings/bulk-upload", {
     method: "POST",
     body: formData,
   });
+  trackOncePerSession("first_recording", "first_recording", {
+    upload_mode: "bulk",
+  });
+  return response;
 }
 
 export async function getRecordings(
@@ -313,7 +337,7 @@ export async function startTraining(
   recordingIds: number[],
   epochs?: number,
 ): Promise<TrainingStartResponse> {
-  return request<TrainingStartResponse>("/training/start", {
+  const response = await request<TrainingStartResponse>("/training/start", {
     method: "POST",
     body: JSON.stringify({
       wake_word: wakeWord,
@@ -321,6 +345,10 @@ export async function startTraining(
       ...(epochs !== undefined ? { epochs } : {}),
     }),
   });
+  trackEvent("training_started", {
+    recording_count: recordingIds.length,
+  });
+  return response;
 }
 
 export async function getTrainingStatus(
@@ -375,10 +403,12 @@ export interface CheckoutResponse {
 export async function createCheckout(
   tier: string,
 ): Promise<CheckoutResponse> {
-  return request<CheckoutResponse>("/billing/checkout", {
+  const response = await request<CheckoutResponse>("/billing/checkout", {
     method: "POST",
     body: JSON.stringify({ tier }),
   });
+  trackEvent("checkout_started", { tier });
+  return response;
 }
 
 export async function getSubscription(): Promise<SubscriptionResponse> {

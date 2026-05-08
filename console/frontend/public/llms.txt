@@ -1,0 +1,38 @@
+# ViolaWake
+
+> Open-source custom wake word training, on-device ONNX inference, and an Apache 2.0 Python SDK.
+
+## Start here
+
+- [Home](https://violawake.com/): Product overview and quick answer.
+- [Docs](https://violawake.com/docs): SDK quickstart, API docs, and training links.
+- [Pricing](https://violawake.com/pricing): Free, Developer, Business, and Enterprise Console plans.
+- [FAQ](https://violawake.com/faq): Offline inference, Raspberry Pi, privacy, and licensing answers.
+
+## Comparisons
+
+- [ViolaWake vs Picovoice](https://violawake.com/compare/picovoice): Open-source alternative to Picovoice Porcupine.
+- [ViolaWake vs OpenWakeWord](https://violawake.com/compare/openwakeword): Honest upstream relationship and value-add.
+- [ViolaWake vs Snowboy](https://violawake.com/compare/snowboy): Replacement path for deprecated Snowboy projects.
+
+## Blog
+
+- [How We Trained a Wake Word at 0.8% EER with 25K Parameters](https://violawake.com/blog/how-we-trained-wake-word-08-eer-25k-parameters): TemporalCNN architecture and training recipe.
+- [Open Source vs Proprietary Wake Word Detection: 2026 Landscape](https://violawake.com/blog/open-source-vs-proprietary-wake-word-detection-2026): Survey of Picovoice, OpenWakeWord, Snowboy, Google KWS, and ViolaWake.
+- [Build a Raspberry Pi Voice Assistant in 30 Minutes with ViolaWake](https://violawake.com/blog/raspberry-pi-voice-assistant-violawake): Practical Python tutorial.
+
+## Markdown mirrors
+
+- [index.md](https://violawake.com/index.md)
+- [pricing.md](https://violawake.com/pricing.md)
+- [compare/picovoice.md](https://violawake.com/compare/picovoice.md)
+- [compare/openwakeword.md](https://violawake.com/compare/openwakeword.md)
+- [compare/snowboy.md](https://violawake.com/compare/snowboy.md)
+- [docs.md](https://violawake.com/docs.md)
+- [blog.md](https://violawake.com/blog.md)
+- [faq.md](https://violawake.com/faq.md)
+- [about.md](https://violawake.com/about.md)
+
+## Repository
+
+- [GitHub](https://github.com/GeeIHadAGoodTime/ViolaWake): SDK, Console, training code, benchmarks, and docs.

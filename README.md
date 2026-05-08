@@ -1,4 +1,4 @@
-# ViolaWake SDK
+# ViolaWake SDK - Open Source Custom Wake Word Detection
 
 **The open-source alternative to Porcupine.** A production-tested wake word engine with accessible training, ONNX inference, and a Python-first SDK.
 
@@ -8,6 +8,8 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 **API Docs:** https://geeihadagoodtime.github.io/ViolaWake/
+**Website:** https://violawake.com/
+**Picovoice comparison:** https://violawake.com/compare/picovoice
 
 ---
 

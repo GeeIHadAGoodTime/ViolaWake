@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTraining } from "../hooks/useTraining";
+import { trackEvent } from "../analytics";
 
 interface TrainingProgressProps {
   jobId: number;
@@ -49,6 +50,7 @@ export default function TrainingProgress({
       !completeFiredRef.current
     ) {
       completeFiredRef.current = true;
+      trackEvent("training_completed");
       onComplete(state.modelId, state.dPrime);
     }
   }, [state.status, state.modelId, state.dPrime, onComplete]);

@@ -1,0 +1,26 @@
+{
+  "name": "ViolaWake",
+  "short_name": "ViolaWake",
+  "description": "Open-source custom wake word training, on-device detection, and an Apache 2.0 Python SDK for voice activation.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#7e6cff",
+  "icons": [
+    {
+      "src": "/favicon-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

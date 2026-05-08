@@ -89,12 +89,12 @@ for frame in mic_stream():
               <tr>
                 <td>Console Pricing</td>
                 <td className="comparison-highlight">Free / $29 / $99</td>
-                <td>$0 &ndash; $899/yr</td>
+                <td>Start Free / Talk to Sales</td>
               </tr>
               <tr>
                 <td>Enterprise</td>
                 <td className="comparison-highlight">From $99/mo</td>
-                <td>$6,000+/yr</td>
+                <td>Contact sales</td>
               </tr>
               <tr>
                 <td>Accuracy disclosure</td>
