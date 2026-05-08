@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-05-08
+
+### Console (SaaS)
+- Surface A/B/C/F model `quality_grade` values in the console model list so trained-model quality is visible without opening the detailed performance view.
+- Add multi-file recording bulk upload plus the `violawake-generate` sample-generation workflow, with per-user upload rate limiting on recording ingest.
+- Add recording storage caps, WAV/FLAC magic-byte validation, canonical 16 kHz mono PCM_16 re-encoding, and append-only upload audit logging for accepted and rejected uploads.
+
 ## [0.2.5] - 2026-05-07
 
 ### SDK
