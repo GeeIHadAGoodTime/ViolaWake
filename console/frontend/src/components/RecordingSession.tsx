@@ -226,27 +226,29 @@ export default function RecordingSession({
             {slot ? (
               <div className="slot-controls">
                 <SlotWaveform blob={slot.blob} />
-                <button
-                  className="slot-play"
-                  type="button"
-                  onClick={() => playRecording(i)}
-                  aria-label={`Play recording ${i + 1}`}
-                >
-                  &#9654;
-                </button>
-                <span className="slot-duration">
-                  {slot.duration.toFixed(1)}s
-                </span>
-                {phase === "review" && (
+                <div className="slot-controls-row">
                   <button
-                    className="slot-redo"
+                    className="slot-play"
                     type="button"
-                    onClick={() => handleReRecord(i)}
-                    aria-label={`Re-record sample ${i + 1}`}
+                    onClick={() => playRecording(i)}
+                    aria-label={`Play recording ${i + 1}`}
                   >
-                    &#8634;
+                    &#9654;
                   </button>
-                )}
+                  <span className="slot-duration">
+                    {slot.duration.toFixed(1)}s
+                  </span>
+                  {phase === "review" && (
+                    <button
+                      className="slot-redo"
+                      type="button"
+                      onClick={() => handleReRecord(i)}
+                      aria-label={`Re-record sample ${i + 1}`}
+                    >
+                      &#8634;
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <span className="slot-empty">--</span>

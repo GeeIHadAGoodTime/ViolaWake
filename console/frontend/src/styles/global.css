@@ -2303,14 +2303,40 @@ a:hover {
 }
 
 /* ─────────── Per-slot recording waveform ─────────── */
+/*
+ * The recorded slot stacks vertically: number on top (existing layout),
+ * then waveform spanning the slot width, then a horizontal row of
+ * play / duration / redo controls. The pre-waveform layout had
+ * play+duration+redo as a single flex row; adding the waveform inline
+ * pushed the duration and redo button OUTSIDE the slot box (visible
+ * 2026-05-07 user screenshot). The .slot-controls-row keeps the
+ * controls grouped on their own line so the waveform always gets the
+ * full width of the slot.
+ */
+.slot-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.slot-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .slot-waveform {
   display: block;
   width: 100%;
-  max-width: 120px;
-  height: 32px;
+  max-width: 100%;
+  height: 28px;
   background: rgba(126, 108, 255, 0.06);
   border-radius: 4px;
-  margin: 0.25rem 0;
+  margin: 0;
 }
 
 /* ─────────── Dashboard upgrade banner ─────────── */
