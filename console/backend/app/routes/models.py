@@ -36,6 +36,7 @@ _THRESHOLD_KEYS = (
     "score_threshold",
     "detection_threshold",
     "decision_threshold",
+    "deployment_threshold",
 )
 _POSITIVE_SCORE_KEYS = (
     "positive_scores",

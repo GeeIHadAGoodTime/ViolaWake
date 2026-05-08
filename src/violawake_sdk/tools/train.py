@@ -1529,6 +1529,7 @@ def _train_temporal_cnn(
         EMBEDDING_DIM,
         wake_word=wake_word,
         deployment_threshold=deployment_threshold,
+        positive_files=pos_files,
         verbose=verbose,
     )
 
@@ -1631,6 +1632,11 @@ def _train_temporal_cnn(
     config.update(get_openwakeword_backbone_hashes("onnx"))
     if d_prime_result is not None:
         config["d_prime"] = round(d_prime_result, 2)
+    elif quality_gate.get("d_prime") is not None:
+        # No external eval set was provided. Surface the d-prime computed by
+        # the post-training quality gate so the Console + dashboard can render
+        # a deployment grade without requiring an eval_dir.
+        config["d_prime"] = round(float(quality_gate["d_prime"]), 2)
 
     config_path = output_path.with_suffix(".config.json")
     with open(config_path, "w") as f:
@@ -1663,6 +1669,7 @@ def _run_quality_gate(
     embedding_dim: int,
     wake_word: str,
     deployment_threshold: float = 0.80,
+    positive_files: list[Path] | None = None,
     verbose: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     """Run a post-training quality gate on speech, confusables, and silence.
@@ -1791,6 +1798,11 @@ def _run_quality_gate(
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_scores = _score_files([silence_path], "qc_silence")
         near_silence_scores = _score_files([near_silence_path], "qc_near_silence")
+        positive_scores = (
+            _score_files(list(positive_files), "qc_positive")
+            if positive_files
+            else np.array([], dtype=np.float32)
+        )
 
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
@@ -1815,6 +1827,36 @@ def _run_quality_gate(
         silence_window_count = 0
     grade = _grade_quality(speech_fp_rate, confusable_fp_rate, silence_max_score)
 
+    # Pool every non-positive score we collected into the negative distribution
+    # used for d-prime. silence_scores prefers pure silence; near_silence is the
+    # fallback when the OWW backbone rejected zero-energy input.
+    neg_pool_parts = [speech_scores, confusable_scores]
+    if len(silence_scores) > 0:
+        neg_pool_parts.append(silence_scores)
+    elif len(near_silence_scores) > 0:
+        neg_pool_parts.append(near_silence_scores)
+    negative_scores_pool = (
+        np.concatenate(neg_pool_parts)
+        if any(len(p) > 0 for p in neg_pool_parts)
+        else np.array([], dtype=np.float32)
+    )
+
+    d_prime: float | None = None
+    if len(positive_scores) >= 2 and len(negative_scores_pool) >= 2:
+        pos_mean = float(positive_scores.mean())
+        neg_mean = float(negative_scores_pool.mean())
+        # Pooled std with ddof=1 (sample variance). Floor variance at 1e-6 so a
+        # degenerate model (all-same-score) doesn't divide by zero.
+        pooled_var = max(
+            (
+                float(positive_scores.var(ddof=1))
+                + float(negative_scores_pool.var(ddof=1))
+            )
+            / 2.0,
+            1e-6,
+        )
+        d_prime = (pos_mean - neg_mean) / (pooled_var**0.5)
+
     metrics: dict[str, Any] = {
         "grade": grade,
         "deployment_threshold": float(deployment_threshold),
@@ -1825,6 +1867,13 @@ def _run_quality_gate(
         "silence_max_score": silence_max_score,
         "silence_window_count": silence_window_count,
         "silence_source": silence_source,
+        "d_prime": (round(float(d_prime), 4) if d_prime is not None else None),
+        "positive_scores": [round(float(s), 6) for s in positive_scores.tolist()],
+        "negative_scores": [
+            round(float(s), 6) for s in negative_scores_pool.tolist()
+        ],
+        "positive_sample_count": int(len(positive_scores)),
+        "negative_sample_count": int(len(negative_scores_pool)),
     }
 
     print(f"Model Quality Grade: {grade} ({_grade_label(grade)})")
@@ -1837,6 +1886,11 @@ def _run_quality_gate(
         f"({len(confusable_scores)} words, threshold={deployment_threshold:.2f})"
     )
     print(f"  Silence max score:  {silence_max_score:.2f}")
+    if d_prime is not None:
+        print(
+            f"  d-prime:            {d_prime:.2f} "
+            f"(pos={len(positive_scores)}, neg={len(negative_scores_pool)})"
+        )
 
     if verbose and len(speech_scores) < len(quality_phrases):
         print(
