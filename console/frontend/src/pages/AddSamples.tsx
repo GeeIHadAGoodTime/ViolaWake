@@ -37,7 +37,7 @@ const RECOMMENDED_SAMPLE_COUNT = 30;
 const MIN_TRAINING_SAMPLE_COUNT = 5;
 const MAX_BULK_FILES = 50;
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
-const ACCEPTED_EXTENSIONS = [".wav", ".flac", ".mp3", ".ogg", ".m4a"];
+const ACCEPTED_EXTENSIONS = [".wav", ".flac"];
 const ACCEPTED_AUDIO = ACCEPTED_EXTENSIONS.join(",");
 
 function readPersistedDeviceId(): string | null {
@@ -532,7 +532,7 @@ export default function AddSamplesPage() {
               hidden
             />
             <strong>Drop audio files here</strong>
-            <span>WAV, FLAC, MP3, OGG, or M4A. 5 MB each, 50 files per batch.</span>
+            <span>WAV or FLAC. 5 MB each, 50 files per batch.</span>
             <button
               className="btn btn-ghost"
               type="button"

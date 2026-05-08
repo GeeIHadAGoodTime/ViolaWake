@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     upload_dir: Path = Path(__file__).resolve().parent.parent / "data" / "recordings"
     models_dir: Path = Path(__file__).resolve().parent.parent / "data" / "models"
     tmp_dir: Path = Path(__file__).resolve().parent.parent / "data" / "tmp"
+    upload_volume_path: Path = Path("/app/data")
+    upload_global_max_used_bytes: int = 50 * 1024 * 1024 * 1024
+    upload_global_min_free_bytes: int = 5 * 1024 * 1024 * 1024
 
     # Object storage
     r2_endpoint: str = ""

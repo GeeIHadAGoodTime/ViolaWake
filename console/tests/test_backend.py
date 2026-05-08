@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import io
 import sqlite3
+import uuid
 import wave
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,7 +42,8 @@ def client():
 
     try:
         from app.main import app
-        return TestClient(app)
+        with TestClient(app) as test_client:
+            yield test_client
     except ImportError as e:
         pytest.skip(f"Backend not yet built: {e}")
 
@@ -871,7 +873,7 @@ class TestUploadEdgeCases:
         assert "too short" in resp.json()["detail"].lower()
 
     def test_upload_non_wav_file(self, client, auth_headers) -> None:
-        """A non-WAV file (random bytes) should be rejected with 400."""
+        """A non-WAV/FLAC file (random bytes) should be rejected with 415."""
         fake_data = b"this is not a wav file at all, just plain text garbage"
         resp = client.post(
             "/api/recordings/upload",
@@ -879,7 +881,7 @@ class TestUploadEdgeCases:
             files={"file": ("fake.wav", fake_data, "audio/wav")},
             data={"wake_word": "edgetest"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 415
 
     def test_upload_empty_wake_word(self, client, auth_headers) -> None:
         """Empty wake_word should be rejected with 400 or 422."""
@@ -923,3 +925,39 @@ class TestUploadEdgeCases:
         sr, stored_data = wavfile.read(io.BytesIO(stored_bytes))
         assert sr == 16000
         assert stored_data.dtype == np.int16
+
+    def test_upload_uses_uuid_filename_and_records_storage_metadata(
+        self, client, auth_headers,
+    ) -> None:
+        import sys
+
+        backend_dir = str(Path(__file__).resolve().parents[1] / "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from app.config import settings
+
+        wav_data = make_wav_bytes()
+        resp = client.post(
+            "/api/recordings/upload",
+            headers=auth_headers,
+            files={"file": ("claimed-name.wav", wav_data, "audio/wav")},
+            data={"wake_word": "metadata"},
+        )
+        assert resp.status_code == 200, resp.text
+        data = resp.json()
+        stored_filename = data["filename"]
+        assert stored_filename.endswith(".wav")
+        uuid.UUID(stored_filename.removesuffix(".wav"))
+
+        with sqlite3.connect(settings.db_path) as conn:
+            row = conn.execute(
+                "SELECT filename, display_name, size_bytes, uploaded_at FROM recordings WHERE id = ?",
+                (data["recording_id"],),
+            ).fetchone()
+
+        assert row is not None
+        assert row[0] == stored_filename
+        assert row[1] == "claimed-name.wav"
+        assert row[2] >= len(wav_data)
+        assert row[3] is not None

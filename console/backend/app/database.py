@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
@@ -77,6 +78,44 @@ def _ensure_schema_updates(connection: Connection) -> None:
         recording_columns = {col["name"] for col in inspector.get_columns("recordings")}
         if "deleted_at" not in recording_columns:
             connection.execute(text("ALTER TABLE recordings ADD COLUMN deleted_at TIMESTAMP"))
+        if "display_name" not in recording_columns:
+            connection.execute(text("ALTER TABLE recordings ADD COLUMN display_name VARCHAR(255)"))
+        if "size_bytes" not in recording_columns:
+            connection.execute(text("ALTER TABLE recordings ADD COLUMN size_bytes BIGINT"))
+        if "uploaded_at" not in recording_columns:
+            connection.execute(text("ALTER TABLE recordings ADD COLUMN uploaded_at TIMESTAMP"))
+
+        connection.execute(
+            text("UPDATE recordings SET uploaded_at = created_at WHERE uploaded_at IS NULL")
+        )
+        _backfill_recording_size_bytes(connection)
+
+
+def _local_recording_path(identifier: str) -> Path:
+    path = Path(identifier)
+    if path.is_absolute():
+        return path
+
+    normalized = identifier.replace("\\", "/").strip().strip("/")
+    parts = normalized.split("/")
+    if parts and parts[0] == "recordings":
+        return settings.upload_dir.joinpath(*parts[1:])
+    return settings.upload_dir / normalized
+
+
+def _backfill_recording_size_bytes(connection: Connection) -> None:
+    rows = connection.execute(
+        text("SELECT id, file_path FROM recordings WHERE size_bytes IS NULL")
+    ).fetchall()
+    for recording_id, file_path in rows:
+        try:
+            size_bytes = _local_recording_path(str(file_path)).stat().st_size
+        except OSError:
+            continue
+        connection.execute(
+            text("UPDATE recordings SET size_bytes = :size_bytes WHERE id = :recording_id"),
+            {"size_bytes": size_bytes, "recording_id": recording_id},
+        )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
