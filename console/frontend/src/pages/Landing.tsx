@@ -98,8 +98,8 @@ for frame in mic_stream():
               </tr>
               <tr>
                 <td>Accuracy disclosure</td>
-                <td className="comparison-highlight">0.8% EER, d&prime; 8.58 (production model); 5.49% EER (adversarial benchmark v2)</td>
-                <td>No published d-prime</td>
+                <td className="comparison-highlight">0.8% EER &middot; 0.001 FA/hr (production reference model); 5.49% EER (adversarial benchmark v2)</td>
+                <td>No comparable public FAR/recall benchmark</td>
               </tr>
               <tr>
                 <td>Training Samples</td>
@@ -194,10 +194,6 @@ for frame in mic_stream():
             <div className="proof-stat">
               <span className="proof-stat-value">0.8%</span>
               <span className="proof-stat-label">EER (equal error rate)</span>
-            </div>
-            <div className="proof-stat">
-              <span className="proof-stat-value">8.58</span>
-              <span className="proof-stat-label">d&prime; (score separation)</span>
             </div>
             <div className="proof-stat">
               <span className="proof-stat-value">&lt;5ms</span>

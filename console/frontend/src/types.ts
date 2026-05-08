@@ -64,10 +64,23 @@ export interface TrainingEvent {
   error: string | null;
 }
 
+export type QualityGrade = "A" | "B" | "C" | "F";
+
+export interface QualityGate {
+  grade?: QualityGrade | null;
+  [key: string]: unknown;
+}
+
+export interface ModelTrainingConfig extends Record<string, unknown> {
+  quality_grade?: QualityGrade | null;
+  quality_gate?: QualityGate | null;
+}
+
 export interface Model {
   id: number;
   wake_word: string;
   d_prime: number | null;
+  quality_grade?: QualityGrade | null;
   created_at: string;
   size_bytes: number;
 }
@@ -76,7 +89,7 @@ export interface ModelConfig {
   d_prime: number | null;
   far_per_hour: number | null;
   frr: number | null;
-  training_config: Record<string, unknown>;
+  training_config: ModelTrainingConfig;
 }
 
 export interface ModelPerformanceResponse {

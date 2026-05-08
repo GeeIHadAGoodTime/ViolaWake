@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Model, ModelConfig } from "../types";
+import type { Model, ModelConfig, QualityGrade } from "../types";
 import { getModelDownloadUrl, getModelConfig, deleteModel } from "../api";
 import { useToast } from "../contexts/ToastContext";
 
@@ -9,18 +9,59 @@ interface ModelCardProps {
   onDeleted?: (modelId: number) => void;
 }
 
-function getDPrimeBadge(dPrime: number | null): {
-  color: string;
+const GRADE_LABELS: Record<QualityGrade, string> = {
+  A: "Excellent",
+  B: "Good",
+  C: "Acceptable",
+  F: "Failed",
+};
+
+function normalizeQualityGrade(value: unknown): QualityGrade | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const grade = value.trim().toUpperCase();
+  if (grade === "A" || grade === "B" || grade === "C" || grade === "F") {
+    return grade;
+  }
+
+  return null;
+}
+
+function getConfigQualityGrade(config: ModelConfig | null): QualityGrade | null {
+  if (!config) {
+    return null;
+  }
+
+  return (
+    normalizeQualityGrade(config.training_config.quality_grade) ??
+    normalizeQualityGrade(config.training_config.quality_gate?.grade)
+  );
+}
+
+function getGradePill(grade: QualityGrade | null): {
+  className: string;
   label: string;
 } {
-  if (dPrime === null) {
-    return { color: "var(--text-secondary)", label: "Unknown" };
+  if (grade === null) {
+    return {
+      className: "grade-pill-unknown",
+      label: "Grade unavailable",
+    };
   }
-  if (dPrime >= 15)
-    return { color: "var(--success)", label: "Excellent" };
-  if (dPrime >= 10)
-    return { color: "var(--warning)", label: "Good" };
-  return { color: "var(--error)", label: "Needs work" };
+
+  return {
+    className: `grade-pill-${grade.toLowerCase()}`,
+    label: `Grade ${grade} - ${GRADE_LABELS[grade]}`,
+  };
+}
+
+function formatGradeValue(grade: QualityGrade | null): string {
+  if (grade === null) {
+    return "Unavailable";
+  }
+  return `${grade} - ${GRADE_LABELS[grade]}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -49,6 +90,24 @@ function formatNullableMetric(
   return `${value.toFixed(digits)}${suffix}`;
 }
 
+function formatFarPerHour(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "Unavailable";
+  }
+
+  const digits = value < 0.01 ? 3 : 2;
+  return `~${value.toFixed(digits)}/hr`;
+}
+
+function formatRecall(frr: number | null | undefined): string {
+  if (frr === null || frr === undefined || Number.isNaN(frr)) {
+    return "Unavailable";
+  }
+
+  const recall = Math.min(100, Math.max(0, (1 - frr) * 100));
+  return `${recall.toFixed(recall === Math.round(recall) ? 0 : 1)}%`;
+}
+
 export default function ModelCard({ model, onDeleted }: ModelCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [config, setConfig] = useState<ModelConfig | null>(null);
@@ -59,7 +118,8 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const badge = getDPrimeBadge(model.d_prime);
+  const grade = normalizeQualityGrade(model.quality_grade) ?? getConfigQualityGrade(config);
+  const gradePill = getGradePill(grade);
 
   useEffect(() => {
     if (!showDeleteConfirm) {
@@ -110,17 +170,35 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
     };
   }, [deleting, showDeleteConfirm]);
 
-  async function toggleExpand() {
-    if (!expanded && !config) {
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConfig() {
       setLoadingConfig(true);
       try {
         const cfg = await getModelConfig(model.id);
-        setConfig(cfg);
+        if (!cancelled) {
+          setConfig(cfg);
+        }
       } catch {
-        // config load failed, show what we have
+        if (!cancelled) {
+          setConfig(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingConfig(false);
+        }
       }
-      setLoadingConfig(false);
     }
+
+    loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [model.id]);
+
+  function toggleExpand() {
     setExpanded(!expanded);
   }
 
@@ -151,11 +229,8 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
     <div className="model-card">
       <div className="model-card-header">
         <h3 className="model-name">{model.wake_word}</h3>
-        <span
-          className="model-dprime-badge"
-          style={{ backgroundColor: badge.color }}
-        >
-          d&prime; {formatNullableMetric(model.d_prime, 1)} &mdash; {badge.label}
+        <span className={`grade-pill ${gradePill.className}`}>
+          {gradePill.label}
         </span>
       </div>
 
@@ -165,6 +240,22 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
         </span>
         <span className="model-size">
           {formatBytes(model.size_bytes)}
+        </span>
+      </div>
+
+      <div className="model-card-stat-row">
+        <span>
+          False alarms:{" "}
+          {loadingConfig && !config
+            ? "Loading..."
+            : formatFarPerHour(config?.far_per_hour)}
+        </span>
+        <span aria-hidden="true">&middot;</span>
+        <span>
+          Recall:{" "}
+          {loadingConfig && !config
+            ? "Loading..."
+            : formatRecall(config?.frr)}
         </span>
       </div>
 
@@ -181,6 +272,12 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
         >
           Download .onnx
         </button>
+        <Link
+          className="btn btn-ghost"
+          to={`/record/${encodeURIComponent(model.wake_word)}/add`}
+        >
+          Add samples &amp; retrain
+        </Link>
         <button className="btn btn-ghost" onClick={toggleExpand}>
           {expanded ? "Hide details" : "View details"}
         </button>
@@ -251,9 +348,9 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
           ) : config ? (
             <div className="config-grid">
               <div className="config-item">
-                <span className="config-label">d-prime</span>
+                <span className="config-label">SDK grade</span>
                 <span className="config-value">
-                  {formatNullableMetric(config.d_prime, 2)}
+                  {formatGradeValue(getConfigQualityGrade(config))}
                 </span>
               </div>
               <div className="config-item">
@@ -261,17 +358,21 @@ export default function ModelCard({ model, onDeleted }: ModelCardProps) {
                   False alarms/hr
                 </span>
                 <span className="config-value">
-                  {formatNullableMetric(config.far_per_hour, 3)}
+                  {formatFarPerHour(config.far_per_hour)}
                 </span>
               </div>
               <div className="config-item">
                 <span className="config-label">
-                  False reject rate
+                  Recall
                 </span>
                 <span className="config-value">
-                  {config.frr === null
-                    ? "Unavailable"
-                    : `${(config.frr * 100).toFixed(1)}%`}
+                  {formatRecall(config.frr)}
+                </span>
+              </div>
+              <div className="config-item">
+                <span className="config-label">d-prime</span>
+                <span className="config-value">
+                  {formatNullableMetric(config.d_prime, 2)}
                 </span>
               </div>
             </div>

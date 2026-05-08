@@ -58,6 +58,7 @@ _EVALUATION_KEYS = {
     "far_per_hour",
     "frr",
 }
+_QUALITY_GRADES = {"A", "B", "C", "F"}
 
 
 def _normalize_key(key: str) -> str:
@@ -131,6 +132,43 @@ def _collect_evaluation_data(payload: object) -> dict:
             evaluation_data[container_key] = value
 
     return evaluation_data
+
+
+def _normalize_quality_grade(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+
+    grade = value.strip().upper()
+    if grade in _QUALITY_GRADES:
+        return grade
+    return None
+
+
+def _extract_quality_grade(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+
+    grade = _normalize_quality_grade(payload.get("quality_grade"))
+    if grade is not None:
+        return grade
+
+    quality_gate = payload.get("quality_gate")
+    if isinstance(quality_gate, dict):
+        return _normalize_quality_grade(quality_gate.get("grade"))
+
+    return None
+
+
+def _extract_quality_grade_from_config_json(config_json: str | None) -> str | None:
+    if not config_json:
+        return None
+
+    try:
+        parsed = json.loads(config_json)
+    except json.JSONDecodeError:
+        return None
+
+    return _extract_quality_grade(parsed)
 
 
 def _load_model_metadata(model: TrainedModel) -> dict:
@@ -251,6 +289,7 @@ async def list_models(
             id=m.id,
             wake_word=m.wake_word,
             d_prime=m.d_prime,
+            quality_grade=_extract_quality_grade_from_config_json(m.config_json),
             created_at=m.created_at,
             size_bytes=m.size_bytes,
         )

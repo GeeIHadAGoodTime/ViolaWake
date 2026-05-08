@@ -73,34 +73,63 @@
   line-height: 1.45;
 }
 
-.quality-pill {
-  display: inline-flex;
+.advanced-metrics-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.advanced-metrics-summary {
+  display: flex;
   align-items: center;
-  padding: 0.35rem 0.85rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  cursor: pointer;
+  list-style: none;
 }
 
-.quality-low {
-  color: var(--error);
-  background: rgba(225, 112, 85, 0.15);
+.advanced-metrics-summary::-webkit-details-marker {
+  display: none;
 }
 
-.quality-medium {
-  color: var(--warning);
-  background: rgba(253, 203, 110, 0.15);
+.advanced-metrics-summary strong,
+.advanced-metrics-summary small {
+  display: block;
 }
 
-.quality-high {
-  color: var(--success);
-  background: rgba(0, 206, 201, 0.15);
+.advanced-metrics-summary strong {
+  font-size: 1.05rem;
 }
 
-.quality-unknown {
+.advanced-metrics-summary small {
   color: var(--text-secondary);
-  background: rgba(160, 160, 176, 0.15);
+  font-size: 0.85rem;
+  margin-top: 0.15rem;
+}
+
+.advanced-metrics-card[open] .advanced-metrics-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.advanced-metrics-content {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.5rem;
+}
+
+.advanced-metrics-stats {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.advanced-distribution h3 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.advanced-distribution > p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
 }
 
 .distribution-legend {

@@ -10,6 +10,7 @@
   --link-accent: #a29bfe;
   --link-accent-hover: #c4bbff;
   --success: #00cec9;
+  --info: #74b9ff;
   --warning: #fdcb6e;
   --error: #e17055;
   --border: #2d3748;
@@ -425,15 +426,47 @@ a:hover {
   font-weight: 700;
 }
 
-.model-dprime-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #fff;
+.grade-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+.grade-pill-a {
+  color: var(--success);
+  background: rgba(0, 206, 201, 0.15);
+  border: 1px solid rgba(0, 206, 201, 0.28);
+}
+
+.grade-pill-b {
+  color: var(--info);
+  background: rgba(116, 185, 255, 0.15);
+  border: 1px solid rgba(116, 185, 255, 0.28);
+}
+
+.grade-pill-c {
+  color: var(--warning);
+  background: rgba(253, 203, 110, 0.15);
+  border: 1px solid rgba(253, 203, 110, 0.28);
+}
+
+.grade-pill-f {
+  color: var(--error);
+  background: rgba(225, 112, 85, 0.15);
+  border: 1px solid rgba(225, 112, 85, 0.28);
+}
+
+.grade-pill-unknown {
+  color: var(--text-secondary);
+  background: rgba(160, 160, 176, 0.15);
+  border: 1px solid rgba(160, 160, 176, 0.25);
 }
 
 .model-card-meta {
@@ -441,6 +474,16 @@ a:hover {
   gap: 1rem;
   color: var(--text-secondary);
   font-size: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.model-card-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
   margin-bottom: 1.25rem;
 }
 
@@ -459,7 +502,7 @@ a:hover {
 
 .config-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 1rem;
 }
 

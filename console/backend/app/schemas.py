@@ -171,6 +171,7 @@ class TrainedModelResponse(BaseModel):
     id: int
     wake_word: str
     d_prime: float | None = None
+    quality_grade: str | None = None
     created_at: datetime
     size_bytes: int
 

@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ApiError, getModelPerformance } from "../api";
-import type { ModelPerformanceResponse } from "../types";
+import { ApiError, getModelConfig, getModelPerformance } from "../api";
+import type {
+  ModelConfig,
+  ModelPerformanceResponse,
+  QualityGrade,
+} from "../types";
 import "./ModelPerformance.css";
 
 const DISTRIBUTION_BAR_WIDTH = 18;
@@ -26,23 +30,49 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getQualityState(dPrime: number | null): {
+const GRADE_LABELS: Record<QualityGrade, string> = {
+  A: "Excellent",
+  B: "Good",
+  C: "Acceptable",
+  F: "Failed",
+};
+
+function normalizeQualityGrade(value: unknown): QualityGrade | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const grade = value.trim().toUpperCase();
+  if (grade === "A" || grade === "B" || grade === "C" || grade === "F") {
+    return grade;
+  }
+
+  return null;
+}
+
+function getConfigQualityGrade(config: ModelConfig | null): QualityGrade | null {
+  if (!config) {
+    return null;
+  }
+
+  return (
+    normalizeQualityGrade(config.training_config.quality_grade) ??
+    normalizeQualityGrade(config.training_config.quality_gate?.grade)
+  );
+}
+
+function getGradePill(grade: QualityGrade | null): {
   label: string;
   className: string;
 } {
-  if (dPrime === null) {
-    return { label: "Unknown", className: "quality-unknown" };
+  if (grade === null) {
+    return { label: "Grade unavailable", className: "grade-pill-unknown" };
   }
-  if (dPrime < 5) {
-    return { label: "Needs Work", className: "quality-low" };
-  }
-  if (dPrime < 10) {
-    return { label: "Fair", className: "quality-low" };
-  }
-  if (dPrime < 15) {
-    return { label: "Good", className: "quality-medium" };
-  }
-  return { label: "Excellent", className: "quality-high" };
+
+  return {
+    label: `Grade ${grade} - ${GRADE_LABELS[grade]}`,
+    className: `grade-pill-${grade.toLowerCase()}`,
+  };
 }
 
 function formatMetric(value: number | null, digits = 2): string {
@@ -50,6 +80,24 @@ function formatMetric(value: number | null, digits = 2): string {
     return "Unavailable";
   }
   return value.toFixed(digits);
+}
+
+function formatFarPerHour(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "Unavailable";
+  }
+
+  const digits = value < 0.01 ? 3 : 2;
+  return `~${value.toFixed(digits)}/hr`;
+}
+
+function formatRecall(frr: number | null | undefined): string {
+  if (frr === null || frr === undefined || Number.isNaN(frr)) {
+    return "Unavailable";
+  }
+
+  const recall = Math.min(100, Math.max(0, (1 - frr) * 100));
+  return `${recall.toFixed(recall === Math.round(recall) ? 0 : 1)}%`;
 }
 
 function buildBar(count: number, maxCount: number, fill: string): string {
@@ -132,28 +180,53 @@ function buildDistributionChart(
 
 function getRecommendations(
   performance: ModelPerformanceResponse,
+  config: ModelConfig | null,
 ): string[] {
   const recommendations: string[] = [];
+  const grade = getConfigQualityGrade(config);
+  const farPerHour = config?.far_per_hour ?? null;
+  const hasFar = farPerHour !== null && !Number.isNaN(farPerHour);
+  const farText = formatFarPerHour(farPerHour);
 
-  if (performance.d_prime === null) {
+  if (grade === null) {
     recommendations.push(
-      "Performance score unavailable. Train a fresh model run to capture evaluation metrics.",
+      "SDK quality grade is unavailable. Train a fresh model run to capture the current quality gate.",
     );
-  } else if (performance.d_prime < 5) {
+  } else if (grade === "A") {
     recommendations.push(
-      "Consider recording more samples or improving audio quality.",
+      hasFar
+        ? `Grade A passed the quality gate. Validate the ${farText} false-alarm rate in your target environment before broad deployment.`
+        : "Grade A passed the quality gate. Run a fresh evaluation before comparing this model to vendor false-alarm KPIs.",
     );
-  } else if (performance.d_prime < 10) {
+  } else if (grade === "B") {
     recommendations.push(
-      "Fair separation. Consider testing with real-world noise and recording more samples.",
+      hasFar
+        ? `Grade B is usable for trials. Add more representative samples if the ${farText} false-alarm rate is too high for the product surface.`
+        : "Grade B is usable for trials. Capture false-alarm rate before production deployment.",
     );
-  } else if (performance.d_prime < 15) {
+  } else if (grade === "C") {
     recommendations.push(
-      "Good model. Consider testing with real-world noise.",
+      hasFar
+        ? `Grade C is acceptable for testing. Add samples and retrain before production if false alarms remain near ${farText}.`
+        : "Grade C is acceptable for testing. Add samples and capture false-alarm rate before production deployment.",
     );
   } else {
     recommendations.push(
-      "Excellent separation. Ready for production.",
+      `Grade F failed the quality gate. Add cleaner positives, include confusable phrases, and retrain before deployment.`,
+    );
+  }
+
+  if (!hasFar) {
+    recommendations.push(
+      "False-alarm rate is unavailable. Use a fresh evaluation run before comparing this model to wake-word vendor KPIs.",
+    );
+  } else if (farPerHour > 2) {
+    recommendations.push(
+      `False alarms are elevated at ${farText}. Add background and confusable negatives or raise the threshold carefully.`,
+    );
+  } else {
+    recommendations.push(
+      `False alarms are currently ${farText}. Keep recall checks in the loop when adjusting thresholds.`,
     );
   }
 
@@ -177,6 +250,7 @@ export default function ModelPerformancePage() {
   const navigate = useNavigate();
   const [performance, setPerformance] =
     useState<ModelPerformanceResponse | null>(null);
+  const [config, setConfig] = useState<ModelConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -194,9 +268,20 @@ export default function ModelPerformancePage() {
     async function loadPerformance() {
       setLoading(true);
       try {
-        const data = await getModelPerformance(parsedModelId);
+        const [performanceResult, configResult] = await Promise.allSettled([
+          getModelPerformance(parsedModelId),
+          getModelConfig(parsedModelId),
+        ]);
+
+        if (performanceResult.status === "rejected") {
+          throw performanceResult.reason;
+        }
+
         if (!cancelled) {
-          setPerformance(data);
+          setPerformance(performanceResult.value);
+          setConfig(
+            configResult.status === "fulfilled" ? configResult.value : null,
+          );
           setError(null);
           setNotFound(false);
         }
@@ -206,6 +291,8 @@ export default function ModelPerformancePage() {
         if (err instanceof ApiError && err.status === 404) {
           setNotFound(true);
           setError(null);
+          setPerformance(null);
+          setConfig(null);
         } else {
           setError(
             err instanceof Error
@@ -213,6 +300,8 @@ export default function ModelPerformancePage() {
               : "Failed to load model performance",
           );
           setNotFound(false);
+          setPerformance(null);
+          setConfig(null);
         }
       }
 
@@ -228,9 +317,14 @@ export default function ModelPerformancePage() {
     };
   }, [modelId]);
 
-  const quality = useMemo(
-    () => getQualityState(performance?.d_prime ?? null),
-    [performance?.d_prime],
+  const grade = useMemo(
+    () => getConfigQualityGrade(config),
+    [config],
+  );
+
+  const gradePill = useMemo(
+    () => getGradePill(grade),
+    [grade],
   );
 
   const chart = useMemo(
@@ -245,8 +339,8 @@ export default function ModelPerformancePage() {
   );
 
   const recommendations = useMemo(
-    () => (performance ? getRecommendations(performance) : []),
-    [performance],
+    () => (performance ? getRecommendations(performance, config) : []),
+    [config, performance],
   );
 
   return (
@@ -264,7 +358,7 @@ export default function ModelPerformancePage() {
             {performance ? `${performance.model_name} Performance` : "Model Performance"}
           </h1>
           <p className="page-subtitle">
-            Review model quality, score separation, and deployment guidance.
+            Review model grade, false-alarm rate, recall, and deployment guidance.
           </p>
         </div>
       </div>
@@ -314,31 +408,34 @@ export default function ModelPerformancePage() {
 
       {!loading && !error && !notFound && performance && (
         <div className="model-performance-grid">
-          <section className="model-performance-card">
+          <section className="model-performance-card model-performance-hero-card">
             <div className="model-performance-card-header">
               <div>
-                <h2>Model Quality Summary</h2>
-                <p>Key metrics from the latest available evaluation data.</p>
+                <h2>Deployment Summary</h2>
+                <p>Vendor-facing wake-word metrics from the latest evaluation data.</p>
               </div>
-              <span className={`quality-pill ${quality.className}`}>
-                {quality.label}
+              <span className={`grade-pill ${gradePill.className}`}>
+                {gradePill.label}
               </span>
             </div>
 
             <div className="model-performance-stats">
               <div className="performance-stat">
-                <span className="performance-stat-label">d&prime; (d-prime)</span>
-                <strong className={`performance-stat-value ${quality.className}`}>
-                  {formatMetric(performance.d_prime)}
-                </strong>
-              </div>
-              <div className="performance-stat">
-                <span className="performance-stat-label">Threshold</span>
+                <span className="performance-stat-label">False alarms/hr</span>
                 <strong className="performance-stat-value">
-                  {formatMetric(performance.threshold, 3)}
+                  {formatFarPerHour(config?.far_per_hour)}
                 </strong>
                 <p className="performance-stat-help">
-                  Higher thresholds reduce false accepts but can miss softer activations.
+                  Expected false accepts per hour.
+                </p>
+              </div>
+              <div className="performance-stat">
+                <span className="performance-stat-label">Recall</span>
+                <strong className="performance-stat-value">
+                  {formatRecall(config?.frr)}
+                </strong>
+                <p className="performance-stat-help">
+                  Estimated true wake-word acceptance rate.
                 </p>
               </div>
               <div className="performance-stat">
@@ -346,6 +443,9 @@ export default function ModelPerformancePage() {
                 <strong className="performance-stat-value">
                   {formatBytes(performance.file_size)}
                 </strong>
+                <p className="performance-stat-help">
+                  Downloadable ONNX wake head.
+                </p>
               </div>
               <div className="performance-stat">
                 <span className="performance-stat-label">Training date</span>
@@ -356,35 +456,64 @@ export default function ModelPerformancePage() {
             </div>
           </section>
 
-          <section className="model-performance-card">
-            <div className="model-performance-card-header">
-              <div>
-                <h2>Score Distribution</h2>
+          <details className="model-performance-card advanced-metrics-card">
+            <summary className="advanced-metrics-summary">
+              <span>
+                <strong>Advanced metrics</strong>
+                <small>d-prime, threshold, and score distribution</small>
+              </span>
+              <span aria-hidden="true">+</span>
+            </summary>
+
+            <div className="advanced-metrics-content">
+              <div className="model-performance-stats advanced-metrics-stats">
+                <div className="performance-stat">
+                  <span className="performance-stat-label">d&prime; (d-prime)</span>
+                  <strong className="performance-stat-value">
+                    {formatMetric(performance.d_prime)}
+                  </strong>
+                  <p className="performance-stat-help">
+                    Signal-detection separation, kept for technical debugging.
+                  </p>
+                </div>
+                <div className="performance-stat">
+                  <span className="performance-stat-label">Threshold</span>
+                  <strong className="performance-stat-value">
+                    {formatMetric(performance.threshold, 3)}
+                  </strong>
+                  <p className="performance-stat-help">
+                    Higher thresholds reduce false accepts but can miss softer activations.
+                  </p>
+                </div>
+              </div>
+
+              <div className="advanced-distribution">
+                <h3>Score Distribution</h3>
                 <p>ASCII histogram of positive versus negative evaluation scores.</p>
+
+                {(performance.positive_scores.length > 0 ||
+                  performance.negative_scores.length > 0) &&
+                chart ? (
+                  <>
+                    <div className="distribution-legend">
+                      <span>Positive `#`</span>
+                      <span>Negative `=`</span>
+                    </div>
+                    <pre className="distribution-chart">{chart}</pre>
+                  </>
+                ) : (
+                  <div className="distribution-empty">
+                    <p>
+                      No stored score distributions were found for this model.
+                    </p>
+                    <p className="distribution-empty-subtext">
+                      Summary metrics are still shown using the saved model record.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
-
-            {(performance.positive_scores.length > 0 ||
-              performance.negative_scores.length > 0) &&
-            chart ? (
-              <>
-                <div className="distribution-legend">
-                  <span>Positive `#`</span>
-                  <span>Negative `=`</span>
-                </div>
-                <pre className="distribution-chart">{chart}</pre>
-              </>
-            ) : (
-              <div className="distribution-empty">
-                <p>
-                  No stored score distributions were found for this model.
-                </p>
-                <p className="distribution-empty-subtext">
-                  Summary metrics are still shown using the saved model record.
-                </p>
-              </div>
-            )}
-          </section>
+          </details>
 
           <section className="model-performance-card">
             <div className="model-performance-card-header">
