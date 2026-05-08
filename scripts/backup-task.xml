@@ -37,8 +37,8 @@
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>powershell.exe</Command>
-      <Arguments>-NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'J:\CLAUDE\PROJECTS\Wakeword'; python scripts\backup_to_r2.py --env-file .env.production --env-file 'J:\CLAUDE\PROJECTS\FewerJobs\.env'"</Arguments>
+      <Command>C:\Program Files\Git\usr\bin\bash.exe</Command>
+      <Arguments>-c "set -a; [ -f 'J:/CLAUDE/PROJECTS/FewerJobs/.env' ] &amp;&amp; source 'J:/CLAUDE/PROJECTS/FewerJobs/.env'; [ -f .env.production ] &amp;&amp; source .env.production; set +a; bash scripts/backup_to_r2_wrangler.sh"</Arguments>
       <WorkingDirectory>J:\CLAUDE\PROJECTS\Wakeword</WorkingDirectory>
     </Exec>
   </Actions>
