@@ -126,6 +126,31 @@ def test_health_ready_returns_200_when_database_is_available(client, healthy_run
     assert data["ready"] is True
 
 
+def test_health_returns_503_and_failed_checks_when_dependency_fails(
+    client,
+    healthy_runtime,
+    monkeypatch,
+) -> None:
+    from app import health as health_module
+
+    async def fake_check_database() -> dict[str, object]:
+        return {
+            "status": "error",
+            "connected": False,
+            "target": "test-db",
+            "error": "bad password",
+        }
+
+    monkeypatch.setattr(health_module, "_check_database", fake_check_database)
+
+    response = client.get("/api/health")
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["status"] == "error"
+    assert "database" in data["failed_checks"]
+
+
 def test_health_details_returns_component_breakdown(client, healthy_runtime) -> None:
     response = client.get("/api/health/details", headers=health_headers("/api/health/details"))
 

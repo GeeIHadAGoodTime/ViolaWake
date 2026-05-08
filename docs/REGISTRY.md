@@ -21,6 +21,7 @@
 | **Production Status** | `docs/PRODUCTION_STATUS.md` | Current live state, what's verified, operational levers — read FIRST after any deploy | 2026-05-07 | Any deploy, env-var change, or smoke-test result |
 | **Deployment** | `docs/DEPLOYMENT.md` | How frontend + backend + tunnel actually deploy. Manual steps, not auto. | 2026-05-07 | Hosting platform change, tunnel reconfig, env-var schema change |
 | **Operations Runbook** | `docs/OPERATIONS_RUNBOOK.md` | Procedures for dashboard-mediated config changes (Resend, Stripe live mode, key rotation). Things only the operator can do. | 2026-05-07 | New external service added, account / key change |
+| **Launch Runbook** | `docs/RUNBOOK.md` | Pre-launch health monitoring, backups, restore, billing verification, and human handoff steps. | 2026-05-08 | Operational script, monitor, backup, restore, or launch handoff changes |
 | **SEO Audit** | `docs/SEO_AUDIT.md` | Crawler audit, competitor facts, keyword landscape, and static marketing architecture decision. | 2026-05-08 | SEO architecture, crawler behavior, competitor positioning, or SERP target change |
 | **SEO Runbook** | `docs/SEO_RUNBOOK.md` | Search Console, Bing Webmaster, IndexNow, Cloudflare Crawler Hints, Plausible funnel setup, and post-deploy crawler checks. | 2026-05-08 | Indexing workflow, analytics event, sitemap, or crawler-file change |
 | **SEO Outreach** | `docs/SEO_OUTREACH.md` | Rules-aware GitHub/dev.to/Reddit/HN outreach targets for cited discovery. | 2026-05-08 | New outreach target, launch post, or citation strategy change |

@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
-import { changePassword } from "../api";
+import { changePassword, deleteAccount, exportAccount } from "../api";
+import { useAuth } from "../contexts/AuthContext";
 
 interface ValidationErrors {
   currentPassword?: string;
@@ -8,11 +9,17 @@ interface ValidationErrors {
 }
 
 export default function ChangePasswordPage() {
+  const { logout, user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteEmail, setDeleteEmail] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -71,6 +78,58 @@ export default function ChangePasswordPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleExport() {
+    setError(null);
+    setSuccess(null);
+    setExporting(true);
+    try {
+      const blob = await exportAccount();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "violawake-account-export.zip";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setSuccess("Account export downloaded.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "We could not export your account data.",
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDeleteAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (!user || deleteEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+      setError("Enter your account email address to confirm deletion.");
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteAccount(deletePassword);
+      logout();
+      window.location.href = "/";
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "We could not delete your account.",
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -175,7 +234,96 @@ export default function ChangePasswordPage() {
             {submitting ? "Changing password..." : "Change password"}
           </button>
         </form>
+
+        <div className="account-actions">
+          <div className="account-action-row">
+            <div>
+              <h2>Export data</h2>
+              <p>Download your account profile, recordings, models, jobs, and audit log entries.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? "Exporting..." : "Export data"}
+            </button>
+          </div>
+
+          <div className="account-action-row account-action-danger">
+            <div>
+              <h2>Delete account</h2>
+              <p>Delete account access now and schedule retained artifacts for permanent deletion in 30 days.</p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => setShowDeleteConfirm(true)}
+            >
+              Delete account
+            </button>
+          </div>
+        </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="delete-confirm-overlay" role="dialog" aria-modal="true">
+          <form className="delete-confirm" onSubmit={handleDeleteAccount}>
+            <p className="delete-confirm-text">
+              Delete your ViolaWake account?
+            </p>
+            <p className="delete-confirm-subtext">
+              Enter your account email and current password to confirm.
+            </p>
+            <div className="form-group">
+              <label htmlFor="delete-email" className="form-label">
+                Account email
+              </label>
+              <input
+                id="delete-email"
+                type="email"
+                className="form-input"
+                value={deleteEmail}
+                onChange={(event) => setDeleteEmail(event.target.value)}
+                disabled={deleting}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="delete-password" className="form-label">
+                Current password
+              </label>
+              <input
+                id="delete-password"
+                type="password"
+                className="form-input"
+                value={deletePassword}
+                onChange={(event) => setDeletePassword(event.target.value)}
+                disabled={deleting}
+                required
+              />
+            </div>
+            <div className="delete-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn btn-danger"
+                disabled={deleting}
+              >
+                {deleting ? "Deleting..." : "Delete account"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

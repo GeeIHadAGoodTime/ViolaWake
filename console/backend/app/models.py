@@ -36,6 +36,8 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    scheduled_hard_delete_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     recordings: Mapped[list[Recording]] = relationship(back_populates="user", cascade="all, delete-orphan")
     training_jobs: Mapped[list[TrainingJob]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -112,6 +114,7 @@ class TrainingJob(Base):
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     user: Mapped[User] = relationship(back_populates="training_jobs")
     model: Mapped[TrainedModel | None] = relationship()
@@ -129,6 +132,7 @@ class TrainedModel(Base):
     d_prime: Mapped[float | None] = mapped_column(Float, nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     user: Mapped[User] = relationship(back_populates="trained_models")
 
@@ -176,3 +180,12 @@ class ProcessedStripeEvent(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class InboundEmailAutoReply(Base):
+    __tablename__ = "inbound_email_auto_replies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sender_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    ticket_reference: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

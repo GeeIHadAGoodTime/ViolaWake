@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     upload_volume_path: Path = Path("/app/data")
     upload_global_max_used_bytes: int = 50 * 1024 * 1024 * 1024
     upload_global_min_free_bytes: int = 5 * 1024 * 1024 * 1024
+    use_decoder_sidecar: bool = False
+    decoder_sidecar_url: str = "http://decoder:8001/decode"
 
     # Object storage
     r2_endpoint: str = ""
@@ -83,6 +85,8 @@ class Settings(BaseSettings):
 
     # Email
     resend_api_key: str = ""
+    email_inbound_webhook_secret: str = ""
+    support_autoreply_window_hours: int = 24
 
     model_config = SettingsConfigDict(
         env_prefix="VIOLAWAKE_",

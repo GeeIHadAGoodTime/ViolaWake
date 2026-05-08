@@ -621,6 +621,9 @@ async function writeManifest() {
 }
 
 async function writeRedirects() {
+  const marketingLines = allMarketingPaths
+    .filter((route) => route !== "/")
+    .map((route) => `${route} ${route}/index.html 200`);
   const routes = [
     "/login",
     "/register",
@@ -637,7 +640,10 @@ async function writeRedirects() {
     "/teams",
     "/teams/*",
   ];
-  const lines = routes.map((route) => `${route} /app.html 200`);
+  const lines = [
+    ...marketingLines,
+    ...routes.map((route) => `${route} /app.html 200`),
+  ];
   lines.push("/* /index.html 200");
   await writeFile(path.join(distRoot, "_redirects"), `${lines.join("\n")}\n`, "utf8");
 }

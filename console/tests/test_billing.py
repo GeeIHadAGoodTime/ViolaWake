@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import sqlite3
 import sys
 import time
@@ -217,6 +218,26 @@ def make_stripe_mock() -> MagicMock:
     return stripe
 
 
+def make_stripe_signature(payload: bytes, secret: str) -> str:
+    """Return a Stripe-compatible test signature header for a raw payload."""
+    import stripe
+
+    timestamp = int(time.time())
+    signed_payload = f"{timestamp}.{payload.decode('utf-8')}"
+    signature = stripe.WebhookSignature._compute_signature(signed_payload, secret)
+    return f"t={timestamp},v1={signature}"
+
+
+class FakeBillingEmailService:
+    def __init__(self) -> None:
+        self.enabled = True
+        self.subscription_activations: list[dict[str, str]] = []
+
+    async def send_subscription_activated(self, to: str, name: str, tier: str) -> bool:
+        self.subscription_activations.append({"to": to, "name": name, "tier": tier})
+        return True
+
+
 class FakeExecuteResult:
     def __init__(self, rowcount: int) -> None:
         self.rowcount = rowcount
@@ -351,7 +372,10 @@ class TestBillingWebhooks:
         client,
         auth_user,
         billing_settings,
+        monkeypatch,
     ) -> None:
+        import stripe
+
         unique_suffix = time.time_ns()
         customer_id = f"cus_checkout_complete_{unique_suffix}"
         subscription_id = f"sub_checkout_complete_{unique_suffix}"
@@ -371,16 +395,21 @@ class TestBillingWebhooks:
                 }
             },
         }
-        stripe = make_stripe_mock()
-        stripe.Webhook.construct_event.return_value = event
-        stripe.Subscription.retrieve.return_value = SimpleNamespace(current_period_end=period_end)
+        payload = json.dumps(event, separators=(",", ":")).encode("utf-8")
+        sig_header = make_stripe_signature(payload, billing_settings.stripe_webhook_secret)
+        fake_email = FakeBillingEmailService()
+        monkeypatch.setattr(
+            stripe.Subscription,
+            "retrieve",
+            MagicMock(return_value=SimpleNamespace(current_period_end=period_end)),
+        )
+        monkeypatch.setattr("app.email_service.get_email_service", lambda: fake_email)
 
-        with patch("app.routes.billing._get_stripe", return_value=stripe):
-            response = client.post(
-                "/api/billing/webhook",
-                content=b'{"test": true}',
-                headers={"stripe-signature": "sig_test_123"},
-            )
+        response = client.post(
+            "/api/billing/webhook",
+            content=payload,
+            headers={"stripe-signature": sig_header},
+        )
 
         assert response.status_code == 200, response.text
         assert response.json() == {"status": "ok"}
@@ -399,6 +428,13 @@ class TestBillingWebhooks:
         assert row is not None
         assert row["stripe_customer_id"] == customer_id
         assert row["stripe_subscription_id"] == subscription_id
+        assert fake_email.subscription_activations == [
+            {
+                "to": auth_user["email"],
+                "name": "Billing Test",
+                "tier": "developer",
+            }
+        ]
 
     def test_webhook_subscription_deleted_downgrades_to_free(
         self,

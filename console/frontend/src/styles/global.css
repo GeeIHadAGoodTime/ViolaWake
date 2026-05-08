@@ -344,6 +344,37 @@ a:hover {
   gap: 0.75rem;
 }
 
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.account-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.account-action-row h2 {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.account-action-row p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.account-action-danger {
+  padding-top: 1rem;
+  border-top: 1px solid rgba(225, 112, 85, 0.22);
+}
+
 /* ===== Dashboard ===== */
 .dashboard-page {
   animation: fadeIn 0.3s ease;

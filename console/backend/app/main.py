@@ -28,7 +28,7 @@ from app.middleware import (
 )
 from app.monitoring import APP_VERSION, init_monitoring_state, log_exception, mark_startup_complete
 from app.rate_limit import limiter
-from app.routes import auth, billing, files, jobs, models, recordings, teams, training
+from app.routes import account, auth, billing, files, inbound_email, jobs, models, recordings, teams, training
 
 configure_logging()
 logger = logging.getLogger("violawake.console")
@@ -40,6 +40,7 @@ _RETENTION_INTERVAL_SECONDS = 24 * 60 * 60  # 24 hours
 async def _retention_loop() -> None:
     """Run retention cleanup every 24 hours in the background."""
     from app.retention import (
+        cleanup_hard_deleted_accounts,
         cleanup_expired_models,
         cleanup_expired_recordings,
         cleanup_soft_deleted_recordings,
@@ -50,6 +51,7 @@ async def _retention_loop() -> None:
             await cleanup_soft_deleted_recordings()
             await cleanup_expired_recordings()
             await cleanup_expired_models()
+            await cleanup_hard_deleted_accounts()
         except Exception as exc:
             log_exception(logger, exc, message="Retention cleanup cycle failed", source="retention")
 
@@ -128,6 +130,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(auth.router)
+app.include_router(account.router)
 app.include_router(recordings.router)
 app.include_router(jobs.router)
 app.include_router(training.router)
@@ -135,6 +138,7 @@ app.include_router(models.router)
 app.include_router(billing.router)
 app.include_router(files.router)
 app.include_router(teams.router)
+app.include_router(inbound_email.router)
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +173,7 @@ async def trigger_cleanup(
     Protected by the ``X-Admin-Token`` request header.
     """
     from app.retention import (
+        cleanup_hard_deleted_accounts,
         cleanup_expired_models,
         cleanup_expired_recordings,
         cleanup_soft_deleted_recordings,
@@ -177,16 +182,19 @@ async def trigger_cleanup(
     soft_deleted_purged = await cleanup_soft_deleted_recordings()
     recordings_deleted = await cleanup_expired_recordings()
     models_deleted = await cleanup_expired_models()
+    accounts_deleted = await cleanup_hard_deleted_accounts()
     logger.info(
-        "Admin cleanup triggered: %s soft-deleted recording(s) purged, %s recording(s) and %s model(s) deleted",
+        "Admin cleanup triggered: %s soft-deleted recording(s) purged, %s recording(s), %s model(s), and %s account(s) deleted",
         soft_deleted_purged,
         recordings_deleted,
         models_deleted,
+        accounts_deleted,
     )
     return {
         "soft_deleted_recordings_purged": soft_deleted_purged,
         "recordings_deleted": recordings_deleted,
         "models_deleted": models_deleted,
+        "accounts_deleted": accounts_deleted,
     }
 
 

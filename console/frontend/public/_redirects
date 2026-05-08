@@ -1,3 +1,17 @@
+/pricing /pricing/index.html 200
+/privacy /privacy/index.html 200
+/terms /terms/index.html 200
+/contact /contact/index.html 200
+/compare/picovoice /compare/picovoice/index.html 200
+/compare/openwakeword /compare/openwakeword/index.html 200
+/compare/snowboy /compare/snowboy/index.html 200
+/docs /docs/index.html 200
+/blog /blog/index.html 200
+/blog/how-we-trained-wake-word-08-eer-25k-parameters /blog/how-we-trained-wake-word-08-eer-25k-parameters/index.html 200
+/blog/open-source-vs-proprietary-wake-word-detection-2026 /blog/open-source-vs-proprietary-wake-word-detection-2026/index.html 200
+/blog/raspberry-pi-voice-assistant-violawake /blog/raspberry-pi-voice-assistant-violawake/index.html 200
+/faq /faq/index.html 200
+/about /about/index.html 200
 /login /app.html 200
 /register /app.html 200
 /verify-email /app.html 200

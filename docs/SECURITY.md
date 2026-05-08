@@ -15,9 +15,11 @@ Upload storage caps are stacked:
 - Global `/app/data` volume: reject uploads if the app data directory is above
   50 GB used or the backing filesystem has less than 5 GB free.
 
-Decode runs behind a 30 second watchdog. The current watchdog is thread-based:
-it bounds request wall-clock time, but a tighter memory cap requires subprocess
-isolation and OS resource limits. That process sandbox is deferred to Tier 3.
+Decode runs behind a 30 second watchdog by default. Tier 3 container hardening
+adds an optional isolated decoder sidecar (`VIOLAWAKE_USE_DECODER_SIDECAR=1`)
+that receives upload bytes over the internal Docker network and returns a
+canonical 16 kHz mono PCM_16 WAV. The feature flag defaults off until the
+operator rebuilds and verifies the new compose stack.
 
 Every upload attempt writes an append-only JSON line to
 `/app/data/logs/uploads.jsonl`; the backend rotates it to `uploads.jsonl.1`
@@ -27,18 +29,25 @@ stored UUID filename when accepted, claimed MIME type, first 12 magic bytes,
 decode status, recording id, and wake word. Storage and rate cap denials that
 occur before decode are recorded with `decode_status="cap_rejected"`.
 
-## Tier 3 Deferred
+## Tier 3 Container Hardening
 
-These are deliberately not part of the current patch and should be treated as
-the next hardening tier:
+Status: implemented in `docker-compose.production.yml` and the decoder sidecar
+source, but it requires `docker compose -f docker-compose.production.yml up -d
+--build` to take effect.
 
-- Move decode and canonical re-encode into a subprocess with explicit memory,
-  CPU, file descriptor, and wall-clock limits.
-- Run the backend container with `--read-only` plus explicit writable mounts for
-  `/app/data` and temporary decode space.
-- Drop unnecessary Linux capabilities and use `no-new-privileges`.
-- Consider a dedicated decoder sidecar so hostile media parsing is isolated
-  from the authenticated API process and database credentials.
+- Done: backend runs with `read_only: true`, explicit `/app/data` volume, tmpfs
+  mounts for `/tmp` and `/app/data/tmp`, `cap_drop: [ALL]`, limited re-added
+  `CHOWN`, `SETUID`, and `SETGID` for the existing entrypoint user switch,
+  `no-new-privileges`, `mem_limit: 1g`, and `pids_limit: 200`.
+- Done: the decoder sidecar has no database credentials, no JWT secret, no
+  external port, no default outbound network, `read_only: true`, `cap_drop:
+  [ALL]`, `no-new-privileges`, `mem_limit: 512m`, and `pids_limit: 100`.
+- Done: backend upload decoding can call `http://decoder:8001/decode` when
+  `VIOLAWAKE_USE_DECODER_SIDECAR=1`; the default remains local decode until
+  the rebuilt production stack is verified.
+- Caveat: OpenWakeWord runtime downloads are kept writable through the explicit
+  `openwakeword-models` Docker volume mounted at the package model directory;
+  the rest of the backend root filesystem remains read-only.
 
 ## Cloudflare WAF Rules
 

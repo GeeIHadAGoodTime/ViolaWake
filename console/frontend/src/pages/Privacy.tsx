@@ -5,7 +5,7 @@ export default function PrivacyPage() {
     <div className="legal-page">
       <div className="legal-content">
         <h1 className="legal-title">Privacy Policy</h1>
-        <p className="legal-updated">Last updated: May 7, 2026</p>
+        <p className="legal-updated">Last updated: May 8, 2026</p>
 
         <section className="legal-section">
           <h2>1. Introduction</h2>
@@ -118,9 +118,10 @@ export default function PrivacyPage() {
               Trained models are automatically deleted 90 days after creation.
             </li>
             <li>
-              Account deletion hard-deletes your user account, recordings, and
-              trained models and cancels your active subscription within 24
-              hours.
+              Account deletion immediately removes account access, scrubs
+              account identity fields, cancels the linked Stripe customer, and
+              schedules retained recordings, trained models, and job records for
+              permanent deletion after 30 days.
             </li>
           </ul>
         </section>
@@ -168,12 +169,14 @@ export default function PrivacyPage() {
           <ul>
             <li>Access the account information we hold about you</li>
             <li>Correct inaccurate account details</li>
+            <li>Export a machine-readable copy of your account data</li>
             <li>Delete recordings, trained models, or your account</li>
           </ul>
           <p>
-            You can delete your account at any time from the Account Settings
-            page. Account deletion cancels your Stripe subscription and purges
-            your recordings and trained models. You can also contact{" "}
+            You can export or delete your account at any time from the Account
+            Settings page. Account deletion cancels your Stripe customer record,
+            removes account access immediately, and schedules retained artifacts
+            for permanent deletion after 30 days. You can also contact{" "}
             <a href="mailto:privacy@violawake.com">privacy@violawake.com</a> for
             privacy-related requests.
           </p>

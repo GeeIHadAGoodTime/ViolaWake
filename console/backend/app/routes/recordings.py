@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Annotated
 
 import numpy as np
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -37,7 +38,7 @@ from scipy import signal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_verified_user
+from app.auth import get_current_user, get_verified_user
 from app.config import settings
 from app.database import get_db
 from app.models import Recording, Subscription, TrainedModel, User
@@ -162,9 +163,14 @@ class PreparedUpload:
 
 async def _verified_user_with_rate_key(
     request: Request,
-    current_user: Annotated[User, Depends(get_verified_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> User:
     """Resolve the user and stash the ID on request.state for rate limiting."""
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email to upload recordings.",
+        )
     set_rate_limit_user(request, current_user.id)
     return current_user
 
@@ -704,6 +710,59 @@ def _decode_with_watchdog(file_bytes: bytes) -> tuple[bytes, float]:
         return wav_bytes, duration_s
 
 
+async def _decode_via_decoder_sidecar(file_bytes: bytes) -> tuple[bytes, float]:
+    """Decode audio through the isolated decoder service when enabled."""
+    try:
+        async with httpx.AsyncClient(timeout=DECODE_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                settings.decoder_sidecar_url,
+                content=file_bytes,
+                headers={"Content-Type": "application/octet-stream"},
+            )
+    except httpx.TimeoutException as exc:
+        raise UploadRejected(
+            status.HTTP_400_BAD_REQUEST,
+            "Audio decode timed out.",
+            decode_status="timeout",
+        ) from exc
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "Decoder sidecar request failed: %s",
+            exc,
+            extra={"event_data": {"source": "upload", "decode_status": "sidecar_error"}},
+        )
+        raise UploadRejected(
+            status.HTTP_400_BAD_REQUEST,
+            "Could not decode audio file as WAV or FLAC.",
+            decode_status="decode_error",
+        ) from exc
+
+    if response.status_code != status.HTTP_200_OK:
+        logger.warning(
+            "Decoder sidecar rejected upload with status %s: %s",
+            response.status_code,
+            response.text[:300],
+            extra={"event_data": {"source": "upload", "decode_status": "sidecar_rejected"}},
+        )
+        raise UploadRejected(
+            status.HTTP_400_BAD_REQUEST,
+            "Could not decode audio file as WAV or FLAC.",
+            decode_status="decode_error",
+        )
+
+    try:
+        duration_s = float(response.headers["X-Duration-Seconds"])
+    except (KeyError, ValueError) as exc:
+        raise UploadRejected(
+            status.HTTP_400_BAD_REQUEST,
+            "Could not decode audio file as WAV or FLAC.",
+            decode_status="decode_error",
+        ) from exc
+
+    _raise_duration_error(duration_s)
+    return response.content, duration_s
+
+
 async def _prepare_upload(
     *,
     request: Request,
@@ -724,7 +783,10 @@ async def _prepare_upload(
         magic = raw.magic
         size_bytes = len(raw.content)
         _precheck_audio_header(raw.content, user_id=user_id)
-        wav_bytes, duration_s = _decode_with_watchdog(raw.content)
+        if settings.use_decoder_sidecar:
+            wav_bytes, duration_s = await _decode_via_decoder_sidecar(raw.content)
+        else:
+            wav_bytes, duration_s = _decode_with_watchdog(raw.content)
     except UploadRejected as exc:
         if size_bytes == 0 and exc.audit_size_bytes is not None:
             size_bytes = exc.audit_size_bytes

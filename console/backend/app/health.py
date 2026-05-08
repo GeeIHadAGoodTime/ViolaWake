@@ -22,6 +22,7 @@ from app.monitoring import (
     HEALTH_STATUS_OK,
     get_uptime_seconds,
 )
+from app.storage import get_storage
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 
@@ -122,11 +123,31 @@ async def _check_training_queue() -> dict[str, Any]:
 def _check_storage() -> dict[str, Any]:
     upload_dir = _check_directory(settings.upload_dir)
     models_dir = _check_directory(settings.models_dir)
-    component_status = _combine_statuses(upload_dir["status"], models_dir["status"])
+    backend: dict[str, Any] = {
+        "status": HEALTH_STATUS_OK,
+        "roundtrip": True,
+        "error": None,
+    }
+    health_key = "recordings/_health/check/storage-health.txt"
+    try:
+        storage = get_storage()
+        storage.upload(health_key, b"ok", "text/plain")
+        if storage.download(health_key) != b"ok":
+            backend["status"] = HEALTH_STATUS_ERROR
+            backend["roundtrip"] = False
+            backend["error"] = "Storage roundtrip returned unexpected bytes"
+        storage.delete(health_key)
+    except Exception as exc:
+        backend["status"] = HEALTH_STATUS_ERROR
+        backend["roundtrip"] = False
+        backend["error"] = str(exc)
+
+    component_status = _combine_statuses(upload_dir["status"], models_dir["status"], backend["status"])
     return {
         "status": component_status,
         "upload_dir": upload_dir,
         "models_dir": models_dir,
+        "backend": backend,
     }
 
 
@@ -172,19 +193,54 @@ async def build_health_payload(app: Any) -> dict[str, Any]:
     }
 
 
+def _failed_checks_from_payload(payload: dict[str, Any]) -> list[str]:
+    failed: list[str] = []
+
+    if not payload["ready"]:
+        failed.append("startup")
+
+    def walk(path: str, value: Any) -> None:
+        if not isinstance(value, dict):
+            return
+        component_status = value.get("status")
+        if component_status in {HEALTH_STATUS_DEGRADED, HEALTH_STATUS_ERROR}:
+            failed.append(path)
+        for key, nested in value.items():
+            if isinstance(nested, dict):
+                walk(f"{path}.{key}", nested)
+
+    for name, component in payload["components"].items():
+        walk(name, component)
+
+    return sorted(set(failed))
+
+
 def _summary_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    return {
+    summary = {
         "status": payload["status"],
         "uptime_s": payload["uptime_s"],
         "ready": payload["ready"],
         "version": payload["version"],
     }
+    failed_checks = _failed_checks_from_payload(payload)
+    if failed_checks:
+        summary["failed_checks"] = failed_checks
+    return summary
+
+
+def _health_http_status(payload: dict[str, Any]) -> int:
+    if payload["ready"] and payload["status"] == HEALTH_STATUS_OK:
+        return status.HTTP_200_OK
+    return status.HTTP_503_SERVICE_UNAVAILABLE
 
 
 @router.get("")
-async def health(request: Request) -> dict[str, Any]:
+async def health(request: Request) -> JSONResponse:
     payload = await build_health_payload(request.app)
-    return _summary_from_payload(payload)
+    return JSONResponse(
+        status_code=_health_http_status(payload),
+        content=_summary_from_payload(payload),
+    )
 
 
 @router.get("/live")
@@ -201,7 +257,7 @@ async def live(request: Request) -> dict[str, Any]:
 async def ready(request: Request) -> JSONResponse:
     payload = await build_health_payload(request.app)
     return JSONResponse(
-        status_code=status.HTTP_200_OK if payload["ready"] else status.HTTP_503_SERVICE_UNAVAILABLE,
+        status_code=_health_http_status(payload),
         content=_summary_from_payload(payload),
     )
 

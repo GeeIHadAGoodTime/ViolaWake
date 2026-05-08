@@ -133,6 +133,54 @@ class EmailService:
         )
         return await self._send_email(to, "ViolaWake usage warning", html)
 
+    async def send_subscription_activated(self, to: str, name: str, tier: str) -> bool:
+        """Send a confirmation email when a paid subscription activates."""
+        html = self._render_email(
+            heading="Subscription activated",
+            intro=(
+                f"Hi {escape(name)}, your ViolaWake "
+                f"<strong>{escape(tier.title())}</strong> subscription is active."
+            ),
+            button_label="Open Billing",
+            button_url=self._console_url("/billing"),
+            footer="You can review usage, invoices, and plan status from the Billing page.",
+        )
+        return await self._send_email(to, "Your ViolaWake subscription is active", html)
+
+    async def send_account_deleted(
+        self,
+        to: str,
+        name: str,
+        scheduled_hard_delete_at: str,
+    ) -> bool:
+        """Send confirmation after an account deletion request is accepted."""
+        html = self._render_email(
+            heading="Account deleted",
+            intro=(
+                f"Hi {escape(name)}, your ViolaWake account has been deleted. "
+                "Your account data is no longer accessible and is scheduled "
+                f"for permanent deletion on {escape(scheduled_hard_delete_at)}."
+            ),
+            button_label="ViolaWake",
+            button_url=self._console_url("/"),
+            footer="If you did not request this, contact privacy@violawake.com immediately.",
+        )
+        return await self._send_email(to, "Your ViolaWake account has been deleted", html)
+
+    async def send_support_autoreply(self, to: str, ticket_reference: str) -> bool:
+        """Send a support inbox auto-reply."""
+        html = self._render_email(
+            heading="Thanks for contacting ViolaWake",
+            intro=(
+                "We received your message and aim to respond within 48 hours. "
+                f"Your ticket reference is <strong>{escape(ticket_reference)}</strong>."
+            ),
+            button_label="Open ViolaWake",
+            button_url=self._console_url("/"),
+            footer="ViolaWake Support",
+        )
+        return await self._send_email(to, f"ViolaWake support request {ticket_reference}", html)
+
     def _console_url(self, path: str, **query: str) -> str:
         """Build a console URL from the configured base URL."""
         url = urljoin(self._console_base_url, path.lstrip("/"))

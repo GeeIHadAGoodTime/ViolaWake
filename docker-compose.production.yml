@@ -20,10 +20,25 @@ services:
       context: .
       dockerfile: console/Dockerfile.backend
     restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/data/tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 200
     expose:
       - "8000"
     volumes:
       - backend-data:/app/data
+      - openwakeword-models:/usr/local/lib/python3.11/site-packages/openwakeword/resources/models
       - ${VIOLAWAKE_NEGATIVES_CORPUS_DIR:-./violawake_data/negatives}:/app/negatives:ro
       # REQUIRED — universal corpus (LibriSpeech + MUSAN) for training-time
       # speech negatives. See docs/DEPLOYMENT.md. If ./corpus is unavailable,
@@ -34,15 +49,52 @@ services:
     environment:
       - VIOLAWAKE_DB_URL=postgresql+asyncpg://violawake:${POSTGRES_PASSWORD}@postgres:5432/violawake
       - VIOLAWAKE_NEGATIVES_CORPUS_DIR=/app/negatives
+      - VIOLAWAKE_USE_DECODER_SIDECAR=${VIOLAWAKE_USE_DECODER_SIDECAR:-0}
+      - VIOLAWAKE_DECODER_SIDECAR_URL=http://decoder:8001/decode
+      - HOME=/app/data/home
+      - XDG_CACHE_HOME=/app/data/cache
+      - MPLCONFIGDIR=/tmp/matplotlib
     depends_on:
       postgres:
         condition: service_healthy
+      decoder:
+        condition: service_healthy
+    networks:
+      - default
+      - decoder-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  decoder:
+    build:
+      context: .
+      dockerfile: console/decoder/Dockerfile
+    restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 100
+    expose:
+      - "8001"
+    volumes:
+      - decoder-work:/work
+    networks:
+      - decoder-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   frontend:
     build:
@@ -66,3 +118,10 @@ services:
 volumes:
   pgdata:
   backend-data:
+  openwakeword-models:
+  decoder-work:
+
+networks:
+  default:
+  decoder-net:
+    internal: true

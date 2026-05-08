@@ -61,6 +61,10 @@ def _ensure_schema_updates(connection: Connection) -> None:
             )
         except Exception:
             connection.execute(text("ALTER TABLE users ADD COLUMN locked_until TIMESTAMP"))
+    if "deleted_at" not in user_columns:
+        connection.execute(text("ALTER TABLE users ADD COLUMN deleted_at TIMESTAMP"))
+    if "scheduled_hard_delete_at" not in user_columns:
+        connection.execute(text("ALTER TABLE users ADD COLUMN scheduled_hard_delete_at TIMESTAMP"))
 
     # Team FK columns on recordings and trained_models (nullable, so no default needed)
     if "recordings" in table_names:
@@ -72,6 +76,13 @@ def _ensure_schema_updates(connection: Connection) -> None:
         model_columns = {col["name"] for col in inspector.get_columns("trained_models")}
         if "team_id" not in model_columns:
             connection.execute(text("ALTER TABLE trained_models ADD COLUMN team_id INTEGER REFERENCES teams(id)"))
+        if "deleted_at" not in model_columns:
+            connection.execute(text("ALTER TABLE trained_models ADD COLUMN deleted_at TIMESTAMP"))
+
+    if "training_jobs" in table_names:
+        training_job_columns = {col["name"] for col in inspector.get_columns("training_jobs")}
+        if "deleted_at" not in training_job_columns:
+            connection.execute(text("ALTER TABLE training_jobs ADD COLUMN deleted_at TIMESTAMP"))
 
     # Soft-delete support: recordings are marked deleted_at after training completes
     if "recordings" in table_names:

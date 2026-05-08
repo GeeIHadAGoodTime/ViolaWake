@@ -1,12 +1,13 @@
 """Auth routes: register, login, me."""
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy import delete, select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
@@ -25,7 +26,7 @@ from app.config import settings
 from app.database import get_db
 from app.email_service import get_email_service
 from app.job_queue import init_job_queue
-from app.models import Recording, Subscription, TrainedModel, TrainingJob, UsageRecord, User
+from app.models import Recording, Subscription, TrainedModel, TrainingJob, User
 from app.rate_limit import (
     CHANGE_PASSWORD_LIMIT,
     FORGOT_PASSWORD_LIMIT,
@@ -53,7 +54,6 @@ from app.schemas import (
     UserResponse,
     VerifyEmailRequest,
 )
-from app.storage import build_companion_config_identifier, get_storage
 
 # Pre-computed dummy bcrypt hash used to make login timing constant
 # regardless of whether the account exists (prevents email enumeration).
@@ -368,7 +368,7 @@ async def delete_account(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> MessageResponse:
-    """Delete the authenticated user's account and associated data.
+    """Soft-delete the authenticated user's account and associated data.
 
     Requires the user's current password for confirmation.
     """
@@ -378,48 +378,67 @@ async def delete_account(
             detail="Incorrect password",
         )
 
-    storage = get_storage()
     queue = await init_job_queue()
-
-    recording_paths = (
-        await db.execute(select(Recording.file_path).where(Recording.user_id == current_user.id))
-    ).scalars().all()
-    model_paths = (
-        await db.execute(select(TrainedModel.file_path).where(TrainedModel.user_id == current_user.id))
-    ).scalars().all()
-
     await queue.delete_jobs_for_user(current_user.id)
+    original_email = current_user.email
+    original_name = current_user.name
+    now = datetime.now(timezone.utc)
+    scheduled_hard_delete_at = now + timedelta(days=30)
 
-    for file_path in recording_paths:
-        storage.delete(file_path)
-
-    for file_path in model_paths:
-        storage.delete(file_path)
-        storage.delete(build_companion_config_identifier(file_path))
-
-    # Cancel Stripe subscription before deleting DB records.
+    # Delete the Stripe customer before scrubbing local identity fields.
     sub_result = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
     subscription = sub_result.scalar_one_or_none()
-    if subscription and subscription.stripe_subscription_id and settings.billing_enabled:
+    if subscription and subscription.stripe_customer_id and settings.billing_enabled:
         try:
             import stripe
             stripe.api_key = settings.stripe_secret_key
-            stripe.Subscription.cancel(subscription.stripe_subscription_id)
+            stripe.Customer.delete(subscription.stripe_customer_id)
         except Exception:
             logger.warning(
                 "Failed to cancel Stripe subscription %s for user %s — proceeding with deletion",
-                subscription.stripe_subscription_id,
+                subscription.stripe_customer_id,
                 current_user.id,
             )
 
-    await db.execute(delete(UsageRecord).where(UsageRecord.user_id == current_user.id))
-    await db.execute(delete(Subscription).where(Subscription.user_id == current_user.id))
-    await db.execute(delete(TrainingJob).where(TrainingJob.user_id == current_user.id))
-    await db.execute(delete(TrainedModel).where(TrainedModel.user_id == current_user.id))
-    await db.execute(delete(Recording).where(Recording.user_id == current_user.id))
-    await db.execute(delete(User).where(User.id == current_user.id))
+    if subscription is not None:
+        subscription.tier = "free"
+        subscription.status = "canceled"
+        subscription.stripe_customer_id = None
+        subscription.stripe_subscription_id = None
+        subscription.current_period_end = None
+
+    await db.execute(
+        update(Recording)
+        .where(Recording.user_id == current_user.id, Recording.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+    await db.execute(
+        update(TrainedModel)
+        .where(TrainedModel.user_id == current_user.id, TrainedModel.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+    await db.execute(
+        update(TrainingJob)
+        .where(TrainingJob.user_id == current_user.id, TrainingJob.deleted_at.is_(None))
+        .values(deleted_at=now)
+    )
+
+    current_user.email = f"deleted-user-{current_user.id}@deleted.violawake.local"
+    current_user.name = "Deleted user"
+    current_user.password_hash = hash_password(secrets.token_urlsafe(32))
+    current_user.email_verified = False
+    current_user.failed_login_count = 0
+    current_user.locked_until = None
+    current_user.deleted_at = now
+    current_user.scheduled_hard_delete_at = scheduled_hard_delete_at
+
+    await get_email_service().send_account_deleted(
+        to=original_email,
+        name=original_name,
+        scheduled_hard_delete_at=scheduled_hard_delete_at.date().isoformat(),
+    )
 
     logger.info("Deleted account for user %s", current_user.id)
-    return MessageResponse(message="Account and associated data deleted.")
+    return MessageResponse(message="Account deleted. Data is scheduled for permanent deletion in 30 days.")

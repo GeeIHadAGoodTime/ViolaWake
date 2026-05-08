@@ -584,6 +584,21 @@ async def _handle_checkout_completed(db: AsyncSession, session: dict) -> None:
             logger.exception("Failed to fetch subscription %s for period end", subscription_id)
 
     await db.flush()
+
+    try:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user is not None:
+            from app.email_service import get_email_service
+
+            await get_email_service().send_subscription_activated(
+                to=user.email,
+                name=user.name,
+                tier=sub.tier,
+            )
+    except Exception:
+        logger.exception("Failed to send subscription activation email for user %s", user_id)
+
     logger.info(
         "Subscription activated: user=%d tier=%s stripe_sub=%s",
         user_id, sub.tier, subscription_id,

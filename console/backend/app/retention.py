@@ -6,12 +6,12 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.config import settings
 from app.database import async_session_factory
-from app.models import Recording, TrainedModel
-from app.storage import get_storage
+from app.models import Recording, Subscription, TrainedModel, TrainingJob, UsageRecord, User
+from app.storage import build_companion_config_identifier, get_storage
 
 logger = logging.getLogger("violawake.retention")
 
@@ -272,3 +272,62 @@ async def cleanup_expired_models() -> int:
 
     logger.info("Model retention cleanup complete: deleted %s model(s)", deleted_count)
     return deleted_count
+
+
+async def cleanup_hard_deleted_accounts() -> int:
+    """Permanently purge accounts whose 30-day deletion window has elapsed."""
+    now = _utcnow()
+    storage = get_storage()
+    purged_count = 0
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(User).where(
+                User.deleted_at.is_not(None),
+                User.scheduled_hard_delete_at.is_not(None),
+                User.scheduled_hard_delete_at <= now,
+            )
+        )
+        users = result.scalars().all()
+
+        for user in users:
+            recording_result = await session.execute(
+                select(Recording).where(Recording.user_id == user.id)
+            )
+            for recording in recording_result.scalars().all():
+                try:
+                    storage.delete(recording.file_path)
+                except Exception:
+                    logger.warning(
+                        "Failed to delete storage object for deleted account recording %s at %s",
+                        recording.id,
+                        recording.file_path,
+                    )
+
+            model_result = await session.execute(
+                select(TrainedModel).where(TrainedModel.user_id == user.id)
+            )
+            for model in model_result.scalars().all():
+                try:
+                    storage.delete(model.file_path)
+                    storage.delete(build_companion_config_identifier(model.file_path))
+                except Exception:
+                    logger.warning(
+                        "Failed to delete storage object for deleted account model %s at %s",
+                        model.id,
+                        model.file_path,
+                    )
+
+            await session.execute(delete(UsageRecord).where(UsageRecord.user_id == user.id))
+            await session.execute(delete(Subscription).where(Subscription.user_id == user.id))
+            await session.execute(delete(TrainingJob).where(TrainingJob.user_id == user.id))
+            await session.execute(delete(TrainedModel).where(TrainedModel.user_id == user.id))
+            await session.execute(delete(Recording).where(Recording.user_id == user.id))
+            await session.delete(user)
+            purged_count += 1
+
+        if purged_count:
+            await session.commit()
+
+    logger.info("Hard-deleted %s account(s)", purged_count)
+    return purged_count

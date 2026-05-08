@@ -65,7 +65,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {isAuthenticated && user && !user.email_verified && (
         <div className="verification-banner" role="status">
-          Verify your email to unlock recording, training, and billing features.
+          Verify your email to upload recordings, start training, and manage billing.
           Check your inbox for the verification link.
         </div>
       )}

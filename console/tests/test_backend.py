@@ -10,9 +10,11 @@ Usage:
 from __future__ import annotations
 
 import io
+import json
 import sqlite3
 import uuid
 import wave
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -183,6 +185,14 @@ def fake_email_service(monkeypatch):
         async def send_quota_warning(self, to: str, used: int, limit: int, tier: str) -> bool:
             return True
 
+        async def send_account_deleted(
+            self,
+            to: str,
+            name: str,
+            scheduled_hard_delete_at: str,
+        ) -> bool:
+            return True
+
     service = FakeEmailService()
 
     from app.routes import auth as auth_routes
@@ -320,8 +330,11 @@ def _account_state(user_id: int) -> dict[str, int]:
         return {
             "users": int(conn.execute("SELECT COUNT(*) FROM users WHERE id = ?", (user_id,)).fetchone()[0]),
             "recordings": int(conn.execute("SELECT COUNT(*) FROM recordings WHERE user_id = ?", (user_id,)).fetchone()[0]),
+            "deleted_recordings": int(conn.execute("SELECT COUNT(*) FROM recordings WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
             "models": int(conn.execute("SELECT COUNT(*) FROM trained_models WHERE user_id = ?", (user_id,)).fetchone()[0]),
+            "deleted_models": int(conn.execute("SELECT COUNT(*) FROM trained_models WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
             "training_jobs": int(conn.execute("SELECT COUNT(*) FROM training_jobs WHERE user_id = ?", (user_id,)).fetchone()[0]),
+            "deleted_training_jobs": int(conn.execute("SELECT COUNT(*) FROM training_jobs WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
             "subscriptions": int(conn.execute("SELECT COUNT(*) FROM subscriptions WHERE user_id = ?", (user_id,)).fetchone()[0]),
             "usage_records": int(conn.execute("SELECT COUNT(*) FROM usage_records WHERE user_id = ?", (user_id,)).fetchone()[0]),
         }
@@ -517,25 +530,91 @@ class TestAuth:
             )
 
         assert response.status_code == 200, response.text
-        assert response.json()["message"] == "Account and associated data deleted."
+        assert response.json()["message"] == "Account deleted. Data is scheduled for permanent deletion in 30 days."
         queue.delete_jobs_for_user.assert_awaited_once_with(user_id)
 
         state = _account_state(user_id)
         assert state == {
-            "users": 0,
-            "recordings": 0,
-            "models": 0,
-            "training_jobs": 0,
-            "subscriptions": 0,
-            "usage_records": 0,
+            "users": 1,
+            "recordings": 1,
+            "deleted_recordings": 1,
+            "models": 1,
+            "deleted_models": 1,
+            "training_jobs": 1,
+            "deleted_training_jobs": 1,
+            "subscriptions": 1,
+            "usage_records": 1,
         }
 
         storage = get_storage()
-        assert storage.exists(artifacts["model_key"]) is False
-        assert storage.exists(build_companion_config_identifier(artifacts["model_key"])) is False
+        assert storage.exists(artifacts["model_key"]) is True
+        assert storage.exists(build_companion_config_identifier(artifacts["model_key"])) is True
+
+        from app.config import settings
+
+        with sqlite3.connect(settings.db_path) as conn:
+            user_row = conn.execute(
+                "SELECT email, name, deleted_at, scheduled_hard_delete_at FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            sub_row = conn.execute(
+                "SELECT tier, status, stripe_customer_id, stripe_subscription_id FROM subscriptions WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+
+        assert user_row is not None
+        assert user_row[0] == f"deleted-user-{user_id}@deleted.violawake.local"
+        assert user_row[1] == "Deleted user"
+        assert user_row[2] is not None
+        assert user_row[3] is not None
+        assert sub_row == ("free", "canceled", None, None)
 
         me_response = client.get("/api/auth/me", headers=auth_headers)
         assert me_response.status_code == 401
+
+    def test_account_export_includes_profile_artifacts_and_manifests(
+        self, client, auth_headers,
+    ) -> None:
+        import sys
+
+        backend_dir = str(Path(__file__).resolve().parents[1] / "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from app.auth import decode_token
+
+        wav_data = make_wav_bytes()
+        upload_resp = client.post(
+            "/api/recordings/upload",
+            headers=auth_headers,
+            files={"file": ("sample.wav", wav_data, "audio/wav")},
+            data={"wake_word": "export-account"},
+        )
+        assert upload_resp.status_code == 200, upload_resp.text
+
+        user_id = decode_token(auth_headers["Authorization"].removeprefix("Bearer ").strip())
+        _seed_account_artifacts(user_id)
+
+        response = client.get("/api/account/export", headers=auth_headers)
+
+        assert response.status_code == 200, response.text
+        assert response.headers["content-type"] == "application/zip"
+
+        with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
+            names = set(zf.namelist())
+            assert "user.json" in names
+            assert "recordings/manifest.json" in names
+            assert "models/manifest.json" in names
+            assert "jobs.json" in names
+            user_payload = json.loads(zf.read("user.json"))
+            recordings = json.loads(zf.read("recordings/manifest.json"))
+            models = json.loads(zf.read("models/manifest.json"))
+
+        assert user_payload["id"] == user_id
+        assert len(recordings) >= 1
+        assert any(item["available"] for item in recordings)
+        assert len(models) >= 1
+        assert any(item["available"] for item in models)
 
     def test_unverified_user_blocked_from_recording_training_and_billing(
         self, client, unverified_auth_headers,
@@ -549,7 +628,7 @@ class TestAuth:
             data={"wake_word": "blocked"},
         )
         assert recording_resp.status_code == 403
-        assert "verify your email" in recording_resp.json()["detail"].lower()
+        assert recording_resp.json()["detail"] == "Verify your email to upload recordings."
 
         training_resp = client.post(
             "/api/training/start",
