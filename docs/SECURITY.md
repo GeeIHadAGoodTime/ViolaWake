@@ -40,10 +40,27 @@ the next hardening tier:
 - Consider a dedicated decoder sidecar so hostile media parsing is isolated
   from the authenticated API process and database credentials.
 
-## Cloudflare WAF Rules To Set Manually
+## Cloudflare WAF Rules
 
-Apply these in the Cloudflare dashboard. Do not depend on backend-only limits at
-the public edge.
+Two of three target rules are deployed on the `violawake.com` zone (Free plan).
+The third needs a paid plan; backend cap covers it. Original spec preserved
+below for posterity / paid-plan upgrade path.
+
+**Deployed (live)**
+- Geo-block `/api/*` outside US/CA/EU/EEA — `http_request_firewall_custom`,
+  ruleset `bf95b91734b44cd9a2f7f9324a90285a`.
+- Rate-limit `/api/recordings/*` at 17 req per 10s per IP+colo (≈100/min),
+  10s mitigation block — `http_ratelimit`, ruleset
+  `bb8c390ce5da4feca02dbf375b0d286e`. Free plan only allows `period=10s` and
+  `mitigation_timeout=10s`.
+
+**Not deployed**
+- Block oversized recording-upload bodies at edge: requires WAF Advanced plan
+  (Free plan rejects `http.request.body.size` filter with `not entitled`). The
+  backend's 5 MB per-file cap (returns 413, audit-logged) covers this without
+  Cloudflare. Upgrade to Pro+ to push enforcement to the edge.
+
+### Original ruleset spec (apply by hand or via API on paid plan)
 
 1. Block oversized recording uploads.
 
