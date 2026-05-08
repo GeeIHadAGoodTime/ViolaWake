@@ -7,6 +7,8 @@ interface RecordingSessionProps {
   wakeWord: string;
   targetCount: number;
   onComplete: (recordings: Blob[]) => void;
+  onRecordingsChange?: (recordings: Blob[]) => void;
+  showSubmitButton?: boolean;
 }
 
 interface RecordingSlot {
@@ -74,6 +76,8 @@ export default function RecordingSession({
   wakeWord,
   targetCount,
   onComplete,
+  onRecordingsChange,
+  showSubmitButton = true,
 }: RecordingSessionProps) {
   const [slots, setSlots] = useState<(RecordingSlot | null)[]>(
     () => Array(targetCount).fill(null),
@@ -93,6 +97,15 @@ export default function RecordingSession({
   const completedCount = slots.filter((s) => s !== null).length;
   const activeIndex =
     reRecordIndex !== null ? reRecordIndex : currentIndex;
+
+  useEffect(() => {
+    if (!onRecordingsChange) return;
+    onRecordingsChange(
+      slots
+        .filter((s): s is RecordingSlot => s !== null)
+        .map((s) => s.blob),
+    );
+  }, [onRecordingsChange, slots]);
 
   const handleRecordingComplete = useCallback(
     (blob: Blob, duration: number) => {
@@ -258,7 +271,7 @@ export default function RecordingSession({
       </div>
 
       {/* Submit button (review phase only, all slots filled) */}
-      {phase === "review" && completedCount === targetCount && (
+      {showSubmitButton && phase === "review" && completedCount === targetCount && (
         <button className="session-submit" onClick={handleSubmit}>
           Start Training
         </button>

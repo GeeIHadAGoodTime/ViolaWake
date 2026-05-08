@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && node scripts/generate-marketing.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke:record-upload": "node scripts/record-upload-smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
