@@ -37,8 +37,8 @@
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>C:\Program Files\Git\usr\bin\bash.exe</Command>
-      <Arguments>-c "set -a; [ -f 'J:/CLAUDE/PROJECTS/FewerJobs/.env' ] &amp;&amp; source 'J:/CLAUDE/PROJECTS/FewerJobs/.env'; [ -f .env.production ] &amp;&amp; source .env.production; set +a; bash scripts/backup_to_r2_wrangler.sh"</Arguments>
+      <Command>J:\Git\usr\bin\bash.exe</Command>
+      <Arguments>-l -c "export PATH=\"/c/Users/jihad/AppData/Roaming/npm:/c/Program Files/Docker/Docker/resources/bin:/c/Program Files/nodejs:/usr/bin:/bin:$PATH\"; set -a; { [ -f 'J:/CLAUDE/PROJECTS/FewerJobs/.env' ] &amp;&amp; source 'J:/CLAUDE/PROJECTS/FewerJobs/.env'; } 2&gt;/dev/null || true; { [ -f .env.production ] &amp;&amp; source .env.production; } 2&gt;/dev/null || true; set +a; bash scripts/backup_to_r2_wrangler.sh"</Arguments>
       <WorkingDirectory>J:\CLAUDE\PROJECTS\Wakeword</WorkingDirectory>
     </Exec>
   </Actions>
