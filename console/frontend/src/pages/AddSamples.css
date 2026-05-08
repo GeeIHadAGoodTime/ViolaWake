@@ -1,0 +1,333 @@
+.add-samples-page {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+
+.add-samples-header,
+.add-samples-submit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.sample-summary {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 1.25rem;
+  margin: 2rem 0;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.sample-summary-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-right: 1.25rem;
+  border-right: 1px solid var(--border);
+}
+
+.sample-summary-number {
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.sample-summary-label {
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+}
+
+.sample-summary-body {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sample-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-weight: 600;
+}
+
+.sample-target-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.sample-target-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  transition: width 0.2s ease;
+}
+
+.sample-summary-note,
+.sample-summary-error {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.sample-summary-error,
+.add-samples-submit-error {
+  color: var(--error);
+}
+
+.add-samples-tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.add-samples-tabs button {
+  min-width: 128px;
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add-samples-tabs button.active {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.add-samples-panel {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.add-recorder-area {
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.add-sample-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.add-sample-placeholder,
+.upload-file-empty,
+.add-samples-empty {
+  padding: 1.25rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.add-sample-tile {
+  display: grid;
+  gap: 0.6rem;
+  min-height: 112px;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.add-sample-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.add-sample-actions,
+.upload-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-sample-actions button,
+.upload-file-row button {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  cursor: pointer;
+}
+
+.upload-dropzone {
+  display: grid;
+  gap: 0.7rem;
+  justify-items: center;
+  padding: 2rem;
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  text-align: center;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.upload-dropzone.dragging {
+  border-color: var(--accent);
+  background: rgba(126, 108, 255, 0.08);
+}
+
+.upload-dropzone span {
+  color: var(--text-secondary);
+}
+
+.upload-file-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.upload-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 130px 86px auto;
+  min-height: 72px;
+  padding: 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.upload-file-main {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.upload-file-main strong,
+.upload-file-main span,
+.upload-file-main em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-file-main span {
+  color: var(--text-secondary);
+}
+
+.upload-file-main em {
+  color: var(--error);
+  font-style: normal;
+}
+
+.upload-file-progress {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.upload-file-progress div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.upload-file-status {
+  justify-self: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+}
+
+.upload-file-row.success .upload-file-status {
+  color: #087f5b;
+  background: rgba(32, 180, 134, 0.14);
+}
+
+.upload-file-row.error .upload-file-status {
+  color: var(--error);
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.add-samples-submit-error {
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 8px;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.add-samples-submit {
+  position: sticky;
+  bottom: 0;
+  margin-top: 2rem;
+  padding: 1rem 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+}
+
+.add-samples-submit span {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .add-samples-header,
+  .add-samples-submit {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sample-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .sample-summary-stat {
+    padding-right: 0;
+    padding-bottom: 1rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .add-samples-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .add-samples-tabs button {
+    min-width: 0;
+  }
+
+  .upload-file-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .upload-file-status {
+    justify-self: start;
+  }
+}

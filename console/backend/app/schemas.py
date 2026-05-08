@@ -95,6 +95,26 @@ class RecordingUploadResponse(BaseModel):
     duration_s: float
 
 
+class RecordingBulkUploadItem(BaseModel):
+    filename: str
+    status: Literal["success", "error"]
+    recording_id: int | None = None
+    wake_word: str | None = None
+    duration_s: float | None = None
+    error: str | None = None
+
+
+class RecordingBulkUploadResponse(BaseModel):
+    results: list[RecordingBulkUploadItem]
+    uploaded: int
+    failed: int
+
+
+class RecordingCountResponse(BaseModel):
+    wake_word: str | None = None
+    count: int
+
+
 # ── Training ─────────────────────────────────────────────────────────────────
 
 class TrainingStartRequest(BaseModel):

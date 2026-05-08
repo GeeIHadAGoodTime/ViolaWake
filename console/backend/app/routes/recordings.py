@@ -1,10 +1,13 @@
 """Recording upload and listing routes."""
 
+from __future__ import annotations
+
 import io
 import re
-import struct
+import tempfile
 import uuid
 import wave
+from pathlib import Path
 from typing import Annotated
 
 import numpy as np
@@ -27,88 +30,66 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_verified_user
 from app.database import get_db
 from app.models import Recording, User
-from app.rate_limit import RECORDING_UPLOAD_LIMIT, key_by_user, limiter, set_rate_limit_user
-from app.schemas import RecordingResponse, RecordingUploadResponse
+from app.rate_limit import RECORDING_UPLOAD_LIMIT, consume_rate_limit, key_by_user, set_rate_limit_user
+from app.schemas import (
+    RecordingBulkUploadItem,
+    RecordingBulkUploadResponse,
+    RecordingCountResponse,
+    RecordingResponse,
+    RecordingUploadResponse,
+)
 from app.storage import build_recording_key, get_storage
 
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
 
-# Limits
-MIN_DURATION_S = 0.5
-MAX_DURATION_S = 5.0
+MIN_DURATION_S = 0.3
+MAX_DURATION_S = 30.0
 TARGET_SAMPLE_RATE = 16000
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_FILE_SIZE = 5 * 1024 * 1024
+MAX_FILES_PER_REQUEST = 50
 MAX_RECORDINGS_PER_USER = 500
-MIN_RMS_ENERGY = 10.0  # ~-70dBFS — any real speech is well above this
+MIN_RMS_ENERGY = 10.0
+MIN_RMS_FLOAT = MIN_RMS_ENERGY / 32767.0
+SUPPORTED_AUDIO_EXTENSIONS = {".wav", ".flac", ".mp3", ".ogg", ".m4a"}
+RECORDING_UPLOAD_SCOPE = "recordings-upload"
 
 
 async def _verified_user_with_rate_key(
     request: Request,
     current_user: Annotated[User, Depends(get_verified_user)],
 ) -> User:
-    """Resolve the user *and* stash the ID on ``request.state`` for rate limiting."""
+    """Resolve the user and stash the ID on request.state for rate limiting."""
     set_rate_limit_user(request, current_user.id)
     return current_user
 
 
-def _validate_wav(file_bytes: bytes) -> tuple[int, int, int, float]:
-    """Validate WAV file and return (sample_rate, channels, sample_width, duration_s).
+def _normalize_wake_word(wake_word: str) -> str:
+    if not wake_word.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="wake_word is required")
 
-    Raises:
-        HTTPException on invalid WAV data.
-    """
-    # Check RIFF header
-    if len(file_bytes) < 44:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too small to be a valid WAV")
+    normalized = wake_word.strip().lower()
+    normalized = re.sub(r"[^a-z0-9 _-]", "", normalized)
+    if not normalized:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wake word contains no valid characters")
+    return normalized
 
-    if file_bytes[:4] != b"RIFF" or file_bytes[8:12] != b"WAVE":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a valid WAV file")
 
-    # Parse fmt chunk — walk chunks to find it
-    pos = 12
-    fmt_found = False
-    sample_rate = 0
-    channels = 0
-    sample_width = 0
-    n_frames = 0
+def _safe_upload_filename(file: UploadFile) -> str:
+    return Path(file.filename or "upload").name or "upload"
 
-    while pos < len(file_bytes) - 8:
-        chunk_id = file_bytes[pos:pos + 4]
-        chunk_size = struct.unpack_from("<I", file_bytes, pos + 4)[0]
 
-        if chunk_id == b"fmt ":
-            if chunk_size < 16:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed fmt chunk")
-            audio_format = struct.unpack_from("<H", file_bytes, pos + 8)[0]
-            if audio_format not in (1, 3):  # 1=PCM, 3=IEEE float
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported WAV format ({audio_format}). Only PCM and IEEE float are supported.",
-                )
-            channels = struct.unpack_from("<H", file_bytes, pos + 10)[0]
-            sample_rate = struct.unpack_from("<I", file_bytes, pos + 12)[0]
-            bits_per_sample = struct.unpack_from("<H", file_bytes, pos + 22)[0]
-            sample_width = bits_per_sample // 8
-            fmt_found = True
+def _validate_extension(filename: str) -> str:
+    extension = Path(filename).suffix.lower()
+    if extension not in SUPPORTED_AUDIO_EXTENSIONS:
+        allowed = ", ".join(sorted(SUPPORTED_AUDIO_EXTENSIONS))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported audio format. Upload one of: {allowed}.",
+        )
+    return extension
 
-        elif chunk_id == b"data":
-            data_size = chunk_size
-            if fmt_found and sample_width > 0 and channels > 0:
-                n_frames = data_size // (sample_width * channels)
 
-        pos += 8 + chunk_size
-        # Chunks are word-aligned
-        if chunk_size % 2 != 0:
-            pos += 1
-
-    if not fmt_found:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="WAV file missing fmt chunk")
-
-    if sample_rate == 0 or channels == 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid WAV header values")
-
-    duration_s = n_frames / sample_rate if sample_rate > 0 else 0.0
-
+def _raise_duration_error(duration_s: float) -> None:
     if duration_s < MIN_DURATION_S:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -120,46 +101,8 @@ def _validate_wav(file_bytes: bytes) -> tuple[int, int, int, float]:
             detail=f"Recording too long ({duration_s:.2f}s). Maximum is {MAX_DURATION_S}s.",
         )
 
-    return sample_rate, channels, sample_width, duration_s
 
-
-def _ensure_mono_16k(file_bytes: bytes, _orig_sr: int, _channels: int) -> tuple[bytes, float]:
-    """Convert WAV to mono 16kHz if needed. Returns (wav_bytes, duration_s)."""
-    import io
-
-    import numpy as np
-    from scipy.io import wavfile
-
-    with io.BytesIO(file_bytes) as buf:
-        sr, data = wavfile.read(buf)
-
-    if data.ndim > 1:
-        data = data.mean(axis=1)
-
-    if np.issubdtype(data.dtype, np.floating):
-        samples = np.clip(data.astype(np.float32), -1.0, 1.0)
-    elif np.issubdtype(data.dtype, np.signedinteger):
-        info = np.iinfo(data.dtype)
-        scale = float(max(abs(info.min), info.max))
-        samples = data.astype(np.float32) / scale
-    elif np.issubdtype(data.dtype, np.unsignedinteger):
-        info = np.iinfo(data.dtype)
-        midpoint = (info.max + 1) / 2.0
-        samples = (data.astype(np.float32) - midpoint) / midpoint
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported WAV data type: {data.dtype}",
-        )
-
-    if sr != TARGET_SAMPLE_RATE:
-        from scipy.signal import resample
-
-        new_length = int(len(samples) * TARGET_SAMPLE_RATE / sr)
-        samples = resample(samples, new_length)
-
-    duration_s = len(samples) / TARGET_SAMPLE_RATE
-
+def _encode_mono_wav(samples: np.ndarray) -> bytes:
     samples_int16 = (np.clip(samples, -1.0, 1.0) * 32767.0).astype(np.int16)
     out_buf = io.BytesIO()
     with wave.open(out_buf, "wb") as wf:
@@ -167,47 +110,73 @@ def _ensure_mono_16k(file_bytes: bytes, _orig_sr: int, _channels: int) -> tuple[
         wf.setsampwidth(2)
         wf.setframerate(TARGET_SAMPLE_RATE)
         wf.writeframes(samples_int16.tobytes())
+    return out_buf.getvalue()
 
-    return out_buf.getvalue(), duration_s
+
+def _load_with_soundfile(file_bytes: bytes) -> np.ndarray:
+    import soundfile as sf
+
+    data, sample_rate = sf.read(io.BytesIO(file_bytes), dtype="float32", always_2d=False)
+    samples = np.asarray(data, dtype=np.float32)
+    if samples.ndim > 1:
+        samples = samples.mean(axis=1)
+    if sample_rate != TARGET_SAMPLE_RATE:
+        import librosa
+
+        samples = librosa.resample(samples, orig_sr=sample_rate, target_sr=TARGET_SAMPLE_RATE)
+    return np.asarray(samples, dtype=np.float32)
 
 
-@router.post("/upload", response_model=RecordingUploadResponse)
-@limiter.limit(RECORDING_UPLOAD_LIMIT, key_func=key_by_user)
-async def upload_recording(
-    request: Request,
-    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    file: UploadFile = File(...),  # noqa: B008
-    wake_word: str = Form(...),
-) -> RecordingUploadResponse:
-    """Upload a WAV recording for a wake word."""
+def _load_with_librosa(file_bytes: bytes, extension: str) -> np.ndarray:
+    import librosa
 
-    if not wake_word.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="wake_word is required")
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as temp_file:
+            temp_file.write(file_bytes)
+            temp_path = Path(temp_file.name)
+        samples, _sample_rate = librosa.load(str(temp_path), sr=TARGET_SAMPLE_RATE, mono=True)
+        return np.asarray(samples, dtype=np.float32)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
-    wake_word = wake_word.strip().lower()
 
-    # Only allow safe characters in wake_word for filesystem safety
-    wake_word = re.sub(r'[^a-z0-9 _-]', '', wake_word)
-    if not wake_word:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Wake word contains no valid characters")
-
-    total_recordings_result = await db.execute(
-        select(func.count())
-        .select_from(Recording)
-        .where(
-            Recording.user_id == current_user.id,
-            Recording.deleted_at.is_(None),
-        )
-    )
-    total_recordings = int(total_recordings_result.scalar_one())
-    if total_recordings >= MAX_RECORDINGS_PER_USER:
+def _decode_audio_to_wav(file_bytes: bytes, extension: str) -> tuple[bytes, float]:
+    try:
+        try:
+            samples = _load_with_soundfile(file_bytes)
+        except Exception:
+            samples = _load_with_librosa(file_bytes, extension)
+    except Exception as exc:
+        allowed = ", ".join(sorted(SUPPORTED_AUDIO_EXTENSIONS))
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Recording limit reached. Delete old recordings to upload new ones.",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Could not decode audio file. Supported formats: {allowed}.",
+        ) from exc
+
+    if samples.size == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file contains no samples.")
+    if not np.all(np.isfinite(samples)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Audio file contains invalid samples.")
+
+    duration_s = float(len(samples) / TARGET_SAMPLE_RATE)
+    _raise_duration_error(duration_s)
+
+    rms = float(np.sqrt(np.mean(samples.astype(np.float32) ** 2)))
+    if rms < MIN_RMS_FLOAT:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Recording appears to be silent. Please check the audio and try again.",
         )
 
-    # Read file content
+    return _encode_mono_wav(samples), duration_s
+
+
+async def _read_audio_upload(file: UploadFile) -> tuple[str, str, bytes]:
+    original_filename = _safe_upload_filename(file)
+    extension = _validate_extension(original_filename)
+
     content = await file.read()
     if len(content) == 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
@@ -215,41 +184,41 @@ async def upload_recording(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large ({len(content)} bytes). Maximum is {MAX_FILE_SIZE} bytes (10 MB).",
+            detail=f"File too large ({len(content)} bytes). Maximum is {MAX_FILE_SIZE} bytes (5 MB).",
         )
 
-    # Validate WAV
-    sample_rate, channels, sample_width, duration_s = _validate_wav(content)
+    return original_filename, extension, content
 
-    # Convert to mono 16kHz if necessary
-    needs_conversion = sample_rate != TARGET_SAMPLE_RATE or channels != 1 or sample_width != 2
-    if needs_conversion:
-        content, duration_s = _ensure_mono_16k(content, sample_rate, channels)
 
-    # Energy check: reject silent/zero-audio recordings.
-    # This prevents corrupted recordings (all zeros) from entering training data.
-    # The "big chungus" incident: all-zero positives taught the model silence = wake word.
-    # NOTE: Existing recordings uploaded before this check should be audited —
-    # scan for zero-energy WAVs in storage and flag/remove them.
-    with wave.open(io.BytesIO(content), "rb") as _wf:
-        raw_pcm = _wf.readframes(_wf.getnframes())
-    pcm_data = np.frombuffer(raw_pcm, dtype=np.int16)
-    rms = float(np.sqrt(np.mean(pcm_data.astype(np.float32) ** 2)))
-    if rms < MIN_RMS_ENERGY:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Recording appears to be silent. Please check your microphone and try again.",
+async def _active_recording_count(db: AsyncSession, user_id: int) -> int:
+    result = await db.execute(
+        select(func.count())
+        .select_from(Recording)
+        .where(
+            Recording.user_id == user_id,
+            Recording.deleted_at.is_(None),
         )
+    )
+    return int(result.scalar_one())
+
+
+async def _store_upload(
+    *,
+    db: AsyncSession,
+    user_id: int,
+    wake_word: str,
+    file: UploadFile,
+) -> RecordingUploadResponse:
+    _original_filename, extension, content = await _read_audio_upload(file)
+    wav_bytes, duration_s = _decode_audio_to_wav(content, extension)
 
     storage = get_storage()
     filename = f"{wake_word}_{uuid.uuid4().hex[:8]}.wav"
-    storage_key = build_recording_key(current_user.id, wake_word, filename)
+    storage_key = build_recording_key(user_id, wake_word, filename)
+    storage.upload(storage_key, wav_bytes, "audio/wav")
 
-    storage.upload(storage_key, content, "audio/wav")
-
-    # Create DB record
     recording = Recording(
-        user_id=current_user.id,
+        user_id=user_id,
         wake_word=wake_word,
         filename=filename,
         file_path=storage_key,
@@ -264,6 +233,147 @@ async def upload_recording(
         filename=filename,
         wake_word=wake_word,
         duration_s=round(duration_s, 3),
+    )
+
+
+def _consume_upload_budget(request: Request, response: Response, file_count: int) -> None:
+    consume_rate_limit(
+        request,
+        limit_value=RECORDING_UPLOAD_LIMIT,
+        key=key_by_user(request),
+        scope=RECORDING_UPLOAD_SCOPE,
+        cost=file_count,
+        response=response,
+    )
+
+
+def _error_text(exc: HTTPException) -> str:
+    detail = exc.detail
+    return str(detail) if detail else "Upload failed"
+
+
+@router.post("/upload", response_model=RecordingUploadResponse)
+async def upload_recording(
+    request: Request,
+    response: Response,
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),  # noqa: B008
+    wake_word: str = Form(...),
+) -> RecordingUploadResponse:
+    """Upload one audio recording for a wake word."""
+    normalized_wake_word = _normalize_wake_word(wake_word)
+    _consume_upload_budget(request, response, 1)
+
+    total_recordings = await _active_recording_count(db, current_user.id)
+    if total_recordings >= MAX_RECORDINGS_PER_USER:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Recording limit reached. Delete old recordings to upload new ones.",
+        )
+
+    return await _store_upload(
+        db=db,
+        user_id=current_user.id,
+        wake_word=normalized_wake_word,
+        file=file,
+    )
+
+
+@router.post("/bulk-upload", response_model=RecordingBulkUploadResponse)
+async def bulk_upload_recordings(
+    request: Request,
+    response: Response,
+    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    files: list[UploadFile] = File(..., alias="file"),  # noqa: B008
+    wake_word: str = Form(...),
+) -> RecordingBulkUploadResponse:
+    """Upload multiple audio files for a wake word with per-file outcomes."""
+    normalized_wake_word = _normalize_wake_word(wake_word)
+    if not files:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one file is required")
+    if len(files) > MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Too many files. Maximum is {MAX_FILES_PER_REQUEST} files per request.",
+        )
+
+    _consume_upload_budget(request, response, len(files))
+
+    total_recordings = await _active_recording_count(db, current_user.id)
+    remaining_slots = MAX_RECORDINGS_PER_USER - total_recordings
+    successful_uploads = 0
+    results: list[RecordingBulkUploadItem] = []
+
+    for file in files:
+        original_filename = _safe_upload_filename(file)
+        if successful_uploads >= remaining_slots:
+            results.append(
+                RecordingBulkUploadItem(
+                    filename=original_filename,
+                    status="error",
+                    error="Recording limit reached. Delete old recordings to upload new ones.",
+                )
+            )
+            continue
+
+        try:
+            upload = await _store_upload(
+                db=db,
+                user_id=current_user.id,
+                wake_word=normalized_wake_word,
+                file=file,
+            )
+        except HTTPException as exc:
+            results.append(
+                RecordingBulkUploadItem(
+                    filename=original_filename,
+                    status="error",
+                    error=_error_text(exc),
+                )
+            )
+            continue
+
+        successful_uploads += 1
+        results.append(
+            RecordingBulkUploadItem(
+                filename=original_filename,
+                status="success",
+                recording_id=upload.recording_id,
+                wake_word=upload.wake_word,
+                duration_s=upload.duration_s,
+            )
+        )
+
+    failed = len(results) - successful_uploads
+    return RecordingBulkUploadResponse(
+        results=results,
+        uploaded=successful_uploads,
+        failed=failed,
+    )
+
+
+@router.get("/count", response_model=RecordingCountResponse)
+async def count_recordings(
+    current_user: Annotated[User, Depends(get_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    wake_word: str | None = Query(default=None),
+) -> RecordingCountResponse:
+    """Count active recordings for the current user, optionally filtered by wake word."""
+    stmt = select(func.count()).select_from(Recording).where(
+        Recording.user_id == current_user.id,
+        Recording.deleted_at.is_(None),
+    )
+    normalized_wake_word: str | None = None
+    if wake_word:
+        normalized_wake_word = wake_word.strip().lower()
+        stmt = stmt.where(Recording.wake_word == normalized_wake_word)
+
+    result = await db.execute(stmt)
+    return RecordingCountResponse(
+        wake_word=normalized_wake_word,
+        count=int(result.scalar_one()),
     )
 
 

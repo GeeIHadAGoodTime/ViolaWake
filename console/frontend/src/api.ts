@@ -3,6 +3,8 @@ import type {
   User,
   Recording,
   UploadResponse,
+  BulkUploadResponse,
+  RecordingCountResponse,
   TrainingStartResponse,
   TrainingJob,
   Model,
@@ -30,6 +32,7 @@ class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    public retryAfter: number | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -89,6 +92,13 @@ function handleSessionExpiry(): void {
   }
 }
 
+function readRetryAfter(response: Response): number | null {
+  const raw = response.headers.get("Retry-After");
+  if (!raw) return null;
+  const seconds = Number.parseInt(raw, 10);
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -119,6 +129,7 @@ async function request<T>(
 
   if (!response.ok) {
     let message = `Request failed: ${response.status}`;
+    const retryAfter = readRetryAfter(response);
     try {
       const body = await response.json();
       message = body.detail || body.message || message;
@@ -127,9 +138,9 @@ async function request<T>(
     }
     if (response.status === 401) {
       handleSessionExpiry();
-      throw new ApiError(401, message);
+      throw new ApiError(401, message, retryAfter);
     }
-    throw new ApiError(response.status, message);
+    throw new ApiError(response.status, message, retryAfter);
   }
 
   const contentType = response.headers.get("content-type");
@@ -258,6 +269,25 @@ export async function uploadRecording(
   });
 }
 
+export async function bulkUploadRecordings(
+  files: Array<File | Blob>,
+  wakeWord: string,
+): Promise<BulkUploadResponse> {
+  const formData = new FormData();
+  files.forEach((file, index) => {
+    const filename = file instanceof File
+      ? file.name
+      : `${wakeWord}_${index}.wav`;
+    formData.append("file", file, filename);
+  });
+  formData.append("wake_word", wakeWord);
+
+  return request<BulkUploadResponse>("/recordings/bulk-upload", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function getRecordings(
   wakeWord?: string,
 ): Promise<Recording[]> {
@@ -265,6 +295,15 @@ export async function getRecordings(
     ? `?wake_word=${encodeURIComponent(wakeWord)}`
     : "";
   return request<Recording[]>(`/recordings${query}`);
+}
+
+export async function getRecordingCount(
+  wakeWord?: string,
+): Promise<RecordingCountResponse> {
+  const query = wakeWord
+    ? `?wake_word=${encodeURIComponent(wakeWord)}`
+    : "";
+  return request<RecordingCountResponse>(`/recordings/count${query}`);
 }
 
 // --- Training ---

@@ -30,6 +30,26 @@ export interface UploadResponse {
   duration_s: number;
 }
 
+export interface BulkUploadItem {
+  filename: string;
+  status: "success" | "error";
+  recording_id: number | null;
+  wake_word: string | null;
+  duration_s: number | null;
+  error: string | null;
+}
+
+export interface BulkUploadResponse {
+  results: BulkUploadItem[];
+  uploaded: number;
+  failed: number;
+}
+
+export interface RecordingCountResponse {
+  wake_word: string | null;
+  count: number;
+}
+
 export interface TrainingJob {
   job_id: number;
   status: TrainingStatus;

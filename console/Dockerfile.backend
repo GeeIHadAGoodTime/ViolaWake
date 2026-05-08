@@ -4,7 +4,7 @@ WORKDIR /app
 
 # Install system deps for audio processing + gosu for entrypoint
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    portaudio19-dev curl gosu \
+    portaudio19-dev curl gosu ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps + upgrade build tools

@@ -15,6 +15,7 @@ import LoginPage from "./pages/Login";
 import RegisterPage from "./pages/Register";
 import DashboardPage from "./pages/Dashboard";
 import RecordPage from "./pages/Record";
+import AddSamplesPage from "./pages/AddSamples";
 import TrainingStatusPage from "./pages/TrainingStatus";
 import PricingPage from "./pages/Pricing";
 import BillingPage from "./pages/Billing";
@@ -65,6 +66,14 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <RecordPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/record/:wakeWord/add"
+                  element={
+                    <ProtectedRoute>
+                      <AddSamplesPage />
                     </ProtectedRoute>
                   }
                 />
