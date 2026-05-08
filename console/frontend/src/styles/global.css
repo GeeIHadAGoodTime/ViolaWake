@@ -2766,14 +2766,15 @@ a:hover {
 
 /* Account info block on /account/password and section divider */
 .account-info {
-  background: var(--surface-2, #f8f9fc);
-  border: 1px solid var(--border, #e5e7ef);
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0.5rem;
   padding: 1rem 1.25rem;
   margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  color: var(--text-primary);
 }
 .account-info-row {
   display: flex;
@@ -2782,17 +2783,21 @@ a:hover {
   font-size: 0.95rem;
   gap: 1rem;
 }
+.account-info-row strong {
+  color: var(--text-primary);
+}
 .account-info-label {
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 .auth-section-header {
   margin: 1.5rem 0 0.75rem 0;
   padding-top: 1rem;
-  border-top: 1px solid var(--border, #e5e7ef);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 .auth-section-title {
   font-size: 1.1rem;
   margin: 0;
+  color: var(--text-primary);
 }
 
 /* Two-line Account nav link with email subtitle */
@@ -2805,10 +2810,11 @@ a:hover {
 }
 .nav-account-label {
   font-weight: 600;
+  color: var(--text-primary);
 }
 .nav-account-email {
   font-size: 0.72rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-weight: 400;
   max-width: 14rem;
   overflow: hidden;
