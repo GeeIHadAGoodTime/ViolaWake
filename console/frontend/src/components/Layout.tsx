@@ -34,8 +34,15 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/pricing" className="nav-link">
                 Plans
               </Link>
-              <Link to="/account/password" className="nav-link">
-                Account
+              <Link
+                to="/account/password"
+                className="nav-link nav-account"
+                title={user?.email ?? "Account"}
+              >
+                <span className="nav-account-label">Account</span>
+                {user?.email && (
+                  <span className="nav-account-email">{user.email}</span>
+                )}
               </Link>
               <button
                 onClick={logout}

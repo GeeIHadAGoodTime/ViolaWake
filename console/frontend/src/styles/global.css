@@ -2763,3 +2763,55 @@ a:hover {
     font-size: 1rem;
   }
 }
+
+/* Account info block on /account/password and section divider */
+.account-info {
+  background: var(--surface-2, #f8f9fc);
+  border: 1px solid var(--border, #e5e7ef);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.account-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  gap: 1rem;
+}
+.account-info-label {
+  color: var(--text-secondary, #64748b);
+}
+.auth-section-header {
+  margin: 1.5rem 0 0.75rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border, #e5e7ef);
+}
+.auth-section-title {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Two-line Account nav link with email subtitle */
+.nav-account {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.1;
+  padding: 0.4rem 0.75rem;
+}
+.nav-account-label {
+  font-weight: 600;
+}
+.nav-account-email {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #64748b);
+  font-weight: 400;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

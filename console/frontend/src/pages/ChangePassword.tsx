@@ -137,10 +137,33 @@ export default function ChangePasswordPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-header">
-          <h1 className="auth-title">Change password</h1>
+          <h1 className="auth-title">Account</h1>
           <p className="auth-subtitle">
-            Update the password for your ViolaWake account.
+            Your ViolaWake account details, password, and data controls.
           </p>
+        </div>
+
+        {user && (
+          <section className="account-info" aria-label="Account information">
+            <div className="account-info-row">
+              <span className="account-info-label">Email</span>
+              <strong>{user.email}</strong>
+            </div>
+            {user.name && (
+              <div className="account-info-row">
+                <span className="account-info-label">Name</span>
+                <strong>{user.name}</strong>
+              </div>
+            )}
+            <div className="account-info-row">
+              <span className="account-info-label">Email verified</span>
+              <strong>{user.email_verified ? "Yes" : "No — check your inbox"}</strong>
+            </div>
+          </section>
+        )}
+
+        <div className="auth-section-header">
+          <h2 className="auth-section-title">Change password</h2>
         </div>
 
         {error && (
