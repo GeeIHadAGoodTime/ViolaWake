@@ -1,0 +1,14 @@
+{
+  "name": "violawake-support-email",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.80.0"
+  }
+}

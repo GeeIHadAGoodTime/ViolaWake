@@ -1,0 +1,12 @@
+name = "violawake-support-email"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# This Worker is invoked from a Cloudflare Email Routing rule. It is not
+# attached to an HTTP route or a custom domain. send_email entries are not
+# required because we use the EmailMessage.forward() API on inbound mail.
+
+[vars]
+VIOLAWAKE_INBOUND_URL = "https://api.violawake.com/api/email/inbound"
+VIOLAWAKE_FORWARD_TO = "violavoiceassistant@gmail.com"
+# VIOLAWAKE_EMAIL_INBOUND_SECRET is set via `wrangler secret put` below
