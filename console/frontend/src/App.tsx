@@ -28,6 +28,7 @@ import ChangePasswordPage from "./pages/ChangePassword";
 import TeamsPage from "./pages/Teams";
 import TeamDetailPage from "./pages/TeamDetail";
 import TeamAcceptPage from "./pages/TeamAccept";
+import ContactPage from "./pages/Contact";
 import CookieConsent from "./components/CookieConsent";
 
 export default function App() {
@@ -43,6 +44,7 @@ export default function App() {
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
+                <Route path="/contact" element={<ContactPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />

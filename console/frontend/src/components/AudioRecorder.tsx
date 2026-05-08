@@ -9,6 +9,12 @@ import {
 interface AudioRecorderProps {
   onRecordingComplete: (blob: Blob, duration: number) => void;
   maxDuration?: number;
+  /**
+   * Specific microphone deviceId picked by MicMonitor. Null = browser default.
+   * Re-mounting the component on slot change (key={`recorder-${index}-...`})
+   * is enough to pick up new values without explicit prop-watching.
+   */
+  deviceId?: string | null;
 }
 
 type RecorderState = "idle" | "countdown" | "recording" | "done";
@@ -45,6 +51,7 @@ function getMicErrorMessage(err: unknown): string {
 export default function AudioRecorder({
   onRecordingComplete,
   maxDuration = 3,
+  deviceId = null,
 }: AudioRecorderProps) {
   const [state, setState] = useState<RecorderState>("idle");
   const [countdown, setCountdown] = useState(3);
@@ -194,6 +201,7 @@ export default function AudioRecorder({
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
+          ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
         },
       });
       mediaStreamRef.current = stream;

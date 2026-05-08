@@ -1,5 +1,7 @@
-import { useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AudioRecorder from "./AudioRecorder";
+import MicMonitor from "./MicMonitor";
+import { drawWaveformFromBlob } from "../utils/waveform";
 
 interface RecordingSessionProps {
   wakeWord: string;
@@ -11,6 +13,61 @@ interface RecordingSlot {
   blob: Blob;
   duration: number;
   url: string;
+}
+
+const DEVICE_STORAGE_KEY = "violawake.preferred_input_device";
+
+function readPersistedDeviceId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(DEVICE_STORAGE_KEY);
+    return raw && raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistDeviceId(deviceId: string | null): void {
+  try {
+    if (deviceId) {
+      window.localStorage.setItem(DEVICE_STORAGE_KEY, deviceId);
+    } else {
+      window.localStorage.removeItem(DEVICE_STORAGE_KEY);
+    }
+  } catch {
+    // localStorage may be disabled (incognito on some browsers); just skip.
+  }
+}
+
+/**
+ * Per-slot waveform — re-rendered when the slot's blob changes.
+ */
+function SlotWaveform({ blob }: { blob: Blob }) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawWaveformFromBlob(blob, canvas, { color: "#7e6cff" }).catch((err) => {
+      if (!cancelled) {
+        console.warn("waveform render failed:", err);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [blob]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="slot-waveform"
+      width={120}
+      height={32}
+      aria-label="Recording waveform"
+    />
+  );
 }
 
 export default function RecordingSession({
@@ -27,6 +84,9 @@ export default function RecordingSession({
   );
   const [phase, setPhase] = useState<"recording" | "review">(
     "recording",
+  );
+  const [deviceId, setDeviceId] = useState<string | null>(() =>
+    readPersistedDeviceId(),
   );
   const audioRefs = useRef<Map<number, HTMLAudioElement>>(new Map());
 
@@ -63,6 +123,11 @@ export default function RecordingSession({
     [activeIndex, currentIndex, reRecordIndex, targetCount],
   );
 
+  const handleDeviceChange = useCallback((next: string | null) => {
+    setDeviceId(next);
+    persistDeviceId(next);
+  }, []);
+
   function handleReRecord(index: number) {
     setReRecordIndex(index);
     setPhase("recording");
@@ -92,6 +157,12 @@ export default function RecordingSession({
 
   return (
     <div className="recording-session">
+      {/* Always-on mic preview: device picker + live level meter */}
+      <MicMonitor
+        selectedDeviceId={deviceId}
+        onDeviceChange={handleDeviceChange}
+      />
+
       {/* Progress bar */}
       <div className="session-progress">
         <div className="session-progress-header">
@@ -133,6 +204,7 @@ export default function RecordingSession({
             key={`recorder-${activeIndex}-${Date.now()}`}
             onRecordingComplete={handleRecordingComplete}
             maxDuration={3}
+            deviceId={deviceId}
           />
         </div>
       )}
@@ -153,6 +225,7 @@ export default function RecordingSession({
             <span className="slot-number">{i + 1}</span>
             {slot ? (
               <div className="slot-controls">
+                <SlotWaveform blob={slot.blob} />
                 <button
                   className="slot-play"
                   type="button"

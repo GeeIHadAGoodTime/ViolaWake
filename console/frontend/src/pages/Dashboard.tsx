@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-import type { Model } from "../types";
-import { getModels } from "../api";
+import { Link, useNavigate } from "react-router-dom";
+import type { Model, SubscriptionResponse } from "../types";
+import { getModels, getSubscription } from "../api";
 import ModelCard from "../components/ModelCard";
 
 export default function DashboardPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionResponse | null>(
+    null,
+  );
   const navigate = useNavigate();
 
   const loadModels = useCallback(async () => {
@@ -27,6 +30,26 @@ export default function DashboardPage() {
   useEffect(() => {
     loadModels();
   }, [loadModels]);
+
+  // Load subscription so we can show an upgrade CTA on free tier. Failure
+  // here is non-fatal — the dashboard still works without the banner.
+  useEffect(() => {
+    let cancelled = false;
+    getSubscription()
+      .then((data) => {
+        if (!cancelled) setSubscription(data);
+      })
+      .catch(() => {
+        // billing not configured / not available — silently skip the banner
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const tier = subscription?.tier?.toLowerCase() ?? "free";
+  const usage = subscription?.usage;
+  const showUpgrade = tier === "free";
 
   const handleModelDeleted = useCallback((modelId: number) => {
     setModels((prev) => prev.filter((m) => m.id !== modelId));
@@ -50,6 +73,27 @@ export default function DashboardPage() {
           + Train New Model
         </button>
       </div>
+
+      {showUpgrade && (
+        <div className="dashboard-upgrade-banner" role="status">
+          <div>
+            <strong>You&apos;re on the Free plan.</strong> 3 models per
+            month
+            {usage
+              ? ` — ${usage.models_used} / ${usage.models_limit ?? "∞"} used this period.`
+              : "."}{" "}
+            Upgrade for 20+ models, priority training, and team features.
+          </div>
+          <div className="dashboard-upgrade-actions">
+            <Link to="/pricing" className="btn btn-primary">
+              See plans
+            </Link>
+            <Link to="/billing" className="btn btn-ghost">
+              Manage billing
+            </Link>
+          </div>
+        </div>
+      )}
 
       {loading && (
         <div className="dashboard-loading">

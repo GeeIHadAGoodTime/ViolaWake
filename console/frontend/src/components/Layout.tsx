@@ -28,8 +28,14 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/teams" className="nav-link">
                 Teams
               </Link>
+              <Link to="/billing" className="nav-link">
+                Billing
+              </Link>
+              <Link to="/pricing" className="nav-link">
+                Plans
+              </Link>
               <Link to="/account/password" className="nav-link">
-                Password
+                Account
               </Link>
               <button
                 onClick={logout}
@@ -42,6 +48,9 @@ export default function Layout({ children }: LayoutProps) {
             <>
               <Link to="/pricing" className="nav-link">
                 Pricing
+              </Link>
+              <Link to="/contact" className="nav-link">
+                Contact
               </Link>
               <Link to="/login" className="nav-link">
                 Login
@@ -62,6 +71,29 @@ export default function Layout({ children }: LayoutProps) {
       )}
 
       <main className="main-content">{children}</main>
+
+      {/* Global footer — visible app-wide so privacy/terms/contact are
+          always one click away, including from inside the authed app. */}
+      <footer className="app-footer" aria-label="Site footer">
+        <div className="app-footer-inner">
+          <div className="app-footer-links">
+            <Link to="/pricing">Pricing</Link>
+            <Link to="/contact">Contact</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/terms">Terms</Link>
+            <a
+              href="https://github.com/GeeIHadAGoodTime/ViolaWake"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+          </div>
+          <div className="app-footer-meta">
+            &copy; 2026 ViolaWake. Apache 2.0 licensed SDK.
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

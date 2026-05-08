@@ -2202,3 +2202,263 @@ a:hover {
   text-align: center;
   margin: 0.25rem 0 0;
 }
+
+/* ─────────── MicMonitor (always-on device picker + level meter) ─────────── */
+.mic-monitor {
+  background: var(--surface, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mic-monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.mic-monitor-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #a0a0a0);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mic-monitor-select {
+  flex: 1;
+  min-width: 200px;
+  background: var(--bg, #0d0d0d);
+  color: var(--text-primary, #f0f0f0);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.mic-monitor-select:focus {
+  outline: 2px solid var(--accent, #7e6cff);
+  outline-offset: 1px;
+}
+
+.mic-monitor-active {
+  font-size: 0.9rem;
+  color: var(--text-primary, #f0f0f0);
+}
+
+.mic-monitor-error {
+  background: rgba(255, 82, 82, 0.12);
+  color: #ff8080;
+  border: 1px solid rgba(255, 82, 82, 0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.mic-monitor-meter {
+  position: relative;
+  height: 12px;
+  background: var(--bg, #0d0d0d);
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border, #2a2a2a);
+}
+
+.mic-monitor-meter-fill {
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    #4ade80 0%,
+    #4ade80 60%,
+    #facc15 80%,
+    #ef4444 100%
+  );
+  transition: width 60ms linear;
+}
+
+.mic-monitor-meter-peak {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #fff;
+  opacity: 0.85;
+  transition: left 100ms linear;
+}
+
+.mic-monitor.clipping .mic-monitor-meter,
+.mic-monitor-meter.clipping {
+  box-shadow: 0 0 0 2px #ef4444;
+}
+
+.mic-monitor-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+/* ─────────── Per-slot recording waveform ─────────── */
+.slot-waveform {
+  display: block;
+  width: 100%;
+  max-width: 120px;
+  height: 32px;
+  background: rgba(126, 108, 255, 0.06);
+  border-radius: 4px;
+  margin: 0.25rem 0;
+}
+
+/* ─────────── Dashboard upgrade banner ─────────── */
+.dashboard-upgrade-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: linear-gradient(
+    135deg,
+    rgba(126, 108, 255, 0.12),
+    rgba(126, 108, 255, 0.04)
+  );
+  border: 1px solid rgba(126, 108, 255, 0.3);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.95rem;
+}
+
+.dashboard-upgrade-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ─────────── Global app footer ─────────── */
+.app-footer {
+  margin-top: 4rem;
+  padding: 1.5rem 1rem 2rem;
+  border-top: 1px solid var(--border, #2a2a2a);
+  background: var(--surface, #131313);
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.85rem;
+}
+
+.app-footer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.app-footer-links {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.app-footer-links a {
+  color: var(--text-secondary, #a0a0a0);
+  text-decoration: none;
+}
+
+.app-footer-links a:hover {
+  color: var(--text-primary, #f0f0f0);
+}
+
+/* ─────────── Contact page ─────────── */
+.contact-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+}
+
+.contact-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.contact-card {
+  background: var(--surface, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.contact-card h2 {
+  font-size: 1.05rem;
+  margin: 0;
+  color: var(--text-primary, #f0f0f0);
+}
+
+.contact-card p {
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a0a0a0);
+  margin: 0;
+}
+
+.contact-email {
+  font-family: ui-monospace, "Cascadia Mono", "Fira Code", monospace;
+  font-size: 0.95rem;
+  color: var(--accent, #7e6cff);
+  text-decoration: none;
+  margin-top: 0.25rem;
+}
+
+.contact-email:hover {
+  text-decoration: underline;
+}
+
+.contact-aux {
+  border-top: 1px solid var(--border, #2a2a2a);
+  padding-top: 1.5rem;
+}
+
+.contact-aux h2 {
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.contact-links {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0;
+  color: var(--text-secondary, #a0a0a0);
+  font-size: 0.9rem;
+}
+
+.contact-links li {
+  margin-bottom: 0.4rem;
+}
+
+.contact-links a {
+  color: var(--accent, #7e6cff);
+}
+
+/* ─────────── Landing tweaks ─────────── */
+.hero-fineprint {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+.steps-grid-four {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}

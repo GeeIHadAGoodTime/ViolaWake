@@ -24,7 +24,7 @@ export default function LandingPage() {
           </p>
           <div className="hero-actions">
             <Link to="/register" className="btn btn-primary btn-large">
-              Get Started Free
+              Create free account
             </Link>
             <a
               href="https://github.com/GeeIHadAGoodTime/ViolaWake"
@@ -32,9 +32,13 @@ export default function LandingPage() {
               rel="noopener noreferrer"
               className="btn btn-ghost btn-large"
             >
-              View on GitHub
+              View SDK on GitHub
             </a>
           </div>
+          <p className="hero-fineprint">
+            Account required to record and train. SDK is free and open
+            source — works without an account.
+          </p>
         </div>
         <div className="hero-code">
           <div className="code-window">
@@ -116,9 +120,25 @@ for frame in mic_stream():
       <section className="section how-it-works-section">
         <h2 className="section-title">How it works</h2>
         <p className="section-subtitle">
-          From recording to deployment in under 5 minutes.
+          From sign-up to a deployable wake word in under 5 minutes. A free
+          account is required to record and train — the SDK itself is free
+          and open source forever.
         </p>
-        <div className="steps-grid">
+        <div className="steps-grid steps-grid-four">
+          <div className="step-card">
+            <div className="step-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </div>
+            <div className="step-number">1</div>
+            <h3 className="step-title">Sign up free</h3>
+            <p className="step-desc">
+              Create a free account — no credit card. The free tier includes
+              3 trained models per month so you can try the full pipeline.
+            </p>
+          </div>
           <div className="step-card">
             <div className="step-icon">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -128,7 +148,7 @@ for frame in mic_stream():
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
             </div>
-            <div className="step-number">1</div>
+            <div className="step-number">2</div>
             <h3 className="step-title">Record</h3>
             <p className="step-desc">
               Say your wake word 10 times in our browser-based recorder. No
@@ -142,7 +162,7 @@ for frame in mic_stream():
                 <polyline points="8 6 2 12 8 18" />
               </svg>
             </div>
-            <div className="step-number">2</div>
+            <div className="step-number">3</div>
             <h3 className="step-title">Train</h3>
             <p className="step-desc">
               Our ML pipeline trains a custom temporal head on OpenWakeWord embeddings.
@@ -157,7 +177,7 @@ for frame in mic_stream():
                 <line x1="12" y1="22.08" x2="12" y2="12" />
               </svg>
             </div>
-            <div className="step-number">3</div>
+            <div className="step-number">4</div>
             <h3 className="step-title">Deploy</h3>
             <p className="step-desc">
               Download your 102KB wake head. About 1.4MB total runtime with the
