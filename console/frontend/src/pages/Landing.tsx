@@ -14,17 +14,16 @@ export default function LandingPage() {
       <section className="hero">
         <div className="hero-content">
           <h1 className="hero-title">
-            Custom Wake Words.<br />
-            Open Source. $0 to Start.
+            Custom wake words.<br />
+            Open source. Yours forever.
           </h1>
           <p className="hero-subtitle">
-            Train a personal wake word detector from 10 voice samples.
-            Production-tested, Apache 2.0 licensed.
-            The open alternative to Picovoice.
+            Train a personal wake-word detector from your voice samples.
+            Apache 2.0 SDK, ONNX models, no API keys. Works offline forever.
           </p>
           <div className="hero-actions">
             <Link to="/register" className="btn btn-primary btn-large">
-              Create free account
+              Get started free
             </Link>
             <a
               href="https://github.com/GeeIHadAGoodTime/ViolaWake"
@@ -32,12 +31,11 @@ export default function LandingPage() {
               rel="noopener noreferrer"
               className="btn btn-ghost btn-large"
             >
-              View SDK on GitHub
+              View on GitHub
             </a>
           </div>
           <p className="hero-fineprint">
-            Account required to record and train. SDK is free and open
-            source — works without an account.
+            Apache 2.0 licensed. No runtime API keys. No phone-home.
           </p>
         </div>
         <div className="hero-code">
@@ -64,7 +62,7 @@ for frame in mic_stream():
       <section className="section comparison-section">
         <h2 className="section-title">How we compare</h2>
         <p className="section-subtitle">
-          Production-grade accuracy without the enterprise price tag.
+          Factual product differences, verified 2026-05-08.
         </p>
         <div className="comparison-table-wrapper">
           <table className="comparison-table">
@@ -78,41 +76,55 @@ for frame in mic_stream():
             <tbody>
               <tr>
                 <td>SDK License</td>
-                <td className="comparison-highlight">Apache 2.0 (forever free)</td>
-                <td>Proprietary</td>
+                <td className="comparison-highlight">Apache 2.0 SDK</td>
+                <td>Proprietary SDK and service terms<sup>1</sup></td>
               </tr>
               <tr>
-                <td>Training</td>
-                <td className="comparison-highlight">Open (your data stays yours)</td>
-                <td>Black box</td>
+                <td>Runtime key</td>
+                <td className="comparison-highlight">No API key or phone-home</td>
+                <td>AccessKey required by Picovoice docs<sup>2</sup></td>
               </tr>
               <tr>
                 <td>Console Pricing</td>
                 <td className="comparison-highlight">Free / $29 / $99</td>
-                <td>Start Free / Talk to Sales</td>
-              </tr>
-              <tr>
-                <td>Enterprise</td>
-                <td className="comparison-highlight">From $99/mo</td>
-                <td>Contact sales</td>
+                <td>Verify current Picovoice terms directly<sup>3</sup></td>
               </tr>
               <tr>
                 <td>Accuracy disclosure</td>
-                <td className="comparison-highlight">0.8% EER &middot; 0.001 FA/hr (production reference model); 5.49% EER (adversarial benchmark v2)</td>
-                <td>No comparable public FAR/recall benchmark</td>
+                <td className="comparison-highlight">0.8% EER on production reference model; user-trained accuracy varies</td>
+                <td>FAQ claims 97%+ detection and &lt;1 false alarm in 10 hours<sup>4</sup></td>
               </tr>
               <tr>
                 <td>Training Samples</td>
-                <td className="comparison-highlight">10</td>
-                <td>Text-only (0 samples)</td>
+                <td className="comparison-highlight">10+ to start; more for production</td>
+                <td>Text-to-wake-word Console flow<sup>1</sup></td>
               </tr>
               <tr>
                 <td>Model Format</td>
-                <td className="comparison-highlight">ONNX (portable)</td>
-                <td>Proprietary binary</td>
+                <td className="comparison-highlight">ONNX wake head</td>
+                <td>Picovoice .ppn/.pv assets<sup>1</sup></td>
               </tr>
             </tbody>
           </table>
+          <p className="hero-fineprint">
+            Sources as of 2026-05-08: 1.{" "}
+            <a href="https://picovoice.ai/docs/porcupine/" target="_blank" rel="noopener noreferrer">
+              Picovoice Porcupine docs
+            </a>
+            ; 2.{" "}
+            <a href="https://picovoice.ai/docs/quick-start/porcupine-python/" target="_blank" rel="noopener noreferrer">
+              Python Quick Start
+            </a>
+            ; 3.{" "}
+            <a href="https://picovoice.ai/pricing/" target="_blank" rel="noopener noreferrer">
+              Picovoice pricing
+            </a>
+            ; 4.{" "}
+            <a href="https://picovoice.ai/docs/faq/porcupine/" target="_blank" rel="noopener noreferrer">
+              Porcupine FAQ
+            </a>
+            .
+          </p>
         </div>
       </section>
 
@@ -120,9 +132,7 @@ for frame in mic_stream():
       <section className="section how-it-works-section">
         <h2 className="section-title">How it works</h2>
         <p className="section-subtitle">
-          From sign-up to a deployable wake word in under 5 minutes. A free
-          account is required to record and train — the SDK itself is free
-          and open source forever.
+          Sign up, record 10+ samples, train, deploy.
         </p>
         <div className="steps-grid steps-grid-four">
           <div className="step-card">
@@ -135,8 +145,8 @@ for frame in mic_stream():
             <div className="step-number">1</div>
             <h3 className="step-title">Sign up free</h3>
             <p className="step-desc">
-              Create a free account — no credit card. The free tier includes
-              3 trained models per month so you can try the full pipeline.
+              Create an account and open the browser recorder. No credit card
+              is required for the free tier.
             </p>
           </div>
           <div className="step-card">
@@ -151,8 +161,8 @@ for frame in mic_stream():
             <div className="step-number">2</div>
             <h3 className="step-title">Record</h3>
             <p className="step-desc">
-              Say your wake word 10 times in our browser-based recorder. No
-              downloads, no setup.
+              Record or upload at least 10 wake-word samples. Add more samples
+              before production.
             </p>
           </div>
           <div className="step-card">
@@ -165,8 +175,8 @@ for frame in mic_stream():
             <div className="step-number">3</div>
             <h3 className="step-title">Train</h3>
             <p className="step-desc">
-              Our ML pipeline trains a custom temporal head on OpenWakeWord embeddings.
-              Real-time progress via SSE.
+              Train a custom TemporalCNN head on OpenWakeWord embeddings and
+              review the metrics.
             </p>
           </div>
           <div className="step-card">
@@ -180,8 +190,8 @@ for frame in mic_stream():
             <div className="step-number">4</div>
             <h3 className="step-title">Deploy</h3>
             <p className="step-desc">
-              Download your 102KB wake head. About 1.4MB total runtime with the
-              shared OpenWakeWord backbone. Runs anywhere Python runs.
+              Download the ONNX wake head and run it locally with the Apache
+              2.0 SDK.
             </p>
           </div>
         </div>
@@ -192,16 +202,16 @@ for frame in mic_stream():
         <div className="proof-card">
           <div className="proof-stats">
             <div className="proof-stat">
-              <span className="proof-stat-value">0.8%</span>
-              <span className="proof-stat-label">EER (equal error rate)</span>
+              <span className="proof-stat-value">0</span>
+              <span className="proof-stat-label">runtime API keys</span>
             </div>
             <div className="proof-stat">
-              <span className="proof-stat-value">&lt;5ms</span>
-              <span className="proof-stat-label">inference latency</span>
+              <span className="proof-stat-value">0</span>
+              <span className="proof-stat-label">phone-home calls</span>
             </div>
             <div className="proof-stat">
-              <span className="proof-stat-value">10</span>
-              <span className="proof-stat-label">samples to train</span>
+              <span className="proof-stat-value">100%</span>
+              <span className="proof-stat-label">Apache 2.0 SDK</span>
             </div>
             <div className="proof-stat">
               <span className="proof-stat-value">102KB</span>
@@ -209,12 +219,11 @@ for frame in mic_stream():
             </div>
           </div>
           <p className="proof-text">
-            Built by the makers of Viola, an AI voice assistant. Powered by the
-            same wake word technology running 24/7 in production. Metrics from
-            our TemporalCNN(96,9) production reference model evaluated on 25,409
-            parameters. <em>Your custom model&apos;s accuracy varies with sample
-            quantity and quality;</em> the figures above are the upper bound we&apos;ve
-            measured on a fully-tuned production model.
+            TemporalCNN(96, 9), 25,409 parameters, ONNX runtime inference.
+            Production reference model: 0.8% EER and d-prime 8.58 on a curated
+            benchmark. <em>Your trained model&apos;s accuracy depends on sample
+            quantity, sample quality, microphones, rooms, negatives, and
+            threshold tuning.</em>
           </p>
         </div>
       </section>

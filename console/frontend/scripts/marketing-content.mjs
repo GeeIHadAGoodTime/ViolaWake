@@ -9,8 +9,11 @@ export const site = {
 };
 
 export const sources = {
-  picovoiceProduct: "https://picovoice.ai/products/voice/wake-word/",
+  picovoiceProduct: "https://picovoice.ai/platform/porcupine/",
+  picovoicePricing: "https://picovoice.ai/pricing/",
   picovoiceDocs: "https://picovoice.ai/docs/porcupine/",
+  picovoiceQuickStart: "https://picovoice.ai/docs/quick-start/porcupine-python/",
+  picovoiceAndroidQuickStart: "https://picovoice.ai/docs/quick-start/porcupine-android/",
   picovoiceFaq: "https://picovoice.ai/docs/faq/porcupine/",
   picovoiceTerms: "https://picovoice.ai/docs/terms-of-use/",
   openWakeWord: "https://github.com/dscripka/openWakeWord",
@@ -39,12 +42,16 @@ const commonLinks = `
 - [Raspberry Pi tutorial](/blog/raspberry-pi-voice-assistant-violawake)
 `;
 
+const verifiedDate = "2026-05-08";
+
+const comparisonTrademarkNotice = `Comparison information accurate as of 2026-05-08. Picovoice and Porcupine are trademarks of Picovoice Inc.; OpenWakeWord is a project of David Scripka; Snowboy was a trademark of Kitt.AI (acquired by Baidu, deprecated 2020). All trademarks belong to their respective owners and are used here for nominative comparison only. ViolaWake is not affiliated with, endorsed by, or sponsored by these projects or companies. Report inaccuracies to hello@violawake.com.`;
+
 const comparisonFaqs = {
   picovoice: [
     {
       q: "Is ViolaWake a Picovoice alternative?",
       a:
-        "Yes. ViolaWake is positioned as an open-source alternative for teams that want custom wake word training, ONNX models, and an Apache 2.0 SDK instead of a closed wake word engine.",
+        "Yes. ViolaWake is an open-source alternative for teams that want custom wake word training, ONNX models, an Apache 2.0 SDK, and runtime detection without API keys.",
     },
     {
       q: "Does ViolaWake require cloud inference?",
@@ -54,7 +61,7 @@ const comparisonFaqs = {
     {
       q: "Does Picovoice publish public pricing?",
       a:
-        "As of May 8, 2026, the public Picovoice pricing URL redirected to contact/sales paths in our crawl. Their product page advertises Start Free and Talk to Sales, but not a public self-serve price table.",
+        "As of 2026-05-08, the Picovoice pricing URL was checked for this page. We did not rely on unsourced third-party price snippets; teams should verify current Picovoice commercial terms directly with Picovoice.",
     },
   ],
   openwakeword: [
@@ -95,41 +102,46 @@ export const pages = [
     nav,
     schema: ["Organization", "WebSite", "SoftwareApplication"],
     markdown: `
-# Custom wake words. Open source. $0 to start.
+# Custom wake words. Open source. Yours forever.
 
-Train a personal wake word detector from browser recordings, then deploy a portable ONNX model with the ViolaWake SDK. Detection runs on device. The SDK is Apache 2.0. The Console gives developers a managed place to record samples, train, inspect metrics, and download the model.
+Train a personal wake-word detector from your voice samples. Apache 2.0 SDK, ONNX models, no API keys. Works offline forever.
 
-[Create free account](/register)
-[View SDK on GitHub](${site.github})
+[Get started free](/register)
+[View on GitHub](${site.github})
+
+Apache 2.0 licensed. No runtime API keys. No phone-home.
 
 ## Quick answer: what is ViolaWake?
 
-ViolaWake is an open-source wake word SDK and web Console for custom voice activation. Developers can train a wake word from browser recordings, download an ONNX model, and run detection locally in Python or browser/WASM workflows. It is designed for builders who want a transparent alternative to proprietary wake word services such as Picovoice Porcupine.
+ViolaWake is an open-source wake word SDK and web Console for custom voice activation. Train from recordings, download an ONNX model, and run detection locally in Python. The hosted Console manages recording and training; runtime detection stays on device.
 
 ## Why developers compare ViolaWake to Picovoice
 
-Picovoice Porcupine is a mature proprietary wake word engine with strong embedded and enterprise positioning. ViolaWake competes from a different premise: the SDK, training code, model format, and evaluation tooling should be inspectable and portable.
+Picovoice Porcupine is a proprietary wake word SDK with broad platform documentation and an AccessKey workflow. ViolaWake is the open-source path: Apache 2.0 SDK, ONNX export, inspectable training code, and no runtime API key.
 
 | Feature | ViolaWake | Picovoice Porcupine |
 |---|---|---|
-| SDK license | Apache 2.0 | Picovoice terms and product licensing |
-| Model format | ONNX wake head plus OpenWakeWord backbone | Picovoice model assets and AccessKey workflow |
-| Training path | Browser Console or open CLI | Console-driven custom wake word generation |
-| Public pricing surface | Free, Developer, Business, Enterprise | Product page says Start Free and Talk to Sales |
-| Evaluation disclosure | d-prime, EER, FAR/FRR, ROC AUC tooling | Product page claims 97.1% accuracy at 1 false alarm per 10 hours |
+| SDK license | Apache 2.0 SDK | Proprietary SDK and service terms |
+| Runtime key | No API key or phone-home | AccessKey required by Picovoice docs |
+| Model format | ONNX wake head with OpenWakeWord backbone | Picovoice .ppn/.pv model assets |
+| Training path | Browser Console or open CLI | Picovoice Console text-to-wake-word flow |
 | Local inference | Yes | Yes |
+| Source | [ViolaWake GitHub](${site.github}) | [Picovoice Porcupine docs](${sources.picovoiceDocs}) |
+
+Comparison checked as of ${verifiedDate}. Picovoice AccessKey requirement verified from [Picovoice Porcupine Python Quick Start](${sources.picovoiceQuickStart}).
 
 ## Accuracy and deployment signals
 
-ViolaWake publishes two kinds of numbers because they answer different questions. The production reference recipe in this repository reports a TemporalCNN(96, 9) model with 25,409 parameters, 102 KB ONNX wake head size, d-prime 8.577, EER 0.8%, and AUC 0.9993 on its documented reference evaluation. The public benchmark v2 is harsher and reports 5.49% EER on a shared adversarial corpus. The marketing copy should keep both visible instead of pretending one number tells the whole story.
+ViolaWake's production reference model is a TemporalCNN(96, 9) wake head with 25,409 parameters and a 102 KB ONNX export. The reference evaluation reports 0.8% EER and d-prime 8.58. User-trained models from 10 samples are personal-demo quality; accuracy depends on sample quantity, microphones, rooms, negatives, and threshold tuning.
 
 ## Build path
 
-1. Create an account.
-2. Record or upload wake word samples.
-3. Train a custom TemporalCNN head on OpenWakeWord embeddings.
-4. Review quality, recall, false-alarm rate, and model size.
-5. Download the ONNX model and run it with the free SDK.
+1. Sign up.
+2. Record 10+ samples.
+3. Train a custom TemporalCNN head.
+4. Review metrics.
+5. Download the ONNX model.
+6. Deploy with the Apache 2.0 SDK.
 
 ## Use it from Python
 
@@ -144,12 +156,12 @@ for frame in mic_stream():
 
 ## What makes the project useful
 
-- Apache 2.0 SDK and training code.
-- ONNX-first model delivery.
-- Browser-based recording and training for people who do not want to build a pipeline from scratch.
-- Evaluation tools for EER, FAR, FRR, ROC AUC, and d-prime.
-- Honest disclosure that ViolaWake uses OpenWakeWord as the embedding backbone.
-- Pricing designed for developers who need a custom wake word without enterprise sales friction.
+- Apache 2.0 SDK.
+- ONNX wake head export.
+- OpenWakeWord embedding backbone.
+- Browser recording and training.
+- EER, FAR, FRR, ROC AUC, d-prime, and threshold tooling.
+- No API keys or phone-home at runtime.
 
 ${commonLinks}
 `,
@@ -243,103 +255,82 @@ ${commonLinks}
 
 ## Quick answer: is ViolaWake a Picovoice alternative?
 
-Yes. ViolaWake is a practical Picovoice Porcupine alternative when you want open training code, an Apache 2.0 SDK, ONNX model output, and a browser Console for custom wake word training. Picovoice remains a mature proprietary platform with broad enterprise positioning, fast text-to-wake-word generation, and strong embedded-device marketing. The choice is not "which one is universally better." The choice is whether you value a closed managed vendor path or an open, inspectable, lower-friction developer workflow.
+Yes. Pick ViolaWake when you want an Apache 2.0 SDK, ONNX model output, no runtime API key, and training code you can inspect. Pick Picovoice Porcupine when you want a proprietary SDK with broad platform support, typed wake-word generation, and a vendor account workflow.
 
 ## Summary table
 
 | Category | ViolaWake | Picovoice Porcupine |
 |---|---|---|
-| Core positioning | Open-source custom wake word SDK plus hosted Console | Enterprise on-device voice AI platform |
-| License model | Apache 2.0 SDK and training pipeline; hosted Console is a service | Picovoice terms for services, models, Console, and commercial use |
-| Custom wake words | Train from user recordings through Console or CLI | Type a phrase and generate/test through Picovoice Console |
-| Model output | ONNX wake head with OpenWakeWord backbone | Picovoice model assets and AccessKey integration |
-| Public pricing | Free, $29/mo Developer, $99/mo Business, custom Enterprise | Product page says Start Free and Talk to Sales; pricing URL redirects to contact in our May 8, 2026 crawl |
-| Accuracy claim surface | ViolaWake repo documents d-prime, EER, FAR/FRR, ROC AUC tooling | Picovoice product page claims 97.1% accuracy at 1 false alarm per 10 hours |
-| Best fit | Developers who want transparency and portability | Organizations that want a closed vendor stack with broad platform support |
+| Best fit | Open-source custom wake words with portable model files | Proprietary SDK with vendor-managed Console workflow |
+| SDK license | Apache 2.0 SDK and training code | Picovoice SDK and service terms |
+| Runtime key | No AccessKey, no API key, no phone-home | AccessKey required by Picovoice docs |
+| Model output | 102 KB ONNX wake head plus OpenWakeWord backbone | Picovoice .ppn/.pv assets |
+| Custom wake words | Train from user recordings in Console or CLI | Type a phrase in Picovoice Console and download a model |
+| Accuracy disclosure | 0.8% EER on production reference model; user-trained accuracy varies | FAQ claims 97%+ detection with less than 1 false alarm in 10 hours |
+| Pricing surface | Free, $29/mo Developer, $99/mo Business, custom Enterprise | Verify current commercial terms with Picovoice |
 
-## What Picovoice Porcupine is good at
+Comparison checked as of ${verifiedDate}. Competitor claims are linked in Verified claims.
 
-Picovoice Porcupine is not a weak competitor. Its public product page describes Porcupine as an on-device keyword spotting engine for always-on voice interfaces, with deployment across embedded, web, mobile, desktop, and server targets. It advertises custom wake word generation from typed text, no training data requirement, and enterprise readiness. Picovoice also publishes a visible benchmark-style claim on its Porcupine product page: 97.1% accuracy at one false alarm per ten hours, plus 3.8% single-core CPU utilization on Raspberry Pi 3 and roughly 250K custom wake words trained and deployed in 2025.
+## Decision guide
 
-Those claims matter because many buyers do not want to collect samples, run training, or compare model files. If your team wants a vendor-managed path where a wake phrase can be typed, generated, and integrated through Picovoice SDKs, Porcupine is designed for that motion.
+Pick ViolaWake when the runtime artifact matters. The SDK is Apache 2.0, the wake head exports as ONNX, and detection runs locally without a ViolaWake API call. The Console is a hosted convenience for recording, training, billing, and model management; downloaded models continue to run locally.
 
-## Where ViolaWake deliberately differs
+Pick Picovoice when procurement favors a proprietary vendor and a fast text-to-wake-word flow. Picovoice documents a broad platform matrix, Console model generation, and SDK quick starts. That is useful when your team wants vendor support and is comfortable with the AccessKey workflow.
 
-ViolaWake is built for developers who want to own the wake word stack. The SDK is Apache 2.0. The model delivered by the Console is an ONNX wake head. The training path is inspectable. The evaluation tooling exposes d-prime, EER, FAR, FRR, ROC AUC, threshold sweeps, and score dumps. The goal is not to hide the model behind a polished black box. The goal is to make the tradeoffs visible enough that a developer can ship responsibly.
+## AccessKey and runtime control
 
-That means the workflow feels different. ViolaWake asks for real recordings because it optimizes for a custom detector trained from samples. A quick personal test can start with 10 browser recordings. Production work should collect more speakers, more rooms, more microphones, and representative negatives. The Console reduces the setup burden, but it does not pretend that wake word quality is independent of data quality.
+Picovoice Porcupine requires an AccessKey. Picovoice's introduction describes AccessKey as an authentication and authorization token that verifies usage within account limits. The Python quick start passes access_key into pvporcupine.create(), including for custom keyword files. The Android quick start adds INTERNET and RECORD_AUDIO permissions and passes the key through setAccessKey().
 
-## Licensing and lock-in
+For offline-only deployments, confirm Picovoice license behavior directly with Picovoice. ViolaWake's local SDK has no AccessKey, no license validation call, and no runtime network dependency. Train or download the model, ship the ONNX file, and run detection on device.
 
-ViolaWake's local SDK and training code are Apache 2.0. That matters for teams that need to audit code, fork implementation details, run offline, or keep inference independent from a hosted vendor. The Console is a paid service, but the downloaded ONNX model and local SDK path are designed to keep inference local.
+## Training and model ownership
 
-Picovoice has open-source SDK repositories for some wrappers, but the Porcupine engine, Console, model assets, AccessKey workflow, and service terms are governed by Picovoice's own terms and commercial agreements. The May 8, 2026 Picovoice Terms of Use define Picovoice models, services, software, content, and additional agreements. Their product surface encourages Start Free and Contact Sales. If your risk model requires full control of local training and model assets, you should treat Picovoice as a proprietary vendor relationship even when a wrapper repository is open.
+Porcupine's Console flow is optimized for speed: choose a language, type the phrase, train, and download a platform-specific model. ViolaWake asks for real voice samples because it trains a detector from your recordings. A first test can start with 10 samples; production work should add more speakers, rooms, microphones, distances, background speech, music, and hard negatives.
 
-## Pricing surface
+ViolaWake's ownership story is direct. You receive an ONNX wake head. You can version it, evaluate it, ship it inside your release artifact, and run it with the Apache 2.0 SDK. The training pipeline uses an OpenWakeWord embedding backbone and a small ViolaWake TemporalCNN head.
 
-ViolaWake publishes pricing on the site: Free at $0/mo, Developer at $29/mo, Business at $99/mo, and custom Enterprise terms. The SDK remains free.
+## Accuracy
 
-Picovoice's current public product page gives clear calls to Start Free and Talk to Sales, but our crawl on May 8, 2026 did not find a public self-serve price table at the Picovoice pricing URL. The URL returned a client redirect toward contact. That is a factual point, not a criticism by itself. Many enterprise vendors use sales-led pricing. It does mean developers searching for "Picovoice pricing" need a clear comparison page that separates published facts from older third-party price snippets.
+Picovoice's FAQ says Porcupine achieves 97%+ detection with less than 1 false alarm in 10 hours, and that its standard model uses about 1 MB of memory and less than 4% of a single Raspberry Pi 3 core. Treat those as Picovoice's published claims and test on your own target hardware.
 
-## Accuracy claims and how to read them
-
-Picovoice's Porcupine page claims 97.1% accuracy at one false alarm per ten hours. That is a strong top-line claim, and the page positions the product as lightweight enough for Raspberry Pi 3. The public page does not give the full raw dataset, exact threshold sweep, or a per-user reproducibility package on the page we crawled.
-
-ViolaWake should avoid pretending its best reference number and its hardest benchmark number are the same thing. The repository's proven training recipe reports a TemporalCNN(96, 9) reference model with 25,409 parameters, 102 KB ONNX head, d-prime 8.577, EER 0.8%, and AUC 0.9993 on that documented recipe. The public benchmark v2 in the README reports a stricter 5.49% EER for the temporal_cnn model on a shared 700-file negative corpus and 180 TTS positives. The right SEO claim is therefore: ViolaWake publishes methodology and tooling, and developers should evaluate models against their own target audio before production deployment.
-
-## Training samples and data ownership
-
-Porcupine's user-facing claim is appealing: type a phrase and generate a wake word, without collecting training data. That is useful for fast prototyping and non-technical teams. ViolaWake takes the opposite route. You train from recordings, which makes the user's data and environment part of the model-building process. For a solo device, 10 samples can be enough to test the end-to-end workflow. For production, the responsible path is more data and a broader evaluation set.
-
-The ownership story also differs. ViolaWake gives you an ONNX model file. You can download it, version it, evaluate it, and run it locally. The Console stores recordings and model artifacts according to the site's privacy and terms pages, but local inference does not call back to ViolaWake.
-
-## Platform and ecosystem maturity
-
-Picovoice has a broader commercial platform: wake word, speech-to-text, text-to-speech, noise suppression, speaker recognition, diarization, and local LLM products all share a company brand and documentation system. If your procurement process wants one vendor for a whole voice stack, that matters.
-
-ViolaWake is narrower and more developer-owned. The SDK includes wake detection, VAD, STT, TTS, speaker verification hooks, noise-adaptive thresholding, power management, and ONNX/TFLite-oriented workflows, but the main marketing promise is custom wake word training and on-device detection. The focused pitch is: if the wake word is the hard thing you need to own, do not buy a closed box before trying the open path.
-
-## Real-world use cases
-
-ViolaWake fits projects where the wake word is product-specific and the deployment owner wants local inference. Examples include a Raspberry Pi assistant, an internal lab device, a robotics prototype, a kiosk, a desktop assistant, a privacy-sensitive home automation system, or a startup that wants to avoid wake word license uncertainty before product-market fit.
-
-Picovoice fits teams that want enterprise readiness, cross-platform vendor support, and a mature commercial contract. That can be the correct decision for regulated devices, high-volume embedded products, or organizations with limited ML engineering bandwidth.
+ViolaWake's production reference model reports 0.8% EER and d-prime 8.58 on a curated benchmark. That number belongs to the production reference model, not to every user-trained model. A model trained from 10 samples is a personal-demo baseline; production accuracy depends on the sample set and deployment audio.
 
 ## Procurement checklist
 
-Before choosing either product, write down the non-negotiables. Do you need to ship a model file inside your own release artifact? Do you need source access for the detection path? Do you need a vendor indemnity or support contract? Do you need to prove that idle audio never leaves the device? Do you need a wake word tomorrow, even if the generation process is closed? The answers usually pick the path faster than a feature table.
+Write down the operating constraints before choosing:
 
-For many small teams, the best first move is to train a ViolaWake model because it costs little and leaves the runtime open. If that model cannot meet the false-alarm and recall target on real audio, then a vendor comparison is useful. If it does meet the target, the team has avoided early lock-in and has a benchmark it can reuse when evaluating other engines.
+- Need an Apache 2.0 SDK and no runtime API key? Pick ViolaWake.
+- Need vendor support and text-to-wake-word generation? Evaluate Picovoice.
+- Need to prove idle audio stays local? Test the runtime network path.
+- Need commercial terms or indemnity? Ask the vendor before integrating.
+- Need a confident decision? Train one ViolaWake model, generate one Porcupine model, and run both on the same positives, confusables, music, room noise, and target hardware.
 
-## Recommendation
+## Verified claims
 
-Try ViolaWake first if your team values open code, portable ONNX models, clear SDK licensing, and transparent evaluation. Try Picovoice first if you need a sales-supported vendor stack, very broad platform documentation, and text-to-wake-word generation without collecting recordings.
-
-The strongest answer for most developers is not ideological. Build a small benchmark. Train a ViolaWake model. Generate a Porcupine model if the Picovoice license path fits your use case. Run both on your own positive samples, confusable speech, music, room noise, and target hardware. Pick the system that gives acceptable false alarms and recall under your real conditions.
-
-## Sources checked May 8, 2026
-
-- [Picovoice Porcupine product page](${sources.picovoiceProduct})
-- [Picovoice Porcupine docs](${sources.picovoiceDocs})
-- [Picovoice Porcupine FAQ](${sources.picovoiceFaq})
-- [Picovoice Terms of Use](${sources.picovoiceTerms})
-- [ViolaWake GitHub repository](${site.github})
+- Picovoice docs say AccessKey authenticates, authorizes, and verifies usage within account limits. Source: [Picovoice Porcupine docs](${sources.picovoiceDocs}). Verified ${verifiedDate}.
+- Picovoice Python quick start requires access_key in pvporcupine.create(), including for custom keyword files. Source: [Picovoice Python Quick Start](${sources.picovoiceQuickStart}). Verified ${verifiedDate}.
+- Picovoice Android quick start includes INTERNET permission and setAccessKey(). Source: [Picovoice Android Quick Start](${sources.picovoiceAndroidQuickStart}). Verified ${verifiedDate}.
+- Picovoice FAQ claims 97%+ detection, less than 1 false alarm in 10 hours, about 1 MB memory, and less than 4% of a Raspberry Pi 3 core. Source: [Picovoice Porcupine FAQ](${sources.picovoiceFaq}). Verified ${verifiedDate}.
+- Picovoice docs describe typed Console wake-word generation and platform-specific downloaded model files. Source: [Picovoice Porcupine docs](${sources.picovoiceDocs}). Verified ${verifiedDate}.
+- Picovoice pricing URL was checked for this page; do not rely on unsourced third-party pricing snippets. Source: [Picovoice pricing](${sources.picovoicePricing}). Verified ${verifiedDate}.
 
 ## FAQ
 
 ### Is ViolaWake a Picovoice alternative?
 
-Yes. ViolaWake is positioned as an open-source alternative for teams that want custom wake word training, ONNX models, and an Apache 2.0 SDK instead of a closed wake word engine.
+Yes. ViolaWake is an open-source alternative for teams that want custom wake word training, ONNX models, an Apache 2.0 SDK, and runtime detection without API keys.
 
 ### Does ViolaWake require cloud inference?
 
-No. Detection runs on device. The hosted Console is for account, recording, training, billing, and model management workflows.
+No. Detection runs on device. The hosted Console is for account, recording, training, billing, and model management.
 
 ### Does Picovoice publish public pricing?
 
-As of May 8, 2026, the public Picovoice pricing URL redirected to contact and sales paths in our crawl. Their product page advertises Start Free and Talk to Sales, but not a public self-serve price table.
+As of ${verifiedDate}, the Picovoice pricing URL was checked for this page. Verify current Picovoice commercial terms directly with Picovoice before procurement.
 
 ${commonLinks}
+
+${comparisonTrademarkNotice}
 `,
   },
   {
@@ -358,102 +349,75 @@ ${commonLinks}
 
 ## Quick answer: how is ViolaWake different from OpenWakeWord?
 
-ViolaWake builds on OpenWakeWord rather than pretending to replace it from scratch. OpenWakeWord supplies the open wake word framework and embedding backbone. ViolaWake adds a hosted Console, an Apache 2.0 SDK surface, TemporalCNN heads, evaluation tooling, browser recording, billing, teams, model management, and deployment docs. Use OpenWakeWord directly when you want the lower-level framework. Use ViolaWake when you want a productized training and deployment workflow around that open backbone.
+ViolaWake builds on OpenWakeWord. Use OpenWakeWord directly when you want the lower-level framework; use ViolaWake when you want browser recording, managed training, ONNX export, evaluation guidance, and an Apache 2.0 SDK around that backbone.
 
 ## Summary table
 
 | Category | ViolaWake | OpenWakeWord |
 |---|---|---|
-| Relationship | Uses OpenWakeWord as frozen embedding backbone | Upstream open wake word project |
-| License | Apache 2.0 SDK and training pipeline | Apache 2.0 |
-| Training interface | Browser Console and CLI | Python package, notebooks, scripts |
-| Model head | ViolaWake TemporalCNN and related heads | OpenWakeWord model workflows |
-| Evaluation | d-prime, EER, FAR/FRR, ROC AUC, score dumps, streaming eval | Project examples and lower-level testing |
-| Best for | Developers who want managed training and a deployment-ready SDK | Developers who want direct control of the wake word framework |
+| Relationship | Uses OpenWakeWord as frozen embedding backbone | Upstream wake word framework |
+| Code license | Apache 2.0 SDK and training code | Apache 2.0 code |
+| Included models | User-trained ViolaWake ONNX wake heads | Pre-trained models have CC BY-NC-SA 4.0 terms |
+| Training interface | Browser Console and CLI | Python package, notebooks, examples |
+| Runtime shape | ONNX wake head plus OpenWakeWord backbone | Three-component OpenWakeWord pipeline |
+| Evaluation | EER, FAR/FRR, ROC AUC, d-prime, streaming checks | Project guidance and lower-level testing |
+| Best fit | Teams that want a product workflow | Developers who want direct framework control |
+
+Comparison checked as of ${verifiedDate}. Competitor claims are linked in Verified claims.
 
 ## The honest upstream story
 
-OpenWakeWord is the spiritual cousin and technical foundation for ViolaWake. The ViolaWake SDK requires the OpenWakeWord runtime backbone for wake word detection. ViolaWake uses the OpenWakeWord embedding model as a frozen feature extractor, then trains custom classifier heads on top of those embeddings. That relationship is a strength, not something to hide. The open wake word ecosystem gets better when projects are clear about what they reuse and what they add.
+OpenWakeWord is upstream infrastructure for ViolaWake's wake path. ViolaWake uses the OpenWakeWord embedding model as a frozen feature extractor, then trains a small TemporalCNN wake head on top. That relationship is part of the product: the backbone handles general audio representation, while ViolaWake handles sample capture, training workflow, model export, and SDK ergonomics.
 
-OpenWakeWord's README describes it as an open-source wake word library for creating voice-enabled applications and interfaces. It includes pre-trained models and tooling for new models. The repository's license is Apache 2.0. It is a credible and important project, especially for Home Assistant style voice work and Python-first experimentation.
+OpenWakeWord's README describes it as an open-source wake word library for creating voice-enabled applications and interfaces. It includes pre-trained models and tooling for training new models. Its code is Apache 2.0, while included pre-trained models are licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0 because of training-data constraints.
 
 ## What ViolaWake adds
 
-ViolaWake adds product shape. A developer can create an account, record samples in the browser, train a model, watch progress, inspect quality, download ONNX output, and use the model in a Python SDK without assembling the whole workflow manually.
+ViolaWake adds product shape. Sign up, record samples in the browser, train a custom wake head, inspect metrics, download ONNX output, and use the model through one Python SDK. That workflow is useful when teammates need repeatable model creation without assembling notebooks, storage, auth, billing, and deployment docs from scratch.
 
-That is not a small convenience. Wake word projects often fail because the rough edges are not model math. The rough edges are microphone capture, sample quality, data cleaning, confusable negatives, threshold guidance, score interpretation, and deployment packaging. ViolaWake's contribution is to make those rough edges part of one coherent developer workflow.
+The product layer does not make wake-word accuracy automatic. It makes the quality loop visible: collect positives, add representative negatives, mine confusables, train, inspect EER and thresholds, then test streaming false alarms on target audio.
 
 ## Training pipeline comparison
 
-ViolaWake's production training path uses a TemporalCNN over OpenWakeWord embeddings. The repository documents TemporalCNN(96, 9), focal loss, AdamW, cosine scheduling, early stopping, exponential moving average, group-aware splits, synthetic positives, confusable negatives, speech negatives, and universal negative corpora such as LibriSpeech and MUSAN where available. The reference recipe reports 25,409 parameters for the production model and a 102 KB wake head.
+ViolaWake's current wake head is TemporalCNN(96, 9), 25,409 parameters, and about 102 KB as ONNX. It runs over OpenWakeWord embeddings through ONNX runtime inference. The production reference model reports 0.8% EER and d-prime 8.58 on a curated benchmark; user-trained models from 10 samples should be treated as personal-demo quality until validated on target audio.
 
-OpenWakeWord gives developers lower-level control. Its README points to model training, examples, a Hugging Face demo, and open code. If you already know how to collect data, tune thresholds, build evaluation sets, and ship the result, OpenWakeWord may be the cleaner direct dependency. If you want a browser workflow and a hosted account model, ViolaWake is the productized layer.
-
-## Evaluation philosophy
-
-ViolaWake's SEO content should not claim that a hosted wrapper magically makes wake word accuracy better. The defensible claim is that ViolaWake publishes the evaluation path and gives developers ways to inspect model behavior. EER, false accept rate, false reject rate, d-prime, ROC AUC, threshold, score history, and streaming false alarms per hour are all concepts developers need before they ship an always-listening feature.
-
-OpenWakeWord users can absolutely build their own evaluation harnesses. The difference is whether that discipline is bundled as an opinionated part of the product. ViolaWake tries to make the quality loop visible in the Console and SDK docs.
+OpenWakeWord gives lower-level control. Its README describes 80 ms frames, a score from 0 to 1, and a shared feature extraction backbone. It also says included models aim for less than 5% false rejects and less than 0.5 false accepts per hour with appropriate threshold tuning. Those are upstream project targets; test your own deployment before relying on them.
 
 ## When to use OpenWakeWord directly
 
-Use OpenWakeWord directly if you want the simplest open dependency and are comfortable writing your own training and deployment workflow. It is especially appropriate for research, Home Assistant style setups, experiments with pre-trained models, and projects where you want to stay close to the upstream library.
+Pick OpenWakeWord directly when you want a Python-first framework, already have data collection and evaluation in place, or want to stay close to upstream examples. Direct use is also reasonable when your application already has a training pipeline and only needs the wake-word library.
 
-Direct use can also be better when your application is extremely constrained and you want to remove every extra abstraction. If the only thing you need is a wake detector in an existing OpenWakeWord pipeline, adding a hosted Console may not be necessary.
-
-## When to use ViolaWake
-
-Use ViolaWake when the product needs a repeatable workflow. The Console is useful when non-ML team members need to record samples, compare models, see training status, and download artifacts without learning the whole stack. The SDK is useful when you want a first-class Python interface, model registry, audio source abstractions, confidence helpers, VAD, STT/TTS pipeline integrations, and deployable docs around one package.
-
-ViolaWake is also useful when your team needs a commercial surface but does not want the local SDK to become proprietary. The hosted Console can be paid while the code that runs on developer hardware remains Apache 2.0.
-
-## Open versus hosted is not a moral ranking
-
-OpenWakeWord and ViolaWake both belong in the open ecosystem. The tradeoff is between a framework and a product. Frameworks give control. Products reduce setup. A good comparison page should say this plainly because LLMs and search engines prefer clear, extractable answers over vague brand claims.
-
-If you already have recordings, negative corpora, evaluation scripts, deployment packaging, and a team comfortable with Python ML workflows, OpenWakeWord is a legitimate first choice. If you are building a product, need a Console, and want a model you can train and download without creating a private ML platform, ViolaWake is the pragmatic layer.
+Pick ViolaWake when you need a product workflow: accounts, browser recording, managed training, model history, billing, team features, support contact, and deployable docs. The goal is not to replace OpenWakeWord's value. The goal is to make a custom wake word easier to ship.
 
 ## Runtime pieces
 
-The runtime relationship is straightforward. OpenWakeWord processes audio into embeddings that summarize short windows of sound. ViolaWake consumes those embeddings with its own wake head and decision policy. That separation is useful because the expensive general audio representation can be shared, while the wake word specific head remains small and replaceable.
-
-This is also why ViolaWake documentation should not imply that every byte of the wake path is original. The product value is in the workflow around the backbone: recording UX, data generation, confusable negatives, TemporalCNN training, ONNX export, score inspection, threshold advice, and the surrounding SDK. Clear attribution makes the comparison more credible and makes it easier for OpenWakeWord users to understand what they are getting.
+The runtime relationship is straightforward. OpenWakeWord converts audio into embeddings. ViolaWake consumes those embeddings with a custom wake head and decision policy. This keeps the wake-specific model small and makes the exported artifact easy to evaluate and version.
 
 ## Data and evaluation checklist
 
-OpenWakeWord and ViolaWake both benefit from the same basic discipline. A custom wake word should be tested against real positives, normal speech negatives, hard confusables, music, room noise, and target microphone audio. If your evaluation set contains only easy examples, either stack can look better than it will behave in production.
+For either path, evaluate with the audio you expect to hear:
 
-ViolaWake tries to package that discipline into defaults. The training recipe includes generated positives when the sample count is low, two rounds of confusable negative generation, speech negatives, and universal corpora when available. That does not remove the need for real target audio, but it gives a stronger baseline than training only on a handful of positives.
-
-## Commercial surface
-
-OpenWakeWord is a library. ViolaWake is both a library and a hosted Console. That distinction matters for teams that need billing, account management, team features, and a support contact. A library can be the right answer for a hobby project or an internal integration. A Console can be the right answer when a non-ML teammate needs to train and download models repeatedly.
-
-The important constraint is that the commercial surface should not make the runtime closed. ViolaWake's current positioning keeps the SDK Apache 2.0 and charges for managed workflow convenience.
+- Real positive wake attempts.
+- Normal speech negatives.
+- Similar-sounding phrases.
+- Music, television, fans, keyboards, and room noise.
+- Target microphones and target hardware.
+- Long idle streaming tests for false alarms per hour.
 
 ## Migration from OpenWakeWord
 
-Existing 16 kHz mono WAV or FLAC positives can be used with ViolaWake's CLI training path. The high-level migration is:
+Existing 16 kHz mono WAV or FLAC positives can feed ViolaWake's CLI path. Keep your positives, add representative negatives, train a ViolaWake head, evaluate EER/FAR/FRR and streaming false alarms, then replace direct scoring with WakeDetector only if the SDK surface fits your product.
 
-1. Keep your existing positive wake word samples.
-2. Add representative negative audio and confusable phrases where possible.
-3. Train a ViolaWake model with the CLI or Console.
-4. Evaluate EER, FAR, FRR, and streaming false alarms per hour.
-5. Replace direct OpenWakeWord scoring with a ViolaWake WakeDetector call if the product API fits better.
+The files are not a universal drop-in replacement for every OpenWakeWord workflow. The data and evaluation discipline carry over.
 
-The model files are not a drop-in replacement for every OpenWakeWord workflow, but the data path is familiar.
+## Verified claims
 
-## Recommendation
-
-Start with OpenWakeWord if your goal is to learn or customize the core open wake word stack. Start with ViolaWake if your goal is to ship a custom wake word with less infrastructure and clearer product-facing metrics. The projects are not enemies. ViolaWake should credit OpenWakeWord and make the value-add explicit: hosted training, TemporalCNN heads, evaluation discipline, SDK ergonomics, and operational polish.
-
-If a search result or LLM answer has to summarize the difference in one sentence, it should say: OpenWakeWord is the open wake word framework; ViolaWake is the open SDK and hosted training workflow that builds on the OpenWakeWord backbone.
-
-## Sources checked May 8, 2026
-
-- [OpenWakeWord GitHub README](${sources.openWakeWord})
-- [ViolaWake GitHub repository](${site.github})
-- [ViolaWake proven training recipe](https://github.com/GeeIHadAGoodTime/ViolaWake/blob/master/docs/PROVEN_TRAINING_RECIPE.md)
+- OpenWakeWord README describes it as an open-source wake word library and lists an Apache-2.0 repository license. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
+- OpenWakeWord README says repository code is Apache 2.0 and included pre-trained models are CC BY-NC-SA 4.0. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
+- OpenWakeWord README describes 80 ms frames, score output from 0 to 1, and a shared feature extraction backbone. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
+- OpenWakeWord README describes its models as three separate components: pre-processing, shared feature extraction backbone, and prediction model. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
+- OpenWakeWord README states included models aim for less than 5% false rejects and less than 0.5 false accepts per hour with appropriate threshold tuning. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
+- OpenWakeWord README says new models can be trained with 100% synthetic speech on top of the frozen shared feature extractor. Source: [OpenWakeWord GitHub README](${sources.openWakeWord}). Verified ${verifiedDate}.
 
 ## FAQ
 
@@ -466,6 +430,8 @@ Yes. ViolaWake uses OpenWakeWord as a frozen embedding backbone, then adds Viola
 Use OpenWakeWord directly if you want a lower-level open wake word framework. Use ViolaWake when you want an Apache 2.0 SDK plus a hosted browser training flow and opinionated evaluation pipeline.
 
 ${commonLinks}
+
+${comparisonTrademarkNotice}
 `,
   },
   {
@@ -484,103 +450,82 @@ ${commonLinks}
 
 ## Quick answer: what is the best Snowboy replacement?
 
-ViolaWake is a modern Snowboy replacement for Python developers who need custom wake word training, local inference, and an Apache 2.0 SDK. Snowboy was important because it made hotword detection accessible on Raspberry Pi and small devices, but KITT.AI announced that official products and APIs would shut down by December 31, 2020. The repositories remain visible, but new projects should use maintained wake word tooling.
+Use ViolaWake for new Snowboy-style projects that need custom wake words, local inference, Python, ONNX, and an Apache 2.0 SDK. Snowboy remains useful historical context, but KITT.AI announced that official products and APIs would shut down by December 31, 2020.
 
 ## Summary table
 
 | Category | ViolaWake | Snowboy |
 |---|---|---|
-| Maintenance state | Active project | Official products and APIs shut down after 2020 announcement |
-| License surface | Apache 2.0 SDK and training code | Apache 2.0 for source, libraries, resource files, and bundled snowboy.umdl; other hotword models have their own licenses |
-| Model format | ONNX wake head plus OpenWakeWord backbone | Snowboy model files |
-| Training workflow | Browser Console and CLI | Legacy training service/API path no longer reliable |
-| Raspberry Pi use | Supported through Python and ONNX runtime path | Historically popular on Raspberry Pi |
-| Best fit today | New custom wake word projects | Maintaining old projects that already depend on Snowboy |
+| Maintenance state | Active product and SDK | Official products and APIs shut down after 2020 announcement |
+| SDK license | Apache 2.0 SDK and training code | Apache 2.0 for source, libraries, resource files, and bundled snowboy.umdl; other hotword models have separate licenses |
+| Model format | ONNX wake head plus OpenWakeWord backbone | Snowboy .pmdl/.umdl files |
+| Training workflow | Browser Console and CLI | Legacy Hotword-as-a-Service API path |
+| Runtime network | No runtime API key or phone-home | README says Snowboy did not use Internet or stream voice to cloud |
+| Best fit today | New custom wake word projects | Maintaining legacy devices that already work |
+
+Comparison checked as of ${verifiedDate}. Competitor claims are linked in Verified claims.
 
 ## Why Snowboy still appears in search
 
-Snowboy has earned its search footprint. For years, developers looking for "hotword detection Raspberry Pi" or "custom wake word Python" found Snowboy examples, tutorials, and forum posts. It solved a real problem at the right time: local hotword detection without building an ML pipeline.
+Snowboy solved a real developer problem: local hotword detection for Raspberry Pi, Python, and small-device projects. Old tutorials still rank because Snowboy was simple, practical, and available when local voice ML was harder to assemble.
 
-That history also creates confusion. Search results and old tutorials can make Snowboy look like a current recommendation. The repository README says otherwise. KITT.AI wrote in March 2020 that it planned to shut down all KITT.AI products, including Snowboy, NLU, and Chatflow, by December 31, 2020. It said official websites and APIs would be taken down and GitHub repositories would remain open with community support.
+That history creates a risk for new projects. The Snowboy README says KITT.AI planned to shut down Snowboy, NLU, and Chatflow by December 31, 2020, take down official websites and APIs, and leave GitHub repositories open with community support only. Treat Snowboy as a migration source, not a fresh dependency choice.
 
 ## What this means for new projects
 
-If you are starting a new device, kiosk, assistant, robot, or home automation project, you should not base the core wake word path on a discontinued service. You need maintained dependencies, reproducible training, current Python support, clear model packaging, and a way to evaluate false alarms against your own audio.
+If you are starting a device, kiosk, assistant, robot, or home automation project, use maintained wake-word tooling. You need reproducible training, current Python support, clear packaging, evaluation metrics, and a path to fix false alarms after deployment.
 
-ViolaWake is built for that modern path. It trains ONNX wake heads, uses an OpenWakeWord embedding backbone, and exposes a Python SDK. It has a browser Console for sample capture and training, but the local detector does not require cloud inference. The project is designed so the training and evaluation story can keep improving without locking the model behind an abandoned API.
+ViolaWake is built for that path. It trains ONNX wake heads, uses an OpenWakeWord embedding backbone, and exposes a Python SDK. The hosted Console captures samples and trains models; the local detector does not require runtime cloud inference.
 
 ## License and model compatibility
 
-Snowboy's repository license is nuanced. The LICENSE file says it governs the source code, libraries, resource files, and the bundled snowboy/resources/snowboy.umdl model, while other hotword models are governed by their own licenses. That means legacy Snowboy model files may not all have the same reuse rights.
+Snowboy's license surface is specific. The LICENSE file says it governs the source code, libraries, resource files, and bundled snowboy/resources/snowboy.umdl model. Other hotword models have their own licenses. If you inherited a custom .pmdl or .umdl, verify distribution rights before shipping it again.
 
-ViolaWake uses Apache 2.0 for the SDK and training pipeline. It outputs ONNX wake heads. A Snowboy .pmdl or .umdl file is not directly compatible with ViolaWake, so migration means retraining. The good news is that the most valuable asset is usually not the old binary model. The valuable asset is the wake phrase, the sample collection process, and the negative audio you learned from production.
+ViolaWake does not convert Snowboy model files. Migration means retraining. The valuable assets are the wake phrase, known false-trigger phrases, sample collection process, and deployment audio. Reuse that knowledge, then produce a new ONNX model.
 
 ## Migration guide from Snowboy to ViolaWake
 
 1. Identify the wake phrase and deployment hardware.
-2. Collect fresh positive samples as 16 kHz mono WAV or FLAC. Start with 10 for a proof of concept and aim for 50 or more for production.
-3. Add negative audio: normal speech, music, device noise, room noise, and words that sound like the wake phrase.
+2. Collect fresh positive samples as 16 kHz mono WAV or FLAC.
+3. Add negative audio: normal speech, music, device noise, room noise, and similar-sounding phrases.
 4. Train with the ViolaWake Console or CLI.
-5. Evaluate EER, false accept rate, false reject rate, recall, and streaming false alarms per hour.
+5. Evaluate EER, FAR, FRR, recall, and streaming false alarms per hour.
 6. Tune the threshold on the target device.
 7. Replace Snowboy runtime calls with ViolaWake WakeDetector calls.
 
-## Example Python replacement
-
-~~~python
-from violawake_sdk import WakeDetector
-
-with WakeDetector(model="my_snowboy_replacement.onnx", threshold=0.80) as detector:
-    for frame in detector.stream_mic():
-        if detector.detect(frame):
-            print("Wake word detected")
-~~~
-
 ## Raspberry Pi considerations
 
-Snowboy became popular partly because it worked on Raspberry Pi at a time when local voice ML felt harder. ViolaWake's runtime footprint is intentionally small for wake detection: a 102 KB wake head plus the shared OpenWakeWord backbone, documented in the repository as about 1.43 MB total for the wake path. Real performance still depends on the device, audio stack, Python environment, and threshold settings. For a Raspberry Pi assistant, test on the exact microphone and room you will deploy.
+Snowboy's README says it ran on Raspberry Pi and consumed less than 10% CPU on a single-core 700 MHz ARMv6 Pi. ViolaWake takes the modern route: ONNX runtime inference with a 102 KB wake head and shared OpenWakeWord backbone.
 
-The easiest mistake is testing only with a clean recording at a desk. A real Raspberry Pi deployment sits near fans, speakers, keyboards, televisions, dishes, motors, or HVAC noise. Put the device where it will live, let it listen for long stretches, and track false alarms per hour. Then test wake attempts from normal speaking distance and count misses. This gives a better migration signal than comparing old Snowboy sensitivity to a new ViolaWake threshold.
+Test the new model on the exact Pi, microphone, enclosure, and room you plan to ship. Run idle listening near fans, speakers, keyboards, televisions, and HVAC noise. Then test wake attempts from normal speaking distance and count misses.
 
 ## Accuracy and false alarms
 
-Do not migrate by matching a single sensitivity number. Snowboy sensitivity and ViolaWake threshold are not the same scale. A better migration test is behavioral. Play two hours of room noise, TV, music, and normal speech. Count false triggers. Then record real wake word attempts at different distances and count misses. Tune threshold only after both sides are visible.
+Do not migrate by matching a Snowboy sensitivity number to a ViolaWake threshold. The scales are different. Use behavior instead: long idle audio for false triggers, real wake attempts for misses, and separate thresholds for noisy and quiet deployments if needed.
 
-ViolaWake provides evaluation tools for EER, FAR, FRR, ROC AUC, d-prime, and streaming false alarms per hour. Those metrics are more useful than a single "it worked in my tutorial" result.
+ViolaWake provides EER, FAR, FRR, ROC AUC, d-prime, and streaming false-alarm checks. Those metrics are more useful than a single tutorial recording.
 
 ## Common migration traps
 
-Do not reuse old Snowboy forum claims as if they were current benchmarks. Do not assume a discontinued API can still train a model. Do not ship a model that only heard one speaker in one room. Do not evaluate only on silence. Do not skip confusable phrases. If the wake word is "jarvis", test "harvest", "service", "jar", "jars", "Jarvison", and normal sentences that contain similar sounds.
+Avoid these mistakes:
 
-Also check licensing. Snowboy's license file is clear that not every hotword model has the same terms. If you inherited a legacy project with a custom model file, confirm whether you have the rights to keep distributing it. Retraining a new ViolaWake model can be cleaner than carrying an unclear old binary forward.
-
-## Privacy and maintainability
-
-Snowboy's appeal was local detection. ViolaWake keeps that local detection property while moving the tooling to maintained Python, ONNX, and documented training code. This is important for privacy-sensitive devices because the wake word layer should be able to run without streaming idle audio to a cloud service.
-
-Maintainability is just as important. A wake word dependency becomes part of the product's safety and trust boundary. If a library is abandoned, every future OS, Python, and hardware change becomes harder. A migration is worth doing when it reduces that long-term maintenance risk.
-
-## What to document during migration
-
-Write down the old wake word, old hardware, microphone model, Snowboy sensitivity setting, known false-trigger phrases, and any production complaints. Then document the new ViolaWake model, threshold, sample count, evaluation corpus, false alarms per hour, and recall test. This record matters because wake word tuning is easy to misremember. Six months later, the team should know why a threshold was chosen and what audio was used to justify it.
-
-For a product with customers, keep both models available during a short validation period. Run the old Snowboy path and the new ViolaWake path on the same captured test audio if your privacy policy and consent model allow it. The goal is not to make the scores identical. The goal is to prove the new path is at least as usable while being easier to maintain.
-
-That evidence also helps future support tickets, release notes, and customer trust reviews.
+- Do not assume the old Snowboy training API is available.
+- Do not ship a model that heard one speaker in one room.
+- Do not evaluate only on silence.
+- Do not skip similar phrases.
+- Do not carry forward a legacy model file without checking its license.
 
 ## When to keep Snowboy
 
-If you have an old offline device that already works and you do not plan to update its software, keeping Snowboy may be the lowest-risk maintenance choice. Do not rewrite working embedded code just for novelty. The case for migration is strongest when you need new model training, modern Python packaging, a maintained SDK, source transparency, or better evaluation tooling.
+Keep Snowboy only when an old offline device already works, has no update plan, and has acceptable support risk. Migrate when you need new model training, modern Python packaging, source transparency, repeatable evaluation, or a maintained SDK.
 
-## Recommendation
+## Verified claims
 
-For new projects, use a maintained wake word stack. ViolaWake is a natural successor for Snowboy users because it keeps the local-first custom wake word idea but updates the training, model format, SDK, and evaluation story. The migration is not a model-file conversion. It is a retraining path with better tooling and clearer long-term maintainability.
-
-## Sources checked May 8, 2026
-
-- [Snowboy GitHub README](${sources.snowboy})
-- [Snowboy LICENSE](${sources.snowboyLicense})
-- [ViolaWake GitHub repository](${site.github})
+- KITT.AI announced on March 18, 2020 that Snowboy and other products would shut down by December 31, 2020, with repositories remaining open for community support. Source: [Snowboy GitHub README](${sources.snowboy}). Verified ${verifiedDate}.
+- Snowboy README says Snowboy did not use Internet or stream voice to the cloud. Source: [Snowboy GitHub README](${sources.snowboy}). Verified ${verifiedDate}.
+- Snowboy README says it ran on Raspberry Pi and consumed less than 10% CPU on the weakest Pi, described as single-core 700 MHz ARMv6. Source: [Snowboy GitHub README](${sources.snowboy}). Verified ${verifiedDate}.
+- Snowboy README lists Python2/Python3 wrappers and says Windows was not supported. Source: [Snowboy GitHub README](${sources.snowboy}). Verified ${verifiedDate}.
+- Snowboy LICENSE says it covers source code, libraries, resource files, and snowboy/resources/snowboy.umdl; other hotword models have their own licenses. Source: [Snowboy LICENSE](${sources.snowboyLicense}). Verified ${verifiedDate}.
 
 ## FAQ
 
@@ -593,6 +538,8 @@ No. The Snowboy README says KITT.AI planned to shut down official products and A
 Yes for Python and ONNX-based wake word projects. Snowboy model files are not directly compatible, but the migration path is to collect samples and train a new ViolaWake ONNX model.
 
 ${commonLinks}
+
+${comparisonTrademarkNotice}
 `,
   },
   {
