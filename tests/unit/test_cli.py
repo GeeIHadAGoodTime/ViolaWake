@@ -49,6 +49,7 @@ class TestTrainCLI:
         assert "--word" in result.stdout
         assert "--positives" in result.stdout
         assert "--output" in result.stdout
+        assert "--architecture" not in result.stdout
 
     def test_missing_required_args_exits_nonzero(self) -> None:
         result = _run_cli("violawake_sdk.tools.train", [])
@@ -65,51 +66,25 @@ class TestTrainCLI:
         assert result.returncode == 1
         assert "not found" in result.stderr.lower() or "error" in result.stderr.lower()
 
-    def test_valid_args_reach_training_function(self, tmp_path: Path) -> None:
-        """With valid dirs, the CLI should reach the training function."""
+    def test_legacy_architecture_flag_is_rejected(self, tmp_path: Path) -> None:
+        """Legacy MLP flags should be rejected by the temporal-only CLI."""
         pos_dir = tmp_path / "positives"
         pos_dir.mkdir()
-        output = tmp_path / "out.onnx"
-
-        # Use --architecture mlp to hit the fast mockable path.
-        # The default temporal_cnn runs TTS generation inline (slow).
-        with mock.patch("violawake_sdk.tools.train._train_mlp_on_oww") as mock_train:
-            result = _run_cli("violawake_sdk.tools.train", [
-                "--word", "test",
-                "--positives", str(pos_dir),
-                "--output", str(output),
-                "--epochs", "2",
-                "--architecture", "mlp",
-                "--quiet",
-            ])
-            # The mock is in a subprocess so it won't be captured here.
-            # Instead we just verify the process didn't crash on argparse.
-            # The real validation is that it gets past argument parsing.
-            # A non-existent import or bad arg would cause returncode != 0.
-            # Since the subprocess has its own mock context, we test via
-            # direct function call below.
-
-    def test_direct_call_reaches_train_function(self, tmp_path: Path) -> None:
-        """Direct call to main() with mocked _train_mlp_on_oww (legacy MLP path)."""
-        pos_dir = tmp_path / "positives"
-        pos_dir.mkdir()
-        output = tmp_path / "out.onnx"
-
-        test_args = [
+        result = _run_cli("violawake_sdk.tools.train", [
             "--word", "test",
             "--positives", str(pos_dir),
-            "--output", str(output),
-            "--epochs", "2",
+            "--output", str(tmp_path / "out.onnx"),
             "--architecture", "mlp",
-            "--quiet",
-        ]
-        with mock.patch("sys.argv", ["violawake-train", *test_args]):
-            with mock.patch("violawake_sdk.tools.train._train_mlp_on_oww") as mock_train:
-                from violawake_sdk.tools.train import main
-                main()
-                mock_train.assert_called_once()
-                call_kwargs = mock_train.call_args
-                assert call_kwargs[1]["epochs"] == 2 or call_kwargs.kwargs["epochs"] == 2
+        ])
+        assert result.returncode != 0
+        assert "unrecognized arguments" in result.stderr.lower()
+
+    def test_legacy_mlp_helper_raises_runtime_error(self, tmp_path: Path) -> None:
+        """The old helper is kept only to fail loudly."""
+        from violawake_sdk.tools.train import _train_mlp_on_oww
+
+        with pytest.raises(RuntimeError, match="Legacy MLP training has been removed"):
+            _train_mlp_on_oww(tmp_path, tmp_path / "out.onnx")
 
     def test_cli_wrapper_help(self) -> None:
         """The cli.train wrapper should also accept --help."""
@@ -129,82 +104,42 @@ class TestTrainCLI:
                 main()
             assert exc_info.value.code == 0
 
-    def test_cli_train_missing_positive_dir_exits_nonzero(self, tmp_path: Path) -> None:
-        """cli.train without --positive-dir must exit non-zero."""
-        with mock.patch("sys.argv", ["violawake-train",
-                                      "--output-model", str(tmp_path / "out.onnx")]):
+    def test_cli_train_missing_required_args_exits_nonzero(self, tmp_path: Path) -> None:
+        """cli.train mirrors the production trainer's required args."""
+        with mock.patch("sys.argv", ["violawake-train", "--output", str(tmp_path / "out.onnx")]):
             with pytest.raises(SystemExit) as exc_info:
                 from violawake_sdk.cli.train import main
                 main()
             assert exc_info.value.code != 0
 
-    def test_cli_train_missing_output_model_exits_nonzero(self, tmp_path: Path) -> None:
-        """cli.train without --output-model must exit non-zero."""
-        pos_dir = tmp_path / "pos"
+    def test_cli_train_missing_output_exits_nonzero(self, tmp_path: Path) -> None:
+        """cli.train without --output must exit non-zero."""
+        pos_dir = tmp_path / "positives"
         pos_dir.mkdir()
-        with mock.patch("sys.argv", ["violawake-train",
-                                      "--positive-dir", str(pos_dir)]):
+        with mock.patch("sys.argv", ["violawake-train", "--word", "test", "--positives", str(pos_dir)]):
             with pytest.raises(SystemExit) as exc_info:
                 from violawake_sdk.cli.train import main
                 main()
             assert exc_info.value.code != 0
 
     def test_cli_train_nonexistent_positive_dir_exits_1(self, tmp_path: Path) -> None:
-        """cli.train with a nonexistent --positive-dir must exit 1."""
+        """cli.train with a nonexistent --positives dir must exit 1."""
         with mock.patch("sys.argv", ["violawake-train",
-                                      "--positive-dir", str(tmp_path / "nope"),
-                                      "--output-model", str(tmp_path / "out.onnx")]):
+                                      "--word", "test",
+                                      "--positives", str(tmp_path / "nope"),
+                                      "--output", str(tmp_path / "out.onnx")]):
             with pytest.raises(SystemExit) as exc_info:
                 from violawake_sdk.cli.train import main
                 main()
             assert exc_info.value.code == 1
 
-    def test_cli_train_delegates_with_defaults(self, tmp_path: Path) -> None:
-        """cli.train with minimal valid args delegates to _train_mlp_on_oww with defaults."""
-        pos_dir = tmp_path / "pos"
-        pos_dir.mkdir()
-        out = tmp_path / "out.onnx"
-        with mock.patch("sys.argv", ["violawake-train",
-                                      "--positive-dir", str(pos_dir),
-                                      "--output-model", str(out)]):
-            with mock.patch("violawake_sdk.cli.train._train_mlp_on_oww", create=True) as mock_train:
-                # Patch the import inside main()
-                with mock.patch.dict("sys.modules", {}):
-                    import importlib
-                    import violawake_sdk.cli.train as cli_train_mod
-                    importlib.reload(cli_train_mod)
-                    with mock.patch("violawake_sdk.tools.train._train_mlp_on_oww", mock_train):
-                        cli_train_mod.main()
-                        mock_train.assert_called_once()
-                        kw = mock_train.call_args
-                        # Check default epochs=50 and augment=True (no --no-augment)
-                        assert kw.kwargs.get("epochs", kw[1].get("epochs")) == 50
-                        assert kw.kwargs.get("augment", kw[1].get("augment")) is True
+    def test_cli_train_delegates_to_tools_main(self) -> None:
+        """cli.train is now a thin alias for the temporal trainer."""
+        with mock.patch("violawake_sdk.tools.train.main") as mock_main:
+            from violawake_sdk.cli.train import main
 
-    def test_cli_train_delegates_with_all_flags(self, tmp_path: Path) -> None:
-        """cli.train with all flags passes correct args to _train_mlp_on_oww."""
-        pos_dir = tmp_path / "pos"
-        pos_dir.mkdir()
-        neg_dir = tmp_path / "neg"
-        neg_dir.mkdir()
-        out = tmp_path / "out.onnx"
-        with mock.patch("sys.argv", ["violawake-train",
-                                      "--positive-dir", str(pos_dir),
-                                      "--negative-dir", str(neg_dir),
-                                      "--output-model", str(out),
-                                      "--epochs", "10",
-                                      "--no-augment",
-                                      "--quiet"]):
-            with mock.patch("violawake_sdk.tools.train._train_mlp_on_oww") as mock_train:
-                import importlib
-                import violawake_sdk.cli.train as cli_train_mod
-                importlib.reload(cli_train_mod)
-                cli_train_mod.main()
-                mock_train.assert_called_once()
-                kw = mock_train.call_args
-                assert kw.kwargs.get("epochs", kw[1].get("epochs")) == 10
-                assert kw.kwargs.get("augment", kw[1].get("augment")) is False
-                assert kw.kwargs.get("verbose", kw[1].get("verbose")) is False
+            main()
+            mock_main.assert_called_once_with()
 
     def test_negatives_dir_not_found_exits_1(self, tmp_path: Path) -> None:
         pos_dir = tmp_path / "positives"

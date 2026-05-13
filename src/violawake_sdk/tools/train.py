@@ -40,13 +40,6 @@ Usage::
       --negatives data/jarvis/negatives/ \\
       --output models/jarvis.onnx
 
-    # Legacy MLP mode:
-    violawake-train \\
-      --word "jarvis" \\
-      --positives data/jarvis/positives/ \\
-      --output models/jarvis.onnx \\
-      --architecture mlp
-
 Minimum: 5 positive samples (auto-TTS fills to ~200). Recommended: 50+.
 """
 
@@ -2008,12 +2001,10 @@ def _train_mlp_on_oww(
     swa_lr: float | None = None,
     save_raw_model: bool = False,
 ) -> None:
-    """Legacy MLP training on mean-pooled OWW embeddings.
-
-    Kept for backward compatibility with --architecture mlp.
-    See _train_temporal_cnn for the production architecture.
-    """
-    training_start = time.monotonic()
+    """Removed legacy MLP training entry point."""
+    raise RuntimeError(
+        "Legacy MLP training has been removed. Use the production TemporalCNN pipeline via violawake_sdk.tools.train."
+    )
 
     try:
         import numpy as np
@@ -2500,13 +2491,6 @@ def main() -> None:
         help="Disable audio-level augmentation (TTS generation still runs)",
     )
     parser.add_argument(
-        "--architecture",
-        choices=["temporal_cnn", "mlp"],
-        default="temporal_cnn",
-        help="Model architecture (default: temporal_cnn). "
-        "'mlp' is the legacy single-frame architecture.",
-    )
-    parser.add_argument(
         "--auto-corpus",
         action="store_true",
         default=True,
@@ -2524,20 +2508,6 @@ def main() -> None:
         metavar="DIR",
         help="Optional test set directory for evaluation after training. "
         "Must contain positives/ and negatives/ subdirectories.",
-    )
-    parser.add_argument(
-        "--neg-ratio",
-        type=int,
-        default=5,
-        metavar="N",
-        help="Negatives per positive (used in legacy MLP mode, default: 5)",
-    )
-    parser.add_argument(
-        "--hidden-dim",
-        type=int,
-        default=64,
-        metavar="N",
-        help="Hidden dim for legacy MLP (default: 64)",
     )
     parser.add_argument(
         "--quiet",
@@ -2565,7 +2535,7 @@ def main() -> None:
         print("=" * 70)
         print(f"ViolaWake Training: '{args.word}'")
         print("=" * 70)
-        print(f"Architecture:       {args.architecture}")
+        print("Architecture:       temporal_cnn")
         print(f"Auto corpus:        {'enabled' if args.auto_corpus else 'disabled'}")
         if positives_dir:
             print(f"Positives dir:      {positives_dir}")
@@ -2579,31 +2549,6 @@ def main() -> None:
         if eval_dir:
             print(f"Eval set:           {eval_dir}")
         print()
-
-    # ======================================================================
-    # Legacy MLP path
-    # ======================================================================
-    if args.architecture == "mlp":
-        if positives_dir is None:
-            print("ERROR: --positives is required for MLP architecture.", file=sys.stderr)
-            sys.exit(1)
-        if verbose:
-            print("Using legacy MLP architecture (single-frame, mean-pooled embeddings).\n")
-        _train_mlp_on_oww(
-            positives_dir=positives_dir,
-            output_path=output_path,
-            epochs=args.epochs,
-            augment=args.augment,
-            eval_dir=eval_dir,
-            negatives_dir=negatives_dir,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            hidden_dim=args.hidden_dim,
-            neg_ratio=args.neg_ratio,
-            patience=args.patience,
-            verbose=verbose,
-        )
-        return
 
     # ======================================================================
     # TemporalCNN path (production architecture)

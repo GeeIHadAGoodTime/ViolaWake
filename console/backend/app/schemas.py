@@ -202,6 +202,8 @@ class ModelConfigResponse(BaseModel):
     d_prime: float | None = None
     far_per_hour: float | None = None
     frr: float | None = None
+    architecture: str | None = None
+    quality_grade: str | None = None
     training_config: dict = {}
 
 

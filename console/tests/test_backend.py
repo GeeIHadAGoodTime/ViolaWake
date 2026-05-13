@@ -961,6 +961,60 @@ class TestModels:
         second_download = client.get(f"/api/models/{model_id}/download", params={"token": download_token})
         assert second_download.status_code == 401
 
+    def test_model_config_accepts_service_key(self, client, monkeypatch) -> None:
+        import sys
+
+        backend_dir = str(Path(__file__).resolve().parents[1] / "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from app.auth import reset_service_user_cache
+        from app.config import settings
+        from app.storage import build_model_key
+
+        reset_service_user_cache()
+        monkeypatch.setattr(settings, "service_key", "service-key-123")
+        monkeypatch.setattr(settings, "service_user_email", "viola-service@viola.internal")
+
+        probe = client.get("/api/models/999999/config", headers={"Authorization": "Bearer service-key-123"})
+        assert probe.status_code == 404
+
+        with sqlite3.connect(settings.db_path) as conn:
+            row = conn.execute(
+                "SELECT id FROM users WHERE email = ?",
+                (settings.service_user_email,),
+            ).fetchone()
+            assert row is not None
+            service_user_id = int(row[0])
+            cursor = conn.execute(
+                """
+                INSERT INTO trained_models (user_id, wake_word, file_path, config_json, d_prime, size_bytes, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    service_user_id,
+                    "service-key-test",
+                    build_model_key(service_user_id, "service-key-test.onnx"),
+                    json.dumps({"architecture": "temporal_cnn", "quality_grade": "A"}),
+                    12.4,
+                    12345,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            conn.commit()
+            model_id = int(cursor.lastrowid)
+
+        response = client.get(
+            f"/api/models/{model_id}/config",
+            headers={"Authorization": "Bearer service-key-123"},
+        )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["architecture"] == "temporal_cnn"
+        assert payload["quality_grade"] == "A"
+        assert payload["d_prime"] == 12.4
+
 
 # ── Upload Validation Edge Cases ────────────────────────────────────────────
 
