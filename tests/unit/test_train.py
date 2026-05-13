@@ -203,6 +203,44 @@ class TestTrainHelpers:
 
         synth_mock.assert_not_called()
 
+    def test_confusable_generation_reports_incremental_progress(
+        self, tmp_path: Path
+    ) -> None:
+        progress_events: list[dict[str, int | str]] = []
+
+        def _fake_synthesize(
+            text: str,
+            voice: str,
+            out_path: Path,
+            *,
+            check_cancelled=None,
+        ) -> bool:
+            out_path.write_bytes(b"wav")
+            return True
+
+        with (
+            patch(
+                "violawake_sdk.tools.confusables.generate_confusables",
+                return_value=["violas", "violah"],
+            ),
+            patch("violawake_sdk.tools.train._edge_tts_synthesize", side_effect=_fake_synthesize),
+        ):
+            generated = train._generate_confusable_negatives(
+                "viola",
+                tmp_path,
+                n_confusables=2,
+                voices_per_word=2,
+                verbose=False,
+                progress_callback=progress_events.append,
+            )
+
+        assert len(generated) == 4
+        assert [event["completed_samples"] for event in progress_events] == [1, 2, 3, 4]
+        assert all(event["total_samples"] == 4 for event in progress_events)
+        assert progress_events[-1]["generated_files"] == 4
+        assert progress_events[-1]["word_index"] == 2
+        assert progress_events[-1]["total_words"] == 2
+
 
 class TestTrainMainValidation:
     def test_main_exits_when_positives_dir_is_missing(

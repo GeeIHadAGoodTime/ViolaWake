@@ -650,6 +650,7 @@ def _generate_confusable_negatives(
     voices_per_word: int = 10,
     verbose: bool = True,
     *,
+    progress_callback: ProgressCallback | None = None,
     check_cancelled: Callable[[], None] | None = None,
 ) -> list[Path]:
     """Generate confusable negative samples via TTS.
@@ -675,6 +676,8 @@ def _generate_confusable_negatives(
 
     voices_subset = EDGE_TTS_VOICES[:voices_per_word]
     generated: list[Path] = []
+    total_samples = len(confusable_words) * len(voices_subset)
+    completed_samples = 0
 
     for word_idx, word in enumerate(confusable_words):
         _check_cancelled(check_cancelled)
@@ -694,6 +697,21 @@ def _generate_confusable_negatives(
             )
             if ok and out_path.exists():
                 generated.append(out_path)
+
+            completed_samples += 1
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "current_word": word,
+                        "word_index": word_idx + 1,
+                        "total_words": len(confusable_words),
+                        "voice_index": voice_idx + 1,
+                        "total_voices": len(voices_subset),
+                        "completed_samples": completed_samples,
+                        "total_samples": total_samples,
+                        "generated_files": len(generated),
+                    }
+                )
 
         if verbose and (word_idx + 1) % 10 == 0:
             print(f"    {word_idx + 1}/{len(confusable_words)} words done ({len(generated)} files)")

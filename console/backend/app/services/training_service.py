@@ -19,6 +19,13 @@ from app.storage import get_storage
 
 logger = logging.getLogger("violawake.training")
 
+CONFUSABLE_PROGRESS_START = 12.0
+CONFUSABLE_ROUND_ONE_END = 22.0
+CONFUSABLE_PROGRESS_END = 28.0
+CORPUS_READY_PROGRESS = 30.0
+TRAINING_PROGRESS_START = CORPUS_READY_PROGRESS
+TRAINING_PROGRESS_END = 95.0
+
 
 class TrainingCancelledError(RuntimeError):
     """Raised when a running training job is cancelled."""
@@ -57,6 +64,49 @@ def run_training_job_sync(
             raise TrainingCancelledError("Training cancelled by user")
 
     try:
+        def _publish_running_progress(progress: float, message: str) -> None:
+            progress_callback({
+                "status": "running",
+                "progress": round(progress, 2),
+                "epoch": 0,
+                "total_epochs": epochs,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "message": message,
+                "error": None,
+            })
+
+        def _on_confusable_progress(
+            stage_label: str,
+            progress_start: float,
+            progress_end: float,
+            info: dict[str, Any],
+        ) -> None:
+            total_samples = max(int(info.get("total_samples", 0)), 1)
+            completed_samples = min(max(int(info.get("completed_samples", 0)), 0), total_samples)
+            total_words = max(int(info.get("total_words", 0)), 1)
+            word_index = min(max(int(info.get("word_index", 0)), 0), total_words)
+            generated_files = max(int(info.get("generated_files", 0)), 0)
+            progress = progress_start + (
+                (progress_end - progress_start) * (completed_samples / total_samples)
+            )
+            _publish_running_progress(
+                progress,
+                (
+                    "Corpus: %s positives. Generating %s confusable negatives... "
+                    "%s/%s samples, word %s/%s (%s files)"
+                )
+                % (
+                    len(pos_files),
+                    stage_label,
+                    completed_samples,
+                    total_samples,
+                    word_index,
+                    total_words,
+                    generated_files,
+                ),
+            )
+
         _ensure_not_cancelled()
         progress_callback({
             "status": "running",
@@ -130,17 +180,11 @@ def run_training_job_sync(
                     job_id, exc,
                 )
 
-            _ensure_not_cancelled()
-            progress_callback({
-                "status": "running",
-                "progress": 3.0,
-                "epoch": 0,
-                "total_epochs": epochs,
-                "train_loss": 0.0,
-                "val_loss": 0.0,
-                "message": "Corpus: %s positives. Generating wake-word negatives..." % len(pos_files),
-                "error": None,
-            })
+        _ensure_not_cancelled()
+        _publish_running_progress(
+            CONFUSABLE_PROGRESS_START,
+            "Corpus: %s positives. Generating broad confusable negatives..." % len(pos_files),
+        )
         neg_tag_map: dict[str, list[Path]] = {}
 
         # Source 1: User/paid-tier corpus negatives
@@ -166,6 +210,12 @@ def run_training_job_sync(
                 n_confusables=30,
                 voices_per_word=10,
                 verbose=False,
+                progress_callback=lambda info: _on_confusable_progress(
+                    "broad",
+                    CONFUSABLE_PROGRESS_START,
+                    CONFUSABLE_ROUND_ONE_END,
+                    info,
+                ),
                 check_cancelled=_ensure_not_cancelled,
             )
             if confusable_r1:
@@ -187,6 +237,12 @@ def run_training_job_sync(
                 n_confusables=16,
                 voices_per_word=10,
                 verbose=False,
+                progress_callback=lambda info: _on_confusable_progress(
+                    "tight",
+                    CONFUSABLE_ROUND_ONE_END,
+                    CONFUSABLE_PROGRESS_END,
+                    info,
+                ),
                 check_cancelled=_ensure_not_cancelled,
             )
             if confusable_r2:
@@ -198,16 +254,10 @@ def run_training_job_sync(
             )
 
         _ensure_not_cancelled()
-        progress_callback({
-            "status": "running",
-            "progress": 4.0,
-            "epoch": 0,
-            "total_epochs": epochs,
-            "train_loss": 0.0,
-            "val_loss": 0.0,
-            "message": "Generated confusables. Loading corpus speech negatives...",
-            "error": None,
-        })
+        _publish_running_progress(
+            CONFUSABLE_PROGRESS_END,
+            "Generated confusables. Loading corpus speech negatives...",
+        )
 
         _ensure_not_cancelled()
 
@@ -265,16 +315,10 @@ def run_training_job_sync(
                 "/app/corpus or run `violawake download-corpus`."
             )
 
-        progress_callback({
-            "status": "running",
-            "progress": 8.0,
-            "epoch": 0,
-            "total_epochs": epochs,
-            "train_loss": 0.0,
-            "val_loss": 0.0,
-            "message": "Corpus ready: %s pos, %s neg. Training TemporalCNN..." % (len(pos_files), total_neg),
-            "error": None,
-        })
+        _publish_running_progress(
+            CORPUS_READY_PROGRESS,
+            "Corpus ready: %s pos, %s neg. Training TemporalCNN..." % (len(pos_files), total_neg),
+        )
 
         started_at = time.monotonic()
 
@@ -291,7 +335,11 @@ def run_training_job_sync(
             total_epochs = int(info.get("total_epochs", epochs)) or epochs
             train_loss = float(info.get("train_loss", 0.0))
             val_loss = float(info.get("val_loss", 0.0))
-            progress = min(10.0 + 85.0 * (epoch / total_epochs), 95.0)
+            progress = min(
+                TRAINING_PROGRESS_START
+                + (TRAINING_PROGRESS_END - TRAINING_PROGRESS_START) * (epoch / total_epochs),
+                TRAINING_PROGRESS_END,
+            )
 
             progress_callback({
                 "status": "running",
