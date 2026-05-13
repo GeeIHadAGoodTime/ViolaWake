@@ -11,7 +11,14 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import decode_download_token, decode_token, get_current_user
+from app.auth import (
+    _credentials_match_service_key,
+    _get_or_create_service_user,
+    decode_download_token,
+    decode_token,
+    get_current_user,
+)
+from fastapi.security import HTTPAuthorizationCredentials
 from app.database import get_db
 from app.models import TeamMember, TrainedModel, User
 from app.schemas import (
@@ -219,7 +226,16 @@ async def _resolve_download_user(
     else:
         auth_header = request.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
-            user_id = decode_token(auth_header.removeprefix("Bearer ").strip())
+            bearer = auth_header.removeprefix("Bearer ").strip()
+            # Privileged backend integration: a matching service key
+            # authenticates as the synthetic Viola Service user. Lets the
+            # Viola backend download models it submitted on behalf of its
+            # own per-tenant users (per-Viola-tenant isolation enforced
+            # upstream).
+            creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer)
+            if _credentials_match_service_key(creds):
+                return await _get_or_create_service_user(db)
+            user_id = decode_token(bearer)
 
     if user_id is None:
         raise HTTPException(
