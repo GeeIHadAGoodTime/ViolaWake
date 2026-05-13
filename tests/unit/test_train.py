@@ -143,6 +143,66 @@ class TestTrainHelpers:
         assert "edge-tts confusable negative generation produced 0 files" in caplog.text
         assert "missing ffprobe" in caplog.text
 
+    def test_edge_tts_retry_backoff_honors_cancellation(self, tmp_path: Path) -> None:
+        class FakeCommunicate:
+            def __init__(self, text: str, voice: str) -> None:
+                self.text = text
+                self.voice = voice
+
+            async def stream(self):
+                raise RuntimeError("503 Service Unavailable")
+                yield  # pragma: no cover
+
+        edge_tts_module = ModuleType("edge_tts")
+        edge_tts_module.Communicate = FakeCommunicate
+
+        checks = {"count": 0}
+
+        def _cancel_after_first_check() -> None:
+            checks["count"] += 1
+            if checks["count"] >= 2:
+                raise RuntimeError("cancelled")
+
+        out_path = tmp_path / "tts.wav"
+        with (
+            patch.dict(sys.modules, {"edge_tts": edge_tts_module}),
+            patch("violawake_sdk.tools.train.time.sleep") as sleep_mock,
+            pytest.raises(RuntimeError, match="cancelled"),
+        ):
+            train._edge_tts_synthesize(
+                "hello",
+                "en-US-JennyNeural",
+                out_path,
+                check_cancelled=_cancel_after_first_check,
+            )
+
+        sleep_mock.assert_not_called()
+
+    def test_confusable_generation_honors_cancellation_between_words(
+        self, tmp_path: Path
+    ) -> None:
+        def _cancel_immediately() -> None:
+            raise RuntimeError("cancelled")
+
+        with (
+            patch(
+                "violawake_sdk.tools.confusables.generate_confusables",
+                return_value=["violas", "violah"],
+            ),
+            patch("violawake_sdk.tools.train._edge_tts_synthesize") as synth_mock,
+            pytest.raises(RuntimeError, match="cancelled"),
+        ):
+            train._generate_confusable_negatives(
+                "viola",
+                tmp_path,
+                n_confusables=2,
+                voices_per_word=1,
+                verbose=False,
+                check_cancelled=_cancel_immediately,
+            )
+
+        synth_mock.assert_not_called()
+
 
 class TestTrainMainValidation:
     def test_main_exits_when_positives_dir_is_missing(

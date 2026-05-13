@@ -115,6 +115,7 @@ def run_training_job_sync(
                     wake_word,
                     tts_pos_dir,
                     verbose=False,
+                    check_cancelled=_ensure_not_cancelled,
                 )
                 if tts_pos_files:
                     pos_files = list(pos_files) + tts_pos_files
@@ -165,6 +166,7 @@ def run_training_job_sync(
                 n_confusables=30,
                 voices_per_word=10,
                 verbose=False,
+                check_cancelled=_ensure_not_cancelled,
             )
             if confusable_r1:
                 neg_tag_map["neg_confusable_r1"] = confusable_r1
@@ -185,6 +187,7 @@ def run_training_job_sync(
                 n_confusables=16,
                 voices_per_word=10,
                 verbose=False,
+                check_cancelled=_ensure_not_cancelled,
             )
             if confusable_r2:
                 neg_tag_map["neg_confusable_r2"] = confusable_r2

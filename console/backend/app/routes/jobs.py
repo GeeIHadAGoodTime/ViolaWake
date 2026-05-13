@@ -211,7 +211,7 @@ async def get_job(
 @router.delete("/{job_id}", response_model=MessageResponse)
 async def cancel_job(
     job_id: int,
-    current_user: Annotated[User, Depends(get_verified_user)],
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> MessageResponse:
     """Cancel a pending or running training job."""
     await get_owned_job_or_404(job_id, current_user)

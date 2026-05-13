@@ -216,6 +216,26 @@ SPEECH_NEGATIVE_PHRASES = [
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
+def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
+    """Raise immediately when the caller indicates cancellation."""
+    if check_cancelled is not None:
+        check_cancelled()
+
+
+def _sleep_with_cancel(delay_seconds: float, check_cancelled: Callable[[], None] | None) -> None:
+    """Sleep in short slices so cancellation can interrupt retry backoff."""
+    if delay_seconds <= 0:
+        return
+
+    deadline = time.monotonic() + delay_seconds
+    while True:
+        _check_cancelled(check_cancelled)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 0.1))
+
+
 # ---------------------------------------------------------------------------
 # Utility: ONNX runtime provider auto-detection
 # ---------------------------------------------------------------------------
@@ -288,7 +308,13 @@ def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
     return False
 
 
-def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
+def _edge_tts_synthesize(
+    text: str,
+    voice: str,
+    output_path: Path,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> bool:
     """Synthesize a single phrase with edge-tts and save as WAV at 16kHz.
 
     Returns True on success, False on failure.
@@ -336,6 +362,7 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
     mp3_data: bytes | None = None
     max_attempts = max(1, _EDGE_TTS_MAX_ATTEMPTS)
     for attempt in range(1, max_attempts + 1):
+        _check_cancelled(check_cancelled)
         try:
             mp3_data = _run_synth()
             break
@@ -362,7 +389,7 @@ def _edge_tts_synthesize(text: str, voice: str, output_path: Path) -> bool:
                 exc,
                 delay,
             )
-            time.sleep(delay)
+            _sleep_with_cancel(delay, check_cancelled)
 
     if not mp3_data or len(mp3_data) < 100:
         return _edge_tts_fail(
@@ -490,6 +517,8 @@ def _generate_tts_positives(
     wake_word: str,
     output_dir: Path,
     verbose: bool = True,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> list[Path]:
     """Generate diverse TTS positive samples using Edge TTS with Kokoro fallback.
 
@@ -541,7 +570,9 @@ def _generate_tts_positives(
         )
 
     for voice_idx, voice in enumerate(EDGE_TTS_VOICES):
+        _check_cancelled(check_cancelled)
         for phrase_idx, phrase in enumerate(phrases):
+            _check_cancelled(check_cancelled)
             clean_path = output_dir / f"tts_pos_{voice_idx:02d}_{phrase_idx}_{voice}.wav"
             if clean_path.exists():
                 generated.append(clean_path)
@@ -556,7 +587,12 @@ def _generate_tts_positives(
                     engine=kokoro_engine,
                 )
             else:
-                ok = _edge_tts_synthesize(phrase, voice, clean_path)
+                ok = _edge_tts_synthesize(
+                    phrase,
+                    voice,
+                    clean_path,
+                    check_cancelled=check_cancelled,
+                )
                 if not ok and _ensure_kokoro_ready():
                     kokoro_voice = kokoro_voices[voice_idx % len(kokoro_voices)]
                     ok = _kokoro_tts_synthesize(
@@ -570,6 +606,7 @@ def _generate_tts_positives(
 
                 # Generate noisy variant
                 try:
+                    _check_cancelled(check_cancelled)
                     from violawake_sdk.audio import load_audio
                     from violawake_sdk.training.augment import apply_additive_noise
 
@@ -612,6 +649,8 @@ def _generate_confusable_negatives(
     n_confusables: int = 30,
     voices_per_word: int = 10,
     verbose: bool = True,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> list[Path]:
     """Generate confusable negative samples via TTS.
 
@@ -638,14 +677,21 @@ def _generate_confusable_negatives(
     generated: list[Path] = []
 
     for word_idx, word in enumerate(confusable_words):
+        _check_cancelled(check_cancelled)
         for voice_idx, voice in enumerate(voices_subset):
+            _check_cancelled(check_cancelled)
             safe_word = word.replace(" ", "_")[:30]
             out_path = output_dir / f"confusable_{word_idx:03d}_{voice_idx}_{safe_word}.wav"
             if out_path.exists():
                 generated.append(out_path)
                 continue
 
-            ok = _edge_tts_synthesize(word, voice, out_path)
+            ok = _edge_tts_synthesize(
+                word,
+                voice,
+                out_path,
+                check_cancelled=check_cancelled,
+            )
             if ok and out_path.exists():
                 generated.append(out_path)
 
@@ -671,6 +717,8 @@ def _generate_speech_negatives(
     output_dir: Path,
     n_voices: int = 5,
     verbose: bool = True,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> list[Path]:
     """Deprecated for production training: generate speech negatives via TTS.
 
@@ -690,14 +738,21 @@ def _generate_speech_negatives(
         )
 
     for phrase_idx, phrase in enumerate(SPEECH_NEGATIVE_PHRASES):
+        _check_cancelled(check_cancelled)
         for voice_idx, voice in enumerate(voices_subset):
+            _check_cancelled(check_cancelled)
             safe_phrase = phrase.replace(" ", "_")[:40]
             out_path = output_dir / f"speech_neg_{phrase_idx:03d}_{voice_idx}_{safe_phrase}.wav"
             if out_path.exists():
                 generated.append(out_path)
                 continue
 
-            ok = _edge_tts_synthesize(phrase, voice, out_path)
+            ok = _edge_tts_synthesize(
+                phrase,
+                voice,
+                out_path,
+                check_cancelled=check_cancelled,
+            )
             if ok and out_path.exists():
                 generated.append(out_path)
 

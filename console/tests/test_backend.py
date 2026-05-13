@@ -816,6 +816,33 @@ class TestTraining:
         assert "status" in data
         assert data["status"] in ("queued", "running", "completed", "failed")
 
+    def test_cancel_job_accepts_service_key(self, client, monkeypatch) -> None:
+        import sys
+
+        backend_dir = str(Path(__file__).resolve().parents[1] / "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from app.auth import reset_service_user_cache
+        from app.config import settings
+
+        reset_service_user_cache()
+        monkeypatch.setattr(settings, "service_key", "svc-test-key")
+
+        queue = SimpleNamespace(cancel_job=AsyncMock(return_value=True))
+        with (
+            patch("app.routes.jobs.get_owned_job_or_404", new=AsyncMock(return_value=SimpleNamespace(id=54))),
+            patch("app.routes.jobs.init_job_queue", new=AsyncMock(return_value=queue)),
+        ):
+            resp = client.delete(
+                "/api/jobs/54",
+                headers={"Authorization": "Bearer svc-test-key"},
+            )
+
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["message"] == "Training job cancellation requested"
+        queue.cancel_job.assert_awaited_once_with(54)
+
     def test_start_no_auth(self, client) -> None:
         resp = client.post(
             "/api/training/start",

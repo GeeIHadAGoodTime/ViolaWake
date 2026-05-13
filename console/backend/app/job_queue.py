@@ -321,6 +321,7 @@ class JobQueue:
                 cancel_event = self._cancel_events.get(job_id)
             if cancel_event is not None:
                 cancel_event.set()
+            await self._update_job(job_id, cancel_requested=True)
             logger.info("Cancellation requested for running job %s", job_id)
             return True
 
@@ -330,6 +331,7 @@ class JobQueue:
             status=JobStatus.CANCELLED,
             completed_at=completed_at,
             error="Cancelled by user",
+            cancel_requested=False,
         )
         await self._publish(
             job_id,
@@ -575,6 +577,11 @@ class JobQueue:
                     "ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 0"
                 )
                 logger.info("Migrated jobs table: added priority column")
+            if "cancel_requested" not in columns:
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
+                )
+                logger.info("Migrated jobs table: added cancel_requested column")
 
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_priority_created ON jobs(status, priority DESC, created_at ASC)"
@@ -584,9 +591,14 @@ class JobQueue:
 
     async def _resume_jobs(self) -> None:
         running_user_ids: set[int] = set()
+        now = _utcnow()
         async with self._connect() as conn:
             async with conn.execute(
-                "SELECT DISTINCT user_id FROM jobs WHERE status = ?",
+                """
+                SELECT DISTINCT user_id
+                FROM jobs
+                WHERE status = ? AND COALESCE(cancel_requested, 0) = 0
+                """,
                 (JobStatus.RUNNING.value,),
             ) as cursor:
                 rows = await cursor.fetchall()
@@ -595,8 +607,25 @@ class JobQueue:
             await conn.execute(
                 """
                 UPDATE jobs
-                SET status = ?, started_at = NULL, error = NULL
-                WHERE status IN (?, ?)
+                SET
+                    status = ?,
+                    completed_at = ?,
+                    error = ?,
+                    cancel_requested = 0
+                WHERE status = ? AND COALESCE(cancel_requested, 0) = 1
+                """,
+                (
+                    JobStatus.CANCELLED.value,
+                    _serialize_datetime(now),
+                    "Cancelled by user",
+                    JobStatus.RUNNING.value,
+                ),
+            )
+            await conn.execute(
+                """
+                UPDATE jobs
+                SET status = ?, started_at = NULL, error = NULL, cancel_requested = 0
+                WHERE status IN (?, ?) AND COALESCE(cancel_requested, 0) = 0
                 """,
                 (
                     JobStatus.PENDING.value,
@@ -618,7 +647,6 @@ class JobQueue:
         for user_id in running_user_ids:
             logger.info("Resumed interrupted training jobs for user %s", user_id)
 
-        now = _utcnow()
         for row in breaker_rows:
             if bool(row["paused"]):
                 continue
@@ -777,6 +805,7 @@ class JobQueue:
                 error=None,
                 model_id=model_id,
                 d_prime=artifact.d_prime,
+                cancel_requested=False,
             )
             await self._record_success(job.user_id)
 
@@ -829,6 +858,7 @@ class JobQueue:
                 status=JobStatus.CANCELLED,
                 completed_at=completed_at,
                 error=str(exc),
+                cancel_requested=False,
             )
             await self._publish(
                 job_id,
@@ -855,6 +885,7 @@ class JobQueue:
                 status=JobStatus.FAILED,
                 completed_at=completed_at,
                 error=str(exc),
+                cancel_requested=False,
             )
             user_id = current_job.user_id if current_job is not None else None
             if user_id is not None:
@@ -1006,6 +1037,7 @@ class JobQueue:
         error: str | None = None,
         model_id: int | None = None,
         d_prime: float | None = None,
+        cancel_requested: bool | None = None,
     ) -> None:
         assignments: list[str] = []
         values: list[Any] = []
@@ -1031,6 +1063,9 @@ class JobQueue:
         if d_prime is not None:
             assignments.append("d_prime = ?")
             values.append(d_prime)
+        if cancel_requested is not None:
+            assignments.append("cancel_requested = ?")
+            values.append(1 if cancel_requested else 0)
 
         if not assignments:
             return

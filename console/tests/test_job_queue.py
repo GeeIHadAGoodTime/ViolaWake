@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -203,6 +205,46 @@ class TestCancelJob:
             result = await q.cancel_job(job_id)
             assert result is False
         _run_test(tmp_path, _test, no_worker=True)
+
+    def test_cancel_running_job_survives_restart(self, tmp_path):
+        loop = asyncio.new_event_loop()
+        try:
+            async def _test():
+                db_path = tmp_path / "restart_cancel.db"
+
+                q1 = JobQueue(db_path=db_path, max_concurrent=1, max_pending=5)
+                await q1._initialize_db()
+                try:
+                    job_id = await _submit(q1)
+                    await q1._update_job(job_id, status=JobStatus.RUNNING)
+                    q1._cancel_events[job_id] = threading.Event()
+
+                    result = await q1.cancel_job(job_id)
+
+                    assert result is True
+                    with sqlite3.connect(db_path) as conn:
+                        row = conn.execute(
+                            "SELECT status, cancel_requested FROM jobs WHERE id = ?",
+                            (job_id,),
+                        ).fetchone()
+                    assert row == (JobStatus.RUNNING.value, 1)
+                finally:
+                    await q1.shutdown()
+
+                q2 = JobQueue(db_path=db_path, max_concurrent=1, max_pending=5)
+                await q2._initialize_db()
+                try:
+                    await q2._resume_jobs()
+                    job = await q2.get_job(job_id)
+                    assert job is not None
+                    assert job.status == JobStatus.CANCELLED
+                    assert job.error == "Cancelled by user"
+                finally:
+                    await q2.shutdown()
+
+            loop.run_until_complete(_test())
+        finally:
+            loop.close()
 
 
 class TestQueueCapacity:
