@@ -1,0 +1,40 @@
+# Compose override: bridge ViolaWake Console backend to Viola's internal
+# Docker network so viola-cloud can call /api/recordings/* and /api/jobs/*
+# without going through Cloudflare.
+#
+# Usage:
+#   docker compose -f docker-compose.production.yml -f docker-compose.viola-bridge.yml up -d
+#
+# This file is INTENTIONALLY separate from docker-compose.production.yml so
+# the Wakeword product can still ship standalone (no Viola dependency).
+#
+# Why pin VIOLAWAKE_DB_URL to wakeword-postgres-1:
+#   When `backend` joins both `default` (wakeword's network) and
+#   `novviola_viola-local` (Viola's network), Docker's embedded DNS resolves
+#   the unqualified hostname `postgres` against ALL attached networks. Viola
+#   has its own `viola-postgres-local` container aliased as `postgres` on its
+#   network — without pinning, asyncpg can hit Viola's postgres and 401 with
+#   InvalidPasswordError. Pinning to `wakeword-postgres-1` (the compose-
+#   generated container name, unique across networks) breaks the tie.
+#
+# Verified live 2026-05-13: with this override + matching VIOLA_WAKEWORD_*
+# env in Viola, viola-api reaches `http://wakeword-backend:8000` and the
+# Console authenticates Viola via VIOLAWAKE_SERVICE_KEY.
+
+services:
+  backend:
+    networks:
+      default: {}
+      decoder-net: {}
+      novviola_viola-local:
+        aliases:
+          - wakeword-backend
+    environment:
+      # Override the default `postgres` hostname so multi-network DNS
+      # resolution can't accidentally route DB connections to Viola's
+      # postgres. See header comment.
+      - VIOLAWAKE_DB_URL=postgresql+asyncpg://violawake:${POSTGRES_PASSWORD}@wakeword-postgres-1:5432/violawake
+
+networks:
+  novviola_viola-local:
+    external: true
