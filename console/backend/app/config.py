@@ -70,6 +70,16 @@ class Settings(BaseSettings):
     # Admin
     admin_token: str = ""  # When set, enables POST /api/admin/cleanup (protect with a strong secret)
 
+    # Privileged service integration (e.g., Viola backend).
+    # When set, an HTTP request with `Authorization: Bearer <service_key>` is
+    # authenticated as the synthetic service user identified by
+    # `service_user_email`. All recordings + training jobs created via the
+    # service path land under that account; per-tenant isolation must be
+    # enforced upstream (Viola scopes by user_id on its side).
+    service_key: str = ""
+    service_user_email: str = "viola-service@viola.internal"
+    service_user_name: str = "Viola Service"
+
     # Stripe billing
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""

@@ -38,7 +38,12 @@ from scipy import signal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user, get_verified_user
+from app.auth import (
+    get_current_user,
+    get_service_or_verified_user,
+    get_verified_user,
+    is_service_user,
+)
 from app.config import settings
 from app.database import get_db
 from app.models import Recording, Subscription, TrainedModel, User
@@ -171,6 +176,19 @@ async def _verified_user_with_rate_key(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Verify your email to upload recordings.",
         )
+    set_rate_limit_user(request, current_user.id)
+    return current_user
+
+
+async def _service_or_verified_user_with_rate_key(
+    request: Request,
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
+) -> User:
+    """Accept either a privileged service key or a verified JWT user.
+
+    Used by the bulk-upload endpoint that Viola's privileged backend integration
+    calls. Per-user rate-limiting still tracks the (synthetic) service user.
+    """
     set_rate_limit_user(request, current_user.id)
     return current_user
 
@@ -1015,7 +1033,7 @@ async def upload_recording(
 async def bulk_upload_recordings(
     request: Request,
     response: Response,
-    current_user: Annotated[User, Depends(_verified_user_with_rate_key)],
+    current_user: Annotated[User, Depends(_service_or_verified_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
     files: list[UploadFile] = File(..., alias="file"),  # noqa: B008
     wake_word: str = Form(...),

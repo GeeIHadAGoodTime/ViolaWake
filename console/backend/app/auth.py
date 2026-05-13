@@ -367,6 +367,115 @@ async def get_verified_user(
     return current_user
 
 
+# ---------------------------------------------------------------------------
+# Privileged service-key authentication (Viola backend integration)
+# ---------------------------------------------------------------------------
+
+_SERVICE_USER_ID_CACHE: int | None = None
+
+
+def _credentials_match_service_key(
+    credentials: HTTPAuthorizationCredentials | None,
+) -> bool:
+    """Return True iff the bearer credentials match the configured service key."""
+    key = (settings.service_key or "").strip()
+    if not key:
+        return False
+    if credentials is None:
+        return False
+    submitted = (credentials.credentials or "").strip()
+    if not submitted:
+        return False
+    return secrets.compare_digest(submitted, key)
+
+
+async def _get_or_create_service_user(db: AsyncSession) -> User:
+    """Look up (or create on first use) the synthetic Viola service user.
+
+    The service user owns every recording / training job submitted via the
+    service-key path. Per-Viola-tenant isolation is enforced upstream by Viola
+    (e.g., model paths under `<user_id>__<slug>.onnx`).
+    """
+    global _SERVICE_USER_ID_CACHE
+
+    if _SERVICE_USER_ID_CACHE is not None:
+        cached = await db.execute(select(User).where(User.id == _SERVICE_USER_ID_CACHE))
+        cached_user = cached.scalar_one_or_none()
+        if cached_user is not None and cached_user.deleted_at is None:
+            return cached_user
+        _SERVICE_USER_ID_CACHE = None
+
+    email = (settings.service_user_email or "viola-service@viola.internal").strip().lower()
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            email=email,
+            password_hash=hash_password(secrets.token_urlsafe(48)),
+            name=settings.service_user_name or "Viola Service",
+            email_verified=True,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    elif user.deleted_at is not None:
+        # Resurrect a previously soft-deleted service user. Without this, the
+        # service path stays 401 forever after an accidental deletion.
+        user.deleted_at = None
+        if not user.email_verified:
+            user.email_verified = True
+        await db.commit()
+        await db.refresh(user)
+
+    _SERVICE_USER_ID_CACHE = user.id
+    return user
+
+
+def reset_service_user_cache() -> None:
+    """Clear the cached service-user id. Test helper."""
+    global _SERVICE_USER_ID_CACHE
+    _SERVICE_USER_ID_CACHE = None
+
+
+async def get_service_or_verified_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """Auth dependency: privileged service key OR a verified end-user JWT.
+
+    When ``VIOLAWAKE_SERVICE_KEY`` is set and the request bearer matches it,
+    the call is authenticated as the synthetic Viola service user (bypassing
+    email-verification + per-user billing quotas). Otherwise falls back to the
+    standard JWT-backed ``get_verified_user`` semantics.
+    """
+    if _credentials_match_service_key(credentials):
+        return await _get_or_create_service_user(db)
+
+    user_id = decode_token(credentials.credentials)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or user.deleted_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email address to access recording, training, and billing features.",
+        )
+    return user
+
+
+def is_service_user(user: User) -> bool:
+    """Return True iff this User is the synthetic Viola service account."""
+    expected = (settings.service_user_email or "").strip().lower()
+    if not expected:
+        return False
+    actual = (user.email or "").strip().lower()
+    return actual == expected
+
+
 def make_get_team_member(required_roles: list[str] | None = None):
     """Return a FastAPI dependency that verifies team membership and optionally requires a specific role.
 

@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_verified_user
+from app.auth import (
+    get_service_or_verified_user,
+    get_verified_user,
+    is_service_user,
+)
 from app.database import get_db
 from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
 from app.models import Recording, User
@@ -30,6 +34,27 @@ async def _quota_user_with_rate_key(
     """Resolve the user via training-quota check and stash ID for rate limiting."""
     set_rate_limit_user(request, current_user.id)
     return current_user
+
+
+async def _service_or_quota_user_with_rate_key(
+    request: Request,
+    candidate_user: Annotated[User, Depends(get_service_or_verified_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """Privileged service key OR end-user with quota check.
+
+    Service-key callers (Viola backend) bypass per-user billing quotas:
+    upstream Viola handles its own per-tenant billing. End-user callers go
+    through the standard ``check_training_quota`` path.
+    """
+    if is_service_user(candidate_user):
+        set_rate_limit_user(request, candidate_user.id)
+        return candidate_user
+    # Mirror check_training_quota inline so we can reuse the already-resolved
+    # User and avoid double DB lookups.
+    quota_user = await check_training_quota(candidate_user, db)
+    set_rate_limit_user(request, quota_user.id)
+    return quota_user
 
 
 def serialize_job(job: Job) -> JobResponse:
@@ -133,7 +158,7 @@ async def get_owned_job_or_404(job_id: int, current_user: User) -> Job:
 async def create_job(
     request: Request,
     body: JobSubmitRequest,
-    current_user: Annotated[User, Depends(_quota_user_with_rate_key)],
+    current_user: Annotated[User, Depends(_service_or_quota_user_with_rate_key)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobSubmitResponse:
     """Submit a new training job."""
@@ -176,7 +201,7 @@ async def get_circuit_breaker_state(
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(
     job_id: int,
-    current_user: Annotated[User, Depends(get_verified_user)],
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> JobResponse:
     """Return one training job."""
     job = await get_owned_job_or_404(job_id, current_user)
