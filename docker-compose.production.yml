@@ -32,13 +32,10 @@ services:
       - SETGID
     security_opt:
       - no-new-privileges:true
-    # mem_limit raised 1g -> 2g (2026-05-13) — two concurrent training jobs
-    # (max_concurrent_jobs=2 by default) at TTS-corpus generation peak hit
-    # ~500MB each on top of ~400MB base, OOM-killing the container with
-    # exit=137 every ~14 min. docker inspect showed OOMKilled=false after
-    # restart (the flag is wiped) but the live Docker events stream caught
-    # `container oom` immediately before each `die`. Live-confirmed via job
-    # 54+55 concurrent run on 2026-05-13.
+    # Permanent backend cap after fixing all-at-once negative corpus loading.
+    # Live proof on 2026-05-14 completed a full TemporalCNN training job with
+    # peak container memory at ~0.794 GiB and zero restarts. Keep concurrency
+    # at 1 and leave ~1 GiB of headroom above the measured peak.
     mem_limit: 2g
     pids_limit: 200
     expose:
