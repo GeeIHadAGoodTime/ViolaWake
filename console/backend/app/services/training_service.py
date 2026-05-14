@@ -394,6 +394,16 @@ def run_training_job_sync(
     except TrainingCancelledError:
         logger.info("Training job %s cancelled", job_id)
         raise
+    except (SystemExit, KeyboardInterrupt) as exc:
+        detail = str(exc).strip()
+        exc_name = type(exc).__name__
+        if detail:
+            raise RuntimeError(
+                "Training aborted by fatal control-flow exception: %s: %s" % (exc_name, detail)
+            ) from exc
+        raise RuntimeError(
+            "Training aborted by fatal control-flow exception: %s" % exc_name
+        ) from exc
     except Exception as exc:
         log_exception(
             logger,

@@ -66,6 +66,7 @@ _EVALUATION_KEYS = {
     "frr",
 }
 _QUALITY_GRADES = {"A", "B", "C", "F"}
+_ARCHITECTURE_KEYS = ("architecture", "model_architecture")
 
 
 def _normalize_key(key: str) -> str:
@@ -176,6 +177,14 @@ def _extract_quality_grade_from_config_json(config_json: str | None) -> str | No
         return None
 
     return _extract_quality_grade(parsed)
+
+
+def _extract_architecture(payload: object) -> str | None:
+    value = _find_value(payload, _ARCHITECTURE_KEYS)
+    if isinstance(value, str):
+        architecture = value.strip().lower()
+        return architecture or None
+    return None
 
 
 def _load_model_metadata(model: TrainedModel) -> dict:
@@ -350,13 +359,15 @@ async def download_model(
 @router.get("/{model_id}/config", response_model=ModelConfigResponse)
 async def get_model_config(
     model_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
+    token: str | None = Query(default=None),
 ) -> ModelConfigResponse:
     """Get training config and metrics for a trained model.
 
-    Requires the standard ``Authorization: Bearer <token>`` header.
+    Accepts the same service-key or one-time token path as ``/download``.
     """
+    current_user = await _resolve_download_user(request, token, db, model_id=model_id)
     model = await _get_model_for_user(db, model_id, current_user.id)
 
     training_config = _load_model_metadata(model)
@@ -372,6 +383,8 @@ async def get_model_config(
         d_prime=model.d_prime,
         far_per_hour=far_per_hour,
         frr=frr,
+        architecture=_extract_architecture(training_config),
+        quality_grade=_extract_quality_grade(training_config),
         training_config=training_config,
     )
 

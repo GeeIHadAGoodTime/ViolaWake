@@ -40,13 +40,6 @@ Usage::
       --negatives data/jarvis/negatives/ \\
       --output models/jarvis.onnx
 
-    # Legacy MLP mode:
-    violawake-train \\
-      --word "jarvis" \\
-      --positives data/jarvis/positives/ \\
-      --output models/jarvis.onnx \\
-      --architecture mlp
-
 Minimum: 5 positive samples (auto-TTS fills to ~200). Recommended: 50+.
 """
 
@@ -69,6 +62,10 @@ if TYPE_CHECKING:
     import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+class TrainingError(RuntimeError):
+    """Raised when programmatic training cannot continue safely."""
 
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
@@ -904,6 +901,42 @@ def _prepare_audio_for_oww(
     return audio_i16
 
 
+def _temporal_windows_from_frame_embeddings(
+    frame_embeddings: np.ndarray,
+    *,
+    source_id: int,
+    tag: str,
+    seq_len: int,
+) -> tuple[list[np.ndarray], list[int], list[str]]:
+    """Convert one clip's frame embeddings into seq_len temporal windows."""
+    import numpy as np
+
+    if len(frame_embeddings.shape) == 1:
+        frame_embeddings = frame_embeddings.reshape(1, -1)
+
+    n_frames = frame_embeddings.shape[0]
+    windows: list[np.ndarray] = []
+    source_indices: list[int] = []
+    tags: list[str] = []
+
+    if n_frames >= seq_len:
+        for i in range(n_frames - seq_len + 1):
+            window = frame_embeddings[i : i + seq_len].astype(np.float32)
+            windows.append(window)
+            source_indices.append(source_id)
+            tags.append(tag)
+    elif n_frames > 0:
+        padded = np.zeros((seq_len, frame_embeddings.shape[1]), dtype=np.float32)
+        padded[:n_frames] = frame_embeddings
+        for j in range(n_frames, seq_len):
+            padded[j] = frame_embeddings[-1]
+        windows.append(padded)
+        source_indices.append(source_id)
+        tags.append(tag)
+
+    return windows, source_indices, tags
+
+
 def _extract_temporal_windows_from_audio(
     audio_clips: list[np.ndarray],
     source_ids: list[int],
@@ -917,8 +950,7 @@ def _extract_temporal_windows_from_audio(
     try:
         from openwakeword.model import Model as OWWModel
     except ImportError as e:
-        print(f"ERROR: openwakeword required: {e}", file=sys.stderr)
-        sys.exit(1)
+        raise TrainingError(f"openwakeword required: {e}") from e
 
     if len(audio_clips) != len(source_ids):
         raise ValueError("audio_clips and source_ids must have the same length")
@@ -947,27 +979,15 @@ def _extract_temporal_windows_from_audio(
 
         try:
             frame_embeddings_3d = preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1)
-            frame_embeddings = frame_embeddings_3d[0]
-
-            if len(frame_embeddings.shape) == 1:
-                frame_embeddings = frame_embeddings.reshape(1, -1)
-
-            n_frames = frame_embeddings.shape[0]
-
-            if n_frames >= seq_len:
-                for i in range(n_frames - seq_len + 1):
-                    window = frame_embeddings[i : i + seq_len].astype(np.float32)
-                    all_embeddings.append(window)
-                    all_source_idx.append(source_ids[clip_idx])
-                    all_tags.append(tag)
-            elif n_frames > 0:
-                padded = np.zeros((seq_len, frame_embeddings.shape[1]), dtype=np.float32)
-                padded[:n_frames] = frame_embeddings
-                for j in range(n_frames, seq_len):
-                    padded[j] = frame_embeddings[-1]
-                all_embeddings.append(padded)
-                all_source_idx.append(source_ids[clip_idx])
-                all_tags.append(tag)
+            clip_embeddings, clip_sources, clip_tags = _temporal_windows_from_frame_embeddings(
+                frame_embeddings_3d[0],
+                source_id=source_ids[clip_idx],
+                tag=tag,
+                seq_len=seq_len,
+            )
+            all_embeddings.extend(clip_embeddings)
+            all_source_idx.extend(clip_sources)
+            all_tags.extend(clip_tags)
         except Exception:
             failures += 1
 
@@ -1001,20 +1021,29 @@ def _extract_temporal_embeddings(
     This is critical for pipeline equivalence: streaming push_audio() produces
     subtly different embeddings due to internal state accumulation.
 
-    For each audio file, center-crops to CLIP_SAMPLES (1.5s), runs embed_clips
-    to get (n_frames, 96) embeddings, and builds sliding windows of `seq_len`
-    consecutive embeddings. Each window is a (seq_len, 96) tensor.
+    Files are processed one at a time so long corpus negatives do not force the
+    trainer to hold hours of decoded raw audio in memory before the 1.5s crop.
+    Each file is loaded, center-cropped to CLIP_SAMPLES, embedded, converted to
+    temporal windows, and then discarded before the next file is loaded.
 
     Returns:
         embeddings: List of (seq_len, 96) numpy arrays.
         source_indices: Source file index for each embedding (for group-aware split).
         tags: Tag string for each embedding.
     """
-
     from violawake_sdk.audio import load_audio
 
-    audio_clips: list[np.ndarray] = []
-    source_ids: list[int] = []
+    try:
+        from openwakeword.model import Model as OWWModel
+    except ImportError as e:
+        raise TrainingError(f"openwakeword required: {e}") from e
+
+    oww = OWWModel(inference_framework="onnx")
+    preprocessor = oww.preprocessor
+
+    all_embeddings: list[np.ndarray] = []
+    all_source_idx: list[int] = []
+    all_tags: list[str] = []
     failures = 0
 
     for file_idx, wav_path in enumerate(audio_files):
@@ -1022,21 +1051,40 @@ def _extract_temporal_embeddings(
         if audio is None:
             failures += 1
             continue
-        audio_clips.append(audio)
-        source_ids.append(file_idx)
 
-    embeddings, embedding_source_ids, tags = _extract_temporal_windows_from_audio(
-        audio_clips,
-        source_ids,
-        tag,
-        verbose=verbose,
-        seq_len=seq_len,
-    )
+        audio_i16 = _prepare_audio_for_oww(
+            audio,
+            clip_name=wav_path.name,
+            verbose=verbose and failures == 0,
+        )
+        if audio_i16 is None:
+            failures += 1
+            continue
 
-    if verbose and failures > 0:
-        print(f"  [{tag}] skipped {failures} files during audio loading")
+        try:
+            frame_embeddings_3d = preprocessor.embed_clips(audio_i16.reshape(1, -1), ncpu=1)
+            file_embeddings, file_source_ids, file_tags = _temporal_windows_from_frame_embeddings(
+                frame_embeddings_3d[0],
+                source_id=file_idx,
+                tag=tag,
+                seq_len=seq_len,
+            )
+            all_embeddings.extend(file_embeddings)
+            all_source_idx.extend(file_source_ids)
+            all_tags.extend(file_tags)
+        except Exception:
+            failures += 1
 
-    return embeddings, embedding_source_ids, tags
+        if verbose and (file_idx + 1) % 100 == 0:
+            print(f"    {file_idx + 1}/{len(audio_files)} files -> {len(all_embeddings)} windows")
+
+    if verbose:
+        print(
+            f"  [{tag}] {len(audio_files)} files -> {len(all_embeddings)} temporal windows "
+            f"({failures} failures)"
+        )
+
+    return all_embeddings, all_source_idx, all_tags
 
 
 # ---------------------------------------------------------------------------
@@ -1252,9 +1300,9 @@ def _train_temporal_cnn(
         import torch.optim as optim
         from torch.utils.data import DataLoader, TensorDataset
     except ImportError as e:
-        print(f"ERROR: PyTorch required for training: {e}", file=sys.stderr)
-        print("Install with: pip install 'violawake[training]'", file=sys.stderr)
-        sys.exit(1)
+        raise TrainingError(
+            f"PyTorch required for training: {e}. Install with: pip install 'violawake[training]'"
+        ) from e
 
     from violawake_sdk.training.losses import FocalLoss
     from violawake_sdk.training.temporal_model import (
@@ -1351,12 +1399,10 @@ def _train_temporal_cnn(
     )
 
     if len(pos_embs) < 5:
-        print(
-            f"ERROR: Only {len(pos_embs)} positive embeddings extracted. "
-            "Need at least 5. Check audio files.",
-            file=sys.stderr,
+        raise TrainingError(
+            f"Only {len(pos_embs)} positive embeddings extracted. Need at least 5. "
+            "Check audio files."
         )
-        sys.exit(1)
 
     if verbose:
         print(f"\n  Processing {len(neg_files)} negative files...")
@@ -1395,11 +1441,9 @@ def _train_temporal_cnn(
     )
 
     if len(all_neg_embs) < 5:
-        print(
-            f"ERROR: Only {len(all_neg_embs)} negative embeddings extracted. Need at least 5.",
-            file=sys.stderr,
+        raise TrainingError(
+            f"Only {len(all_neg_embs)} negative embeddings extracted. Need at least 5."
         )
-        sys.exit(1)
 
     # -- Build dataset -------------------------------------------------------
     n_pos = len(pos_embs)
@@ -2008,12 +2052,10 @@ def _train_mlp_on_oww(
     swa_lr: float | None = None,
     save_raw_model: bool = False,
 ) -> None:
-    """Legacy MLP training on mean-pooled OWW embeddings.
-
-    Kept for backward compatibility with --architecture mlp.
-    See _train_temporal_cnn for the production architecture.
-    """
-    training_start = time.monotonic()
+    """Removed legacy MLP training entry point."""
+    raise RuntimeError(
+        "Legacy MLP training has been removed. Use the production TemporalCNN pipeline via violawake_sdk.tools.train."
+    )
 
     try:
         import numpy as np
@@ -2500,13 +2542,6 @@ def main() -> None:
         help="Disable audio-level augmentation (TTS generation still runs)",
     )
     parser.add_argument(
-        "--architecture",
-        choices=["temporal_cnn", "mlp"],
-        default="temporal_cnn",
-        help="Model architecture (default: temporal_cnn). "
-        "'mlp' is the legacy single-frame architecture.",
-    )
-    parser.add_argument(
         "--auto-corpus",
         action="store_true",
         default=True,
@@ -2524,20 +2559,6 @@ def main() -> None:
         metavar="DIR",
         help="Optional test set directory for evaluation after training. "
         "Must contain positives/ and negatives/ subdirectories.",
-    )
-    parser.add_argument(
-        "--neg-ratio",
-        type=int,
-        default=5,
-        metavar="N",
-        help="Negatives per positive (used in legacy MLP mode, default: 5)",
-    )
-    parser.add_argument(
-        "--hidden-dim",
-        type=int,
-        default=64,
-        metavar="N",
-        help="Hidden dim for legacy MLP (default: 64)",
     )
     parser.add_argument(
         "--quiet",
@@ -2565,7 +2586,7 @@ def main() -> None:
         print("=" * 70)
         print(f"ViolaWake Training: '{args.word}'")
         print("=" * 70)
-        print(f"Architecture:       {args.architecture}")
+        print("Architecture:       temporal_cnn")
         print(f"Auto corpus:        {'enabled' if args.auto_corpus else 'disabled'}")
         if positives_dir:
             print(f"Positives dir:      {positives_dir}")
@@ -2579,31 +2600,6 @@ def main() -> None:
         if eval_dir:
             print(f"Eval set:           {eval_dir}")
         print()
-
-    # ======================================================================
-    # Legacy MLP path
-    # ======================================================================
-    if args.architecture == "mlp":
-        if positives_dir is None:
-            print("ERROR: --positives is required for MLP architecture.", file=sys.stderr)
-            sys.exit(1)
-        if verbose:
-            print("Using legacy MLP architecture (single-frame, mean-pooled embeddings).\n")
-        _train_mlp_on_oww(
-            positives_dir=positives_dir,
-            output_path=output_path,
-            epochs=args.epochs,
-            augment=args.augment,
-            eval_dir=eval_dir,
-            negatives_dir=negatives_dir,
-            batch_size=args.batch_size,
-            lr=args.lr,
-            hidden_dim=args.hidden_dim,
-            neg_ratio=args.neg_ratio,
-            patience=args.patience,
-            verbose=verbose,
-        )
-        return
 
     # ======================================================================
     # TemporalCNN path (production architecture)
@@ -2845,21 +2841,25 @@ def main() -> None:
             print(f"  Auto-test dir:      {eval_target_dir}")
 
     # -- Step 2-5: Train TemporalCNN ----------------------------------------
-    _train_temporal_cnn(
-        pos_files=train_pos_files,
-        neg_files=train_neg_files,
-        output_path=output_path,
-        wake_word=args.word,
-        epochs=args.epochs,
-        augment=args.augment,
-        eval_dir=None,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        patience=args.patience,
-        verbose=verbose,
-        neg_tags=train_neg_tag_map,
-        augment_source_files=user_pos_files or train_pos_files,
-    )
+    try:
+        _train_temporal_cnn(
+            pos_files=train_pos_files,
+            neg_files=train_neg_files,
+            output_path=output_path,
+            wake_word=args.word,
+            epochs=args.epochs,
+            augment=args.augment,
+            eval_dir=None,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            patience=args.patience,
+            verbose=verbose,
+            neg_tags=train_neg_tag_map,
+            augment_source_files=user_pos_files or train_pos_files,
+        )
+    except TrainingError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
 
     print("\n" + "=" * 70)
     print("Training complete!")

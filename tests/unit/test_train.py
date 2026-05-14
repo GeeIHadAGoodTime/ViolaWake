@@ -241,6 +241,68 @@ class TestTrainHelpers:
         assert progress_events[-1]["word_index"] == 2
         assert progress_events[-1]["total_words"] == 2
 
+    def test_extract_temporal_embeddings_streams_files_incrementally(
+        self, tmp_path: Path
+    ) -> None:
+        import numpy as np
+
+        from violawake_sdk._constants import CLIP_SAMPLES
+
+        audio_files = [tmp_path / f"neg_{idx:03d}.wav" for idx in range(3)]
+        for path in audio_files:
+            path.write_bytes(b"wav")
+
+        class _FakePreprocessor:
+            def __init__(self) -> None:
+                self.calls: list[tuple[int, ...]] = []
+
+            def embed_clips(self, audio_batch, ncpu: int = 1):
+                self.calls.append(tuple(audio_batch.shape))
+                return np.ones((1, 12, 96), dtype=np.float32)
+
+        fake_preprocessor = _FakePreprocessor()
+
+        class _FakeModel:
+            def __init__(self, inference_framework: str) -> None:
+                assert inference_framework == "onnx"
+                self.preprocessor = fake_preprocessor
+
+        fake_openwakeword = ModuleType("openwakeword")
+        fake_openwakeword_model = ModuleType("openwakeword.model")
+        fake_openwakeword_model.Model = _FakeModel
+        fake_openwakeword.model = fake_openwakeword_model
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "openwakeword": fake_openwakeword,
+                    "openwakeword.model": fake_openwakeword_model,
+                },
+            ),
+            patch(
+                "violawake_sdk.audio.load_audio",
+                side_effect=lambda _path: np.full(CLIP_SAMPLES * 40, 0.05, dtype=np.float32),
+            ),
+            patch(
+                "violawake_sdk.tools.train._extract_temporal_windows_from_audio",
+                side_effect=AssertionError(
+                    "negative temporal extraction must process files incrementally"
+                ),
+            ),
+        ):
+            embeddings, source_indices, tags = train._extract_temporal_embeddings(
+                audio_files,
+                "neg",
+                verbose=False,
+                seq_len=9,
+            )
+
+        assert fake_preprocessor.calls == [(1, CLIP_SAMPLES)] * 3
+        assert len(embeddings) == 12
+        assert source_indices == ([0] * 4) + ([1] * 4) + ([2] * 4)
+        assert tags == ["neg"] * 12
+
 
 class TestTrainMainValidation:
     def test_main_exits_when_positives_dir_is_missing(
@@ -325,7 +387,38 @@ class TestTrainMainValidation:
         with patch.object(sys, "argv", argv), pytest.raises(SystemExit, match="1"):
             train.main()
 
-        assert "Provide at least 5 via --positives or enable --auto-corpus" in capsys.readouterr().err
+    def test_main_exits_cleanly_when_internal_temporal_training_fails(
+        self, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    ) -> None:
+        positives = tmp_path / "positives"
+        negatives = tmp_path / "negatives"
+        _touch_audio_files(positives, 5)
+        _touch_audio_files(negatives, 5)
+        output = tmp_path / "model.onnx"
+        argv = [
+            "violawake-train",
+            "--word",
+            "viola",
+            "--positives",
+            str(positives),
+            "--negatives",
+            str(negatives),
+            "--no-auto-corpus",
+            "--output",
+            str(output),
+        ]
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch(
+                "violawake_sdk.tools.train._train_temporal_cnn",
+                side_effect=train.TrainingError("temporal pipeline failed"),
+            ),
+            pytest.raises(SystemExit, match="1"),
+        ):
+            train.main()
+
+        assert "temporal pipeline failed" in capsys.readouterr().err
 
     def test_main_temporal_exits_with_too_few_negative_files(
         self, capsys: pytest.CaptureFixture[str], tmp_path: Path

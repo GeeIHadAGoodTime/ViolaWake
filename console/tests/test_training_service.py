@@ -131,3 +131,36 @@ def test_run_training_job_sync_reports_confusable_progress(monkeypatch, tmp_path
     messages = [str(event["message"]) for event in progress_events]
     assert any("broad confusable negatives" in message for message in messages)
     assert any("tight confusable negatives" in message for message in messages)
+
+
+def test_run_training_job_sync_wraps_system_exit(monkeypatch, tmp_path: Path) -> None:
+    from violawake_sdk.tools import train as train_module
+
+    negatives_dir = tmp_path / "negatives"
+    _touch_audio_files(negatives_dir, 5)
+
+    monkeypatch.setattr(training_service.settings, "tmp_dir", tmp_path)
+    monkeypatch.setattr(training_service, "get_storage", lambda: _FakeStorage())
+    monkeypatch.setattr(train_module, "_generate_tts_positives", lambda *args, **kwargs: [])
+    monkeypatch.setattr(train_module, "_generate_confusable_negatives", lambda *args, **kwargs: [])
+
+    def _raise_system_exit(*args, **kwargs) -> None:
+        raise SystemExit(9)
+
+    monkeypatch.setattr(train_module, "_train_temporal_cnn", _raise_system_exit)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Training aborted by fatal control-flow exception: SystemExit: 9",
+    ):
+        training_service.run_training_job_sync(
+            job_id=57,
+            wake_word="viola",
+            recording_identifiers=["r1", "r2", "r3", "r4", "r5"],
+            output_path=tmp_path / "model.onnx",
+            epochs=2,
+            timeout_seconds=120,
+            progress_callback=lambda event: None,
+            is_cancelled=lambda: False,
+            negatives_dir=negatives_dir,
+        )
