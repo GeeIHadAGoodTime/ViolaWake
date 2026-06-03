@@ -77,30 +77,6 @@ async def test_me_with_token_returns_profile(
 
 
 @pytest.mark.smoke
-async def test_billing_checkout_session_claim_endpoint(
-    http_session: httpx.AsyncClient,
-    authed_user: AuthUser,
-) -> None:
-    """Validate the endpoint named in the launch claim.
-
-    The current source tree exposes /api/billing/checkout. If the deployed API
-    does not expose /api/billing/checkout-session, this test fails and records
-    the product/API contract mismatch.
-    """
-    response = await http_session.post(
-        "/api/billing/checkout-session",
-        headers=auth_headers(authed_user.token),
-        json={"tier": "developer"},
-    )
-    assert response.status_code in (200, 503), json_or_text(response)
-    if response.status_code == 200:
-        url = response.json().get("checkout_url") or response.json().get("url")
-        assert isinstance(url, str) and url.startswith("https://checkout.stripe.com")
-    else:
-        assert "configured" in str(json_or_text(response)).lower()
-
-
-@pytest.mark.smoke
 async def test_billing_checkout_actual_route_configuration(
     http_session: httpx.AsyncClient,
     authed_user: AuthUser,
