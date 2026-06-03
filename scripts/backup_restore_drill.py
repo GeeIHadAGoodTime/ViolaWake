@@ -256,7 +256,15 @@ def main() -> int:
         if args.inspect_only:
             create_count = sql.count(b"CREATE TABLE ")
             copy_count = sql.count(b"COPY public.")
-            print(f"SQL inspection OK: create_tables={create_count} copy_sections={copy_count}")
+            print(f"SQL inspection: create_tables={create_count} copy_sections={copy_count}")
+            if create_count == 0 or copy_count == 0:
+                raise RuntimeError(
+                    "Backup SQL inspection failed: expected at least one CREATE TABLE "
+                    "and one COPY public.* section in the downloaded dump, got "
+                    f"create_tables={create_count} copy_sections={copy_count}. An "
+                    "empty-but-gzipped or non-dump artifact would pass without this check."
+                )
+            print("SQL inspection OK")
             return 0
 
         require_docker()

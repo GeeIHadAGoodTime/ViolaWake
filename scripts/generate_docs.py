@@ -131,10 +131,14 @@ def check_api_public_surface(api_dir: Path) -> int:
         return 1
 
     text = docs_file.read_text(encoding="utf-8", errors="replace")
+    # Require the canonical pdoc anchor `id="violawake_sdk.<name>"` rather than
+    # any incidental string match. Without this tightening, a symbol listed only
+    # in __all__ source text (or any other accidental occurrence) would pass.
     missing = [
         name
         for name in violawake_sdk.__all__
-        if name != "__version__" and name not in text
+        if name != "__version__"
+        and f'id="violawake_sdk.{name}"' not in text
     ]
     if missing:
         print("API public surface check failed:", file=sys.stderr)

@@ -42,7 +42,7 @@
 | Security | `SECURITY.md` | Security policy, vulnerability reporting | 2026-04-05 | New threat model or disclosure process change |
 | Console Security Notes | `docs/SECURITY.md` | Console upload hardening, container security notes, and WAF rule status | 2026-06-03 | Upload limits, decoder sidecar, container hardening, WAF rules, or security-control change |
 | Contributing | `CONTRIBUTING.md` | Contributor guidelines, dev setup | 2026-04-05 | Process or tooling change |
-| Progress | `PROGRESS.md` | Current development progress tracker | 2026-04-05 | Milestone completion or priority shift |
+| Progress | `docs/PROGRESS.md` | Current development progress tracker | 2026-04-05 | Milestone completion or priority shift |
 | Release Notes | `RELEASE_NOTES.md` | User-facing release notes | 2026-04-05 | New release shipped |
 | This registry | `docs/REGISTRY.md` | Doc routing | 2026-04-05 | New doc added without updating registry |
 
@@ -102,11 +102,11 @@ Documents at the repo root that are audit-era records and candidates for archiva
 
 | Document | Path | Why Archive Candidate |
 |----------|------|-----------------------|
-| Launch Readiness | `LAUNCH_READINESS.md` | Point-in-time launch audit doc |
-| Functional Gap Analysis | `FUNCTIONAL_GAP_ANALYSIS.md` | Point-in-time gap audit doc |
-| E2E Readiness | `E2E_READINESS.md` | Point-in-time end-to-end readiness audit doc |
-| Adversary Audit | `ADVERSARY_AUDIT.md` | Point-in-time adversary/security audit doc |
-| Build vs Buy Audit | `BUILD_VS_BUY_AUDIT.md` | Point-in-time console build-vs-buy audit doc |
+| Launch Readiness | `docs/LAUNCH_READINESS.md` | Point-in-time launch audit doc |
+| Functional Gap Analysis | `docs/FUNCTIONAL_GAP_ANALYSIS.md` | Point-in-time gap audit doc |
+| E2E Readiness | `docs/E2E_READINESS.md` | Point-in-time end-to-end readiness audit doc |
+| Adversary Audit | `docs/ADVERSARY_AUDIT.md` | Point-in-time adversary/security audit doc |
+| Build vs Buy Audit | `docs/BUILD_VS_BUY_AUDIT.md` | Point-in-time console build-vs-buy audit doc |
 
 ---
 

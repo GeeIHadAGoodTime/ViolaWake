@@ -738,52 +738,20 @@ rule.
 
 ---
 
-## Cruft — files belonging nowhere, scheduled for action
+## Cruft — resolved 2026-06-03
 
-These files do not live in any lane. They are tracked here so the
-disjointness rule remains structurally true: assigning them to any lane
-would corrupt that lane's surface.
+The 2026-06-03 cleanup audit (committed under `audit-2026-06-03/cleanup`)
+resolved the historical cruft block. Surviving open item:
 
 ```
-# top-level TTS test artifacts (~170 .mp3 files) — generated samples
-# from an old TTS sweep, left at repo root. Move into
-# benchmark_v2/audio/tts_sweep/ (Lane 5) or delete; do NOT leave at root.
-test_*.mp3
-test_long.mp3
-test_short.mp3
-test_model.config.json
-test_model.onnx
-
-# top-level scratch scripts — one-off explorations.
-# Move into _diag/ with a dated subfolder, or delete.
-_write_wake_detector.py
-diagnostic_embedding_analysis.py
-
-# empty stub
-python
-
-# top-level docs that belong in docs/ (listed above with their target lane)
-ACCURACY_MISSION.md            → docs/ + Lane 5
-ADVERSARY_AUDIT.md             → docs/ + Lane 5
-BUILD_VS_BUY_AUDIT.md          → docs/ + Lane 11
-E2E_READINESS.md               → docs/ + Lane 5
-FUNCTIONAL_GAP_ANALYSIS.md     → docs/ + Lane 5
-LAUNCH_READINESS.md            → docs/ + Lane 5
-PROGRESS.md                    → docs/ + Lane 12
-SECURITY.md (top-level)        → docs/SECURITY.md is authoritative;
-                                 delete the top-level duplicate or
-                                 make it a one-line pointer (Lane 10)
-
-# duplicate SDK namespace
+# duplicate SDK namespace — CONFIRM with founder
 src/violawake/                 # compat shim re-exporting violawake_sdk;
-                               # currently in Lane 1 — confirm whether to
-                               # KEEP (back-compat) or DEPRECATE in next
-                               # major. CONFIRM with founder.
+                               # currently in Lane 1. Keep for back-compat
+                               # or deprecate in next major.
 ```
 
-Cleanup is owned by **Lane 12 (Project Governance & Process)** as a
-one-shot housekeeping investigation, not by the lanes whose surfaces
-the stray files would otherwise pollute.
+If cruft accumulates again, this block is the index — list what doesn't
+belong to any lane and schedule its disposition.
 
 ---
 
