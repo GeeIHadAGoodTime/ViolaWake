@@ -16,6 +16,7 @@ from violawake_sdk._exceptions import ModelNotFoundError
 from violawake_sdk.models import (
     MODEL_REGISTRY,
     SIZE_TOLERANCE_FRACTION,
+    ModelCache,
     ModelSpec,
     _auto_download_model,
     _format_size,
@@ -91,6 +92,29 @@ class TestGetModelDir:
         with patch.dict("os.environ", {"VIOLAWAKE_MODEL_DIR": str(new_dir)}):
             result = get_model_dir()
             assert result.exists()
+
+
+class TestModelCache:
+    """Test the documented ModelCache wrapper."""
+
+    def test_model_cache_uses_explicit_directory(self, tmp_path: Path) -> None:
+        model_file = tmp_path / "temporal_cnn.onnx"
+        model_file.write_bytes(b"fake model")
+
+        cache = ModelCache(tmp_path)
+
+        assert cache.model_dir == tmp_path
+        assert cache.get_path("temporal_cnn") == model_file
+        assert cache.get_model_path("temporal_cnn") == model_file
+        assert cache.resolve("temporal_cnn") == model_file
+
+    def test_model_cache_lists_cached_models(self, tmp_path: Path) -> None:
+        (tmp_path / "temporal_cnn.onnx").write_bytes(b"x" * 1000)
+
+        cache = ModelCache(tmp_path)
+        cached = cache.list_cached()
+
+        assert [name for name, _, _ in cached] == ["temporal_cnn"]
 
 
 class TestGetModelPath:

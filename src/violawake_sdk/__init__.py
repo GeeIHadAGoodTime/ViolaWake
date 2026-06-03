@@ -155,6 +155,7 @@ __all__ = [
     # Core detection
     "DetectorConfig",
     "WakeDetector",
+    "WakewordDetector",
     "AsyncWakeDetector",
     "WakeDecisionPolicy",
     "validate_audio_chunk",

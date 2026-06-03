@@ -16,6 +16,7 @@ import hashlib
 import logging
 import os
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -114,6 +115,93 @@ _PACKAGE_MANAGED_MODELS = {"oww_backbone"}
 # the declared size_bytes.  5% accommodates minor compression/header differences
 # while still catching truncated or wildly wrong files.
 SIZE_TOLERANCE_FRACTION = 0.05
+
+
+@contextlib.contextmanager
+def _temporary_model_dir(model_dir: Path | None) -> Iterator[None]:
+    """Temporarily route module-level cache helpers to ``model_dir``."""
+    if model_dir is None:
+        yield
+        return
+
+    previous = os.environ.get("VIOLAWAKE_MODEL_DIR")
+    os.environ["VIOLAWAKE_MODEL_DIR"] = str(model_dir)
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("VIOLAWAKE_MODEL_DIR", None)
+        else:
+            os.environ["VIOLAWAKE_MODEL_DIR"] = previous
+
+
+class ModelCache:
+    """Object-oriented wrapper around ViolaWake's model cache.
+
+    The historical public docs describe a ``ModelCache`` utility.  The
+    underlying implementation has always been the module-level functions in
+    this file; this class makes that documented API real while preserving the
+    existing function API.
+    """
+
+    def __init__(self, model_dir: str | os.PathLike[str] | None = None) -> None:
+        self.model_dir = Path(model_dir) if model_dir is not None else get_model_dir()
+        self.model_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_path(
+        self,
+        model_name: str,
+        *,
+        auto_download: bool = True,
+        format: str | None = None,
+    ) -> Path:
+        """Return a cached model path, downloading when allowed."""
+        with _temporary_model_dir(self.model_dir):
+            return get_model_path(
+                model_name,
+                auto_download=auto_download,
+                format=format,
+            )
+
+    def get_model_path(
+        self,
+        model_name: str,
+        *,
+        auto_download: bool = True,
+        format: str | None = None,
+    ) -> Path:
+        """Alias for ``get_path()`` for discoverability."""
+        return self.get_path(
+            model_name,
+            auto_download=auto_download,
+            format=format,
+        )
+
+    resolve = get_path
+
+    def download(
+        self,
+        model_name: str,
+        *,
+        force: bool = False,
+        verify: bool = True,
+        use_pinning: bool = False,
+        skip_verify: bool = False,
+    ) -> Path:
+        """Download ``model_name`` into this cache directory."""
+        with _temporary_model_dir(self.model_dir):
+            return download_model(
+                model_name,
+                force=force,
+                verify=verify,
+                use_pinning=use_pinning,
+                skip_verify=skip_verify,
+            )
+
+    def list_cached(self) -> list[tuple[str, Path, float]]:
+        """List models cached in this cache directory."""
+        with _temporary_model_dir(self.model_dir):
+            return list_cached_models()
 
 
 def check_registry_integrity(*, strict: bool = True) -> list[str]:

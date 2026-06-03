@@ -37,17 +37,27 @@ def _make_fake_ort() -> types.SimpleNamespace:
 
 def test_required_public_imports_work() -> None:
     from violawake_sdk import VADEngine as ExportedVADEngine
-    from violawake_sdk import VoicePipeline, WakeDetector
-    from violawake_sdk.models import MODEL_REGISTRY, ModelSpec, get_model_path
+    from violawake_sdk import VoicePipeline, WakeDetector, WakewordDetector
+    from violawake_sdk.models import MODEL_REGISTRY, ModelCache, ModelSpec, get_model_path
     from violawake_sdk.tools.evaluate import main as evaluate_main
 
     assert inspect.isclass(WakeDetector)
+    assert inspect.isclass(WakewordDetector)
     assert inspect.isclass(ExportedVADEngine)
     assert inspect.isclass(VoicePipeline)
     assert callable(get_model_path)
     assert isinstance(MODEL_REGISTRY, dict)
+    assert inspect.isclass(ModelCache)
     assert ModelSpec is not None
     assert callable(evaluate_main)
+
+
+def test_compat_import_package_shim_works() -> None:
+    import violawake
+    import violawake_sdk
+
+    assert violawake.__version__ == violawake_sdk.__version__
+    assert violawake.WakeDetector is violawake_sdk.WakeDetector
 
 
 def test_optional_tts_export_if_extra_installed() -> None:

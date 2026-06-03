@@ -2,6 +2,18 @@
 
 Update this file before each release. These notes are used as the GitHub Release body in `.github/workflows/release.yml`.
 
+## v0.2.6 - Console Recording + Quality Visibility
+
+### Highlights
+
+- **Model quality is visible in the console list.** A/B/C/F `quality_grade` values now surface without opening each model's detailed performance view.
+- **Bulk upload and generated-sample workflow.** Users can add multiple recording files at once and use the `violawake-generate` sample-generation flow.
+- **Recording ingest hardening.** Uploads now enforce per-user rate limits, storage caps, WAV/FLAC magic-byte validation, canonical 16 kHz mono PCM_16 re-encoding, and append-only audit logging for accepted and rejected files.
+
+### Breaking Changes
+
+- None.
+
 ## v0.2.5 — Quality Gate Hardening + Self-Reporting Version
 
 ### Highlights
