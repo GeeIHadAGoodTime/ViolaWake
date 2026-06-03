@@ -502,18 +502,38 @@ class TestCollectCLI:
             "--delay", "0.5",
             "--sample-rate", "16000",
         ]
-        # We just need to verify argparse succeeds; the actual recording
-        # requires microphone hardware, so we mock _record_one_sample.
+        # The actual recording requires microphone hardware, so mock the
+        # audio capture boundary and verify the parsed options drive output.
         with mock.patch("sys.argv", ["violawake-collect", *test_args]):
             with mock.patch(
-                "violawake_sdk.tools.collect_samples._record_one_sample",
-                create=True,
-                side_effect=KeyboardInterrupt,  # Stop after setup
+                "violawake_sdk.tools.collect_samples._record_clip",
+                return_value=b"\x00\x00" * 160,
             ):
                 from violawake_sdk.tools.collect_samples import main as collect_main
-                # KeyboardInterrupt is caught by the CLI
                 collect_main()
                 # If we reach here, argparse worked and the CLI handled the interrupt
+
+        assert (out_dir / "sample_0001.wav").exists()
+
+    def test_zero_recorded_samples_exits_1(self, tmp_path: Path) -> None:
+        """A failed recording session must not look successful to scripts."""
+        out_dir = tmp_path / "samples"
+        test_args = [
+            "--word", "hello",
+            "--output", str(out_dir),
+            "--count", "1",
+            "--duration", "0.01",
+            "--delay", "0",
+        ]
+        with mock.patch("sys.argv", ["violawake-collect", *test_args]):
+            with mock.patch("violawake_sdk.tools.collect_samples._record_clip", return_value=None):
+                from violawake_sdk.tools.collect_samples import main as collect_main
+
+                with pytest.raises(SystemExit) as exc_info:
+                    collect_main()
+
+        assert exc_info.value.code == 1
+        assert not list(out_dir.glob("sample_*.wav"))
 
 
 # ===================================================================

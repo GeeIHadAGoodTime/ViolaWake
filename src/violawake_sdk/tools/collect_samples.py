@@ -3,6 +3,8 @@ violawake-collect CLI — Record positive wake word samples for model training.
 
 Entry point: ``violawake-collect`` (declared in pyproject.toml).
 
+Requires: ``pip install "violawake[audio]"`` and a working microphone.
+
 Usage::
 
     violawake-collect --word "jarvis" --output data/jarvis/positives/ --count 50
@@ -148,10 +150,10 @@ def main() -> None:
 
             if data is not None:
                 _save_wav(data, path, args.sample_rate)
-                print(f"✓ {filename}")
+                print(f"OK {filename}")
                 recorded += 1
             else:
-                print("✗ (recording failed)")
+                print("FAILED (recording failed)")
 
     except KeyboardInterrupt:
         print()
@@ -164,6 +166,9 @@ def main() -> None:
         print()
         print("TIP: For good model accuracy, collect at least 50 samples.")
         print("     Use different speaking styles, distances, and room positions.")
+
+    if recorded == 0 and args.count > 0:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
