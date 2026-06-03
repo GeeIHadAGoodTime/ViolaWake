@@ -13,6 +13,7 @@ import {
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = path.join(frontendRoot, "dist");
 const today = "2026-05-08";
+const appShellRedirectTarget = "/app/index.html";
 
 function toPosix(value) {
   return value.replace(/\\/g, "/");
@@ -642,7 +643,7 @@ async function writeRedirects() {
   ];
   const lines = [
     ...marketingLines,
-    ...routes.map((route) => `${route} /app.html 200`),
+    ...routes.map((route) => `${route} ${appShellRedirectTarget} 200`),
   ];
   lines.push("/* /index.html 200");
   await writeFile(path.join(distRoot, "_redirects"), `${lines.join("\n")}\n`, "utf8");
@@ -657,6 +658,10 @@ async function copyAppShell() {
       '<head>\n    <meta name="robots" content="noindex,follow" />',
     );
   }
+  await mkdir(path.join(distRoot, "app"), { recursive: true });
+  // Cloudflare clean-URL handling can canonicalize /app.html to /app, which
+  // drops the original SPA route. Rewriting to a directory index preserves it.
+  await writeFile(path.join(distRoot, "app", "index.html"), appShell, "utf8");
   await writeFile(path.join(distRoot, "app.html"), appShell, "utf8");
 }
 
