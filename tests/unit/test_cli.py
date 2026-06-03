@@ -12,6 +12,8 @@ Strategy:
 
 from __future__ import annotations
 
+import importlib.metadata as metadata
+import os
 import subprocess
 import sys
 import textwrap
@@ -19,6 +21,40 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+
+
+EXPECTED_PROJECT_SCRIPTS = {
+    "violawake-train": "violawake_sdk.tools.train:main",
+    "violawake-eval": "violawake_sdk.tools.evaluate:main",
+    "violawake-collect": "violawake_sdk.tools.collect_samples:main",
+    "violawake-download": "violawake_sdk.tools.download_model:main",
+    "violawake-download-corpus": "violawake_sdk.tools.download_corpus:main",
+    "violawake-expand-corpus": "violawake_sdk.tools.expand_corpus:main",
+    "violawake-streaming-eval": "violawake_sdk.tools.streaming_eval:main",
+    "violawake-test-confusables": "violawake_sdk.tools.test_confusables:main",
+    "violawake-contamination-check": "violawake_sdk.tools.contamination_check:main",
+    "violawake-generate": "violawake_sdk.tools.generate_samples:main",
+}
+
+
+INSTALLED_SCRIPT_HELP_MARKERS = {
+    "violawake-train": (
+        "violawake-train",
+        "--word",
+        "--positives",
+        "--output",
+        "violawake[training]",
+    ),
+    "violawake-eval": ("violawake-eval", "--model", "--test-dir", "violawake[training]"),
+    "violawake-collect": ("violawake-collect", "--word", "--output", "violawake[audio]"),
+    "violawake-download": ("violawake-download", "--model", "--list"),
+    "violawake-download-corpus": ("violawake-download-corpus", "--target-dir"),
+    "violawake-expand-corpus": ("violawake-expand-corpus", "--corpus", "--list"),
+    "violawake-streaming-eval": ("violawake-streaming-eval", "--audio", "--audio-dir"),
+    "violawake-test-confusables": ("violawake-test-confusables", "--wake-word"),
+    "violawake-contamination-check": ("violawake-contamination-check", "--train", "--eval"),
+    "violawake-generate": ("violawake-generate", "--word", "--output", "violawake[generate]"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +69,62 @@ def _run_cli(module: str, args: list[str], *, timeout: int = 30) -> subprocess.C
         text=True,
         timeout=timeout,
     )
+
+
+def _installed_script_path(script_name: str) -> Path:
+    """Return the installed console script path for the current interpreter."""
+    scripts_dir = Path(sys.executable).resolve().parent
+    suffixes = (".exe", ".cmd", ".bat", "") if os.name == "nt" else ("",)
+    for suffix in suffixes:
+        candidate = scripts_dir / f"{script_name}{suffix}"
+        if candidate.exists():
+            return candidate
+    return scripts_dir / script_name
+
+
+class TestInstalledProjectScripts:
+    """Smoke the installed console scripts, not just ``python -m`` modules."""
+
+    def test_distribution_metadata_exposes_all_published_cli_scripts(self) -> None:
+        dist = metadata.distribution("violawake")
+        actual = {
+            entry_point.name: entry_point.value
+            for entry_point in dist.entry_points
+            if entry_point.group == "console_scripts"
+        }
+
+        missing = sorted(set(EXPECTED_PROJECT_SCRIPTS) - set(actual))
+        wrong_targets = {
+            name: actual.get(name)
+            for name, expected in EXPECTED_PROJECT_SCRIPTS.items()
+            if actual.get(name) != expected
+        }
+
+        assert missing == []
+        assert wrong_targets == {}
+
+    @pytest.mark.parametrize(
+        ("script_name", "markers"),
+        sorted(INSTALLED_SCRIPT_HELP_MARKERS.items()),
+    )
+    def test_installed_script_help_exits_zero(
+        self,
+        script_name: str,
+        markers: tuple[str, ...],
+    ) -> None:
+        script_path = _installed_script_path(script_name)
+        assert script_path.exists(), f"missing installed script: {script_path}"
+
+        result = subprocess.run(
+            [str(script_path), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0, result.stderr
+        for marker in markers:
+            assert marker in result.stdout
 
 
 # ===================================================================
@@ -327,6 +419,44 @@ class TestDownloadCLI:
                     dl_mod.main()
                 assert exc_info.value.code == 1
 
+    def test_download_falls_back_to_builtin_downloader_without_download_extra(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Core installs should still support the documented model download command."""
+        from violawake_sdk.models import ModelSpec
+        import violawake_sdk.models as models
+        import violawake_sdk.tools.download_model as dl_mod
+
+        fake_spec = ModelSpec(
+            name="temporal_cnn",
+            url="https://example.com/temporal_cnn.onnx",
+            sha256="a" * 64,
+            size_bytes=4,
+            description="test model",
+        )
+        downloaded_path = tmp_path / "temporal_cnn.onnx"
+
+        def missing_download_extra(*args: object, **kwargs: object) -> Path:
+            raise ImportError("requests is required for model downloading")
+
+        def builtin_download(model_name: str, spec: ModelSpec) -> Path:
+            downloaded_path.write_bytes(b"fake")
+            return downloaded_path
+
+        monkeypatch.setattr(models, "MODEL_REGISTRY", {"temporal_cnn": fake_spec})
+        monkeypatch.setattr(models, "download_model", missing_download_extra)
+        monkeypatch.setattr(models, "_auto_download_model", mock.Mock(side_effect=builtin_download))
+        monkeypatch.setattr(models, "get_model_dir", lambda: tmp_path)
+        monkeypatch.setattr(sys, "argv", ["violawake-download", "--model", "temporal_cnn"])
+
+        dl_mod.main()
+
+        models._auto_download_model.assert_called_once_with("temporal_cnn", fake_spec)
+        assert f"Done. Models cached to {tmp_path}" in capsys.readouterr().out
+
     def test_cli_wrapper_help(self) -> None:
         """The cli.download wrapper re-exports the same main."""
         result = _run_cli("violawake_sdk.cli.download", ["--help"])
@@ -378,18 +508,38 @@ class TestCollectCLI:
             "--delay", "0.5",
             "--sample-rate", "16000",
         ]
-        # We just need to verify argparse succeeds; the actual recording
-        # requires microphone hardware, so we mock _record_one_sample.
+        # The actual recording requires microphone hardware, so mock the
+        # audio capture boundary and verify the parsed options drive output.
         with mock.patch("sys.argv", ["violawake-collect", *test_args]):
             with mock.patch(
-                "violawake_sdk.tools.collect_samples._record_one_sample",
-                create=True,
-                side_effect=KeyboardInterrupt,  # Stop after setup
+                "violawake_sdk.tools.collect_samples._record_clip",
+                return_value=b"\x00\x00" * 160,
             ):
                 from violawake_sdk.tools.collect_samples import main as collect_main
-                # KeyboardInterrupt is caught by the CLI
                 collect_main()
                 # If we reach here, argparse worked and the CLI handled the interrupt
+
+        assert (out_dir / "sample_0001.wav").exists()
+
+    def test_zero_recorded_samples_exits_1(self, tmp_path: Path) -> None:
+        """A failed recording session must not look successful to scripts."""
+        out_dir = tmp_path / "samples"
+        test_args = [
+            "--word", "hello",
+            "--output", str(out_dir),
+            "--count", "1",
+            "--duration", "0.01",
+            "--delay", "0",
+        ]
+        with mock.patch("sys.argv", ["violawake-collect", *test_args]):
+            with mock.patch("violawake_sdk.tools.collect_samples._record_clip", return_value=None):
+                from violawake_sdk.tools.collect_samples import main as collect_main
+
+                with pytest.raises(SystemExit) as exc_info:
+                    collect_main()
+
+        assert exc_info.value.code == 1
+        assert not list(out_dir.glob("sample_*.wav"))
 
 
 # ===================================================================

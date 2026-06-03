@@ -1,6 +1,8 @@
 """
 violawake-eval CLI.
 
+Requires: ``pip install "violawake[training]"``.
+
 Evaluates an ONNX wake-word model on a test set with:
   - architecture auto-detection from ONNX input shape
   - optional threshold sweep

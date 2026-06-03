@@ -15,6 +15,57 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+
+
+def _download_model_for_cli(
+    model_name: str,
+    *,
+    force: bool,
+    verify: bool,
+    skip_verify: bool,
+) -> Path:
+    """Download a model, falling back to the stdlib path on a core install."""
+    from violawake_sdk.models import (
+        MODEL_REGISTRY,
+        _auto_download_model,
+        _verify_sha256,
+        download_model,
+        get_model_dir,
+    )
+
+    try:
+        return download_model(
+            model_name,
+            force=force,
+            verify=verify,
+            skip_verify=skip_verify,
+        )
+    except ImportError as exc:
+        message = str(exc)
+        if "requests is required" not in message and "tqdm is required" not in message:
+            raise
+
+        spec = MODEL_REGISTRY[model_name]
+        ext = Path(spec.url).suffix or ".onnx"
+        model_path = get_model_dir() / f"{spec.name}{ext}"
+
+        print(
+            "  Optional download progress dependencies are not installed; "
+            "using built-in downloader."
+        )
+        if skip_verify:
+            print("  Note: built-in downloader always verifies released model hashes.")
+
+        if model_path.exists():
+            if force:
+                model_path.unlink()
+            else:
+                if verify:
+                    _verify_sha256(model_path, spec.sha256, model_name)
+                return model_path
+
+        return _auto_download_model(model_name, spec)
 
 
 def main() -> None:
@@ -106,7 +157,7 @@ def main() -> None:
     success = True
     for model_name in models_to_download:
         try:
-            path = download_model(
+            path = _download_model_for_cli(
                 model_name,
                 force=args.force,
                 verify=verify,
@@ -126,7 +177,9 @@ def main() -> None:
 
     if success:
         print()
-        print("Done. Models cached to ~/.violawake/models/")
+        from violawake_sdk.models import get_model_dir
+
+        print(f"Done. Models cached to {get_model_dir()}")
     else:
         sys.exit(1)
 
