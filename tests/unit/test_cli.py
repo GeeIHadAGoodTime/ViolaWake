@@ -12,6 +12,8 @@ Strategy:
 
 from __future__ import annotations
 
+import importlib.metadata as metadata
+import os
 import subprocess
 import sys
 import textwrap
@@ -19,6 +21,34 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+
+
+EXPECTED_PROJECT_SCRIPTS = {
+    "violawake-train": "violawake_sdk.tools.train:main",
+    "violawake-eval": "violawake_sdk.tools.evaluate:main",
+    "violawake-collect": "violawake_sdk.tools.collect_samples:main",
+    "violawake-download": "violawake_sdk.tools.download_model:main",
+    "violawake-download-corpus": "violawake_sdk.tools.download_corpus:main",
+    "violawake-expand-corpus": "violawake_sdk.tools.expand_corpus:main",
+    "violawake-streaming-eval": "violawake_sdk.tools.streaming_eval:main",
+    "violawake-test-confusables": "violawake_sdk.tools.test_confusables:main",
+    "violawake-contamination-check": "violawake_sdk.tools.contamination_check:main",
+    "violawake-generate": "violawake_sdk.tools.generate_samples:main",
+}
+
+
+INSTALLED_SCRIPT_HELP_MARKERS = {
+    "violawake-train": ("violawake-train", "--word", "--positives", "--output"),
+    "violawake-eval": ("violawake-eval", "--model", "--test-dir"),
+    "violawake-collect": ("violawake-collect", "--word", "--output"),
+    "violawake-download": ("violawake-download", "--model", "--list"),
+    "violawake-download-corpus": ("violawake-download-corpus", "--target-dir"),
+    "violawake-expand-corpus": ("violawake-expand-corpus", "--corpus", "--list"),
+    "violawake-streaming-eval": ("violawake-streaming-eval", "--audio", "--audio-dir"),
+    "violawake-test-confusables": ("violawake-test-confusables", "--wake-word"),
+    "violawake-contamination-check": ("violawake-contamination-check", "--train", "--eval"),
+    "violawake-generate": ("violawake-generate", "--word", "--output"),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +63,62 @@ def _run_cli(module: str, args: list[str], *, timeout: int = 30) -> subprocess.C
         text=True,
         timeout=timeout,
     )
+
+
+def _installed_script_path(script_name: str) -> Path:
+    """Return the installed console script path for the current interpreter."""
+    scripts_dir = Path(sys.executable).resolve().parent
+    suffixes = (".exe", ".cmd", ".bat", "") if os.name == "nt" else ("",)
+    for suffix in suffixes:
+        candidate = scripts_dir / f"{script_name}{suffix}"
+        if candidate.exists():
+            return candidate
+    return scripts_dir / script_name
+
+
+class TestInstalledProjectScripts:
+    """Smoke the installed console scripts, not just ``python -m`` modules."""
+
+    def test_distribution_metadata_exposes_all_published_cli_scripts(self) -> None:
+        dist = metadata.distribution("violawake")
+        actual = {
+            entry_point.name: entry_point.value
+            for entry_point in dist.entry_points
+            if entry_point.group == "console_scripts"
+        }
+
+        missing = sorted(set(EXPECTED_PROJECT_SCRIPTS) - set(actual))
+        wrong_targets = {
+            name: actual.get(name)
+            for name, expected in EXPECTED_PROJECT_SCRIPTS.items()
+            if actual.get(name) != expected
+        }
+
+        assert missing == []
+        assert wrong_targets == {}
+
+    @pytest.mark.parametrize(
+        ("script_name", "markers"),
+        sorted(INSTALLED_SCRIPT_HELP_MARKERS.items()),
+    )
+    def test_installed_script_help_exits_zero(
+        self,
+        script_name: str,
+        markers: tuple[str, ...],
+    ) -> None:
+        script_path = _installed_script_path(script_name)
+        assert script_path.exists(), f"missing installed script: {script_path}"
+
+        result = subprocess.run(
+            [str(script_path), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        assert result.returncode == 0, result.stderr
+        for marker in markers:
+            assert marker in result.stdout
 
 
 # ===================================================================
