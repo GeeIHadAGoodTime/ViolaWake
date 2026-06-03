@@ -1,0 +1,100 @@
+{
+  "total": 7,
+  "passed": 5,
+  "failed": 1,
+  "skipped": 1,
+  "results": [
+    {
+      "model": "temporal_cnn",
+      "status": "pass",
+      "checks": {
+        "download": "cached",
+        "sha256": "pass",
+        "size": "pass"
+      },
+      "errors": [],
+      "warnings": [],
+      "duration_s": 0.02,
+      "actual_sha256": "9c0b12c68593cfdb3d320a3b34667913b18d63e89eb01247d6332d7839ac9efe",
+      "expected_sha256": "9c0b12c68593cfdb3d320a3b34667913b18d63e89eb01247d6332d7839ac9efe",
+      "size_bytes": 102378
+    },
+    {
+      "model": "oww_backbone",
+      "status": "fail",
+      "checks": {
+        "download": "fail"
+      },
+      "errors": [
+        "Download failed: HTTP Error 404: Not Found"
+      ],
+      "warnings": [],
+      "duration_s": 0.67
+    },
+    {
+      "model": "kokoro_v1_0",
+      "status": "pass",
+      "checks": {
+        "download": "cached",
+        "sha256": "pass",
+        "size": "pass"
+      },
+      "errors": [],
+      "warnings": [],
+      "duration_s": 0.42,
+      "actual_sha256": "7d5df8ecf7d4b1878015a32686053fd0eebe2bc377234608764cc0ef3636a6c5",
+      "expected_sha256": "7d5df8ecf7d4b1878015a32686053fd0eebe2bc377234608764cc0ef3636a6c5",
+      "size_bytes": 325532387
+    },
+    {
+      "model": "kokoro_voices_v1_0",
+      "status": "pass",
+      "checks": {
+        "download": "cached",
+        "sha256": "pass",
+        "size": "pass"
+      },
+      "errors": [],
+      "warnings": [],
+      "duration_s": 0.05,
+      "actual_sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+      "expected_sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+      "size_bytes": 28214398
+    },
+    {
+      "model": "temporal_convgru",
+      "status": "pass",
+      "checks": {
+        "download": "cached",
+        "sha256": "pass",
+        "size": "pass"
+      },
+      "errors": [],
+      "warnings": [],
+      "duration_s": 0.03,
+      "actual_sha256": "5990edf8c6228c45a53e08a270ec4ad9350c9133091ebd95d023a5745578e6f8",
+      "expected_sha256": "5990edf8c6228c45a53e08a270ec4ad9350c9133091ebd95d023a5745578e6f8",
+      "size_bytes": 80780
+    },
+    {
+      "model": "r3_10x_s42",
+      "status": "pass",
+      "checks": {
+        "download": "cached",
+        "sha256": "pass",
+        "size": "pass"
+      },
+      "errors": [],
+      "warnings": [],
+      "duration_s": 0.08,
+      "actual_sha256": "98d028fe36ed10c51791da91fcead6c7c0dd3149049da02a0436ed008da7a362",
+      "expected_sha256": "98d028fe36ed10c51791da91fcead6c7c0dd3149049da02a0436ed008da7a362",
+      "size_bytes": 34010
+    },
+    {
+      "model": "viola",
+      "status": "skipped",
+      "reason": "alias for temporal_cnn"
+    }
+  ]
+}
