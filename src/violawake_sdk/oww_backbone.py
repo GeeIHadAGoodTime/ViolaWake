@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from violawake_sdk._exceptions import ModelNotFoundError
+from violawake_sdk._exceptions import ModelLoadError, ModelNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -183,28 +183,27 @@ class OpenWakeWordBackbone:
     @staticmethod
     def _verify_backbone_integrity(paths: OpenWakeWordBackbonePaths) -> None:
         """Verify OWW backbone files against known SHA-256 hashes."""
+        from violawake_sdk.models import MODEL_REGISTRY
+
+        spec = MODEL_REGISTRY.get("oww_backbone")
+        if spec is None or spec.sha256.startswith("PLACEHOLDER"):
+            return  # No known hash to verify against
+
         try:
-            from violawake_sdk.models import MODEL_REGISTRY
+            mel_sha = _sha256_file(paths.melspectrogram)
+            emb_sha = _sha256_file(paths.embedding_model)
+        except OSError as exc:
+            raise ModelLoadError(f"Could not verify OWW backbone integrity: {exc}") from exc
 
-            spec = MODEL_REGISTRY.get("oww_backbone")
-            if spec is None or spec.sha256.startswith("PLACEHOLDER"):
-                return  # No known hash to verify against
-
-            # Compute combined hash (mel + embedding) matching training-time pinning
-            actual_hashes = get_openwakeword_backbone_hashes()
-            combined = actual_hashes["oww_mel_sha256"] + actual_hashes["oww_emb_sha256"]
-            combined_hash = hashlib.sha256(combined.encode()).hexdigest()
-
-            if combined_hash != spec.sha256:
-                logger.warning(
-                    "OWW backbone hash mismatch: expected %s, got %s. "
-                    "The openwakeword package may have been updated. "
-                    "Re-train your model if detection accuracy degrades.",
-                    spec.sha256[:16],
-                    combined_hash[:16],
-                )
-        except Exception:
-            logger.debug("Skipping backbone integrity check", exc_info=True)
+        # Combined hash matches training-time pinning in models.MODEL_REGISTRY.
+        combined_hash = hashlib.sha256((mel_sha + emb_sha).encode()).hexdigest()
+        if combined_hash != spec.sha256:
+            raise ModelLoadError(
+                "OWW backbone hash mismatch: "
+                f"expected {spec.sha256[:16]}..., got {combined_hash[:16]}... "
+                "The installed openwakeword backbone differs from the pinned "
+                "training/inference contract."
+            )
 
     @property
     def last_embedding(self) -> np.ndarray | None:
