@@ -19,6 +19,31 @@ def _touch_audio_files(directory: Path, count: int) -> None:
         (directory / f"{idx:03d}.wav").write_bytes(b"wav")
 
 
+def _write_probe_wav(
+    path: Path,
+    *,
+    sample_rate: int = 16_000,
+    channels: int = 1,
+    duration_s: float = 0.1,
+) -> None:
+    import wave
+
+    import numpy as np
+
+    n_samples = max(1, int(sample_rate * duration_s))
+    t = np.arange(n_samples, dtype=np.float32) / sample_rate
+    audio = (0.2 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+    pcm = (audio * 32767).astype(np.int16)
+    if channels > 1:
+        pcm = np.repeat(pcm[:, None], channels, axis=1).reshape(-1)
+
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(2)
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm.tobytes())
+
+
 def _path_exists_without_corpus(original_exists):
     def _exists(path: Path) -> bool:
         if "corpus" in {part.lower() for part in path.parts}:
@@ -110,13 +135,52 @@ class TestTrainHelpers:
                 sys.modules,
                 {"edge_tts": edge_tts_module, "soundfile": soundfile_module},
             ),
-            patch("violawake_sdk.tools.train.time.sleep") as sleep_mock,
+            patch("violawake_sdk.tools.train._sleep_with_cancel") as sleep_mock,
         ):
             assert train._edge_tts_synthesize("hello", "en-US-JennyNeural", out_path)
 
         assert attempts["count"] == 2
         sleep_mock.assert_called_once()
         assert out_path.stat().st_size > 44
+
+    def test_load_training_audio_accepts_16khz_mono(self, tmp_path: Path) -> None:
+        import numpy as np
+
+        wav_path = tmp_path / "ok_16khz_mono.wav"
+        _write_probe_wav(wav_path, sample_rate=16_000, channels=1)
+
+        audio = train._load_training_audio(wav_path)
+
+        assert audio.dtype == np.float32
+        assert audio.ndim == 1
+        assert audio.size > 0
+
+    def test_load_training_audio_rejects_wrong_sample_rate(self, tmp_path: Path) -> None:
+        wav_path = tmp_path / "bad_22khz.wav"
+        _write_probe_wav(wav_path, sample_rate=22_050, channels=1)
+
+        with pytest.raises(train.TrainingError, match="16000 Hz"):
+            train._load_training_audio(wav_path)
+
+    def test_load_training_audio_rejects_stereo(self, tmp_path: Path) -> None:
+        wav_path = tmp_path / "bad_stereo.wav"
+        _write_probe_wav(wav_path, sample_rate=16_000, channels=2)
+
+        with pytest.raises(train.TrainingError, match="mono"):
+            train._load_training_audio(wav_path)
+
+    def test_prepare_audio_for_oww_outputs_20ms_aligned_clip(self) -> None:
+        import numpy as np
+
+        from violawake_sdk._constants import CLIP_SAMPLES
+
+        audio = np.full(CLIP_SAMPLES - 123, 0.05, dtype=np.float32)
+        prepared = train._prepare_audio_for_oww(audio, clip_name="short.wav", verbose=False)
+
+        assert train._TRAINING_FRAME_SAMPLES == 320
+        assert prepared is not None
+        assert len(prepared) == CLIP_SAMPLES
+        assert len(prepared) % train._TRAINING_FRAME_SAMPLES == 0
 
     def test_confusable_generation_logs_zero_edge_tts_outputs(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
@@ -281,7 +345,7 @@ class TestTrainHelpers:
                 },
             ),
             patch(
-                "violawake_sdk.audio.load_audio",
+                "violawake_sdk.tools.train._load_training_audio",
                 side_effect=lambda _path: np.full(CLIP_SAMPLES * 40, 0.05, dtype=np.float32),
             ),
             patch(
@@ -302,6 +366,38 @@ class TestTrainHelpers:
         assert len(embeddings) == 12
         assert source_indices == ([0] * 4) + ([1] * 4) + ([2] * 4)
         assert tags == ["neg"] * 12
+
+    def test_extract_temporal_embeddings_rejects_wrong_sample_rate_before_embedding(
+        self, tmp_path: Path
+    ) -> None:
+        wav_path = tmp_path / "bad_22khz.wav"
+        _write_probe_wav(wav_path, sample_rate=22_050, channels=1)
+
+        class _FakePreprocessor:
+            def embed_clips(self, audio_batch, ncpu: int = 1):
+                raise AssertionError("bad-rate audio must fail before embedding extraction")
+
+        class _FakeModel:
+            def __init__(self, inference_framework: str) -> None:
+                assert inference_framework == "onnx"
+                self.preprocessor = _FakePreprocessor()
+
+        fake_openwakeword = ModuleType("openwakeword")
+        fake_openwakeword_model = ModuleType("openwakeword.model")
+        fake_openwakeword_model.Model = _FakeModel
+        fake_openwakeword.model = fake_openwakeword_model
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "openwakeword": fake_openwakeword,
+                    "openwakeword.model": fake_openwakeword_model,
+                },
+            ),
+            pytest.raises(train.TrainingError, match="16000 Hz"),
+        ):
+            train._extract_temporal_embeddings([wav_path], "neg", verbose=False, seq_len=9)
 
 
 class TestTrainMainValidation:
@@ -347,7 +443,7 @@ class TestTrainMainValidation:
 
         assert "Negatives directory not found" in capsys.readouterr().err
 
-    def test_main_requires_positives_for_mlp_architecture(
+    def test_main_rejects_legacy_architecture_flag(
         self, capsys: pytest.CaptureFixture[str], tmp_path: Path
     ) -> None:
         output = tmp_path / "model.onnx"
@@ -361,10 +457,11 @@ class TestTrainMainValidation:
             "mlp",
         ]
 
-        with patch.object(sys, "argv", argv), pytest.raises(SystemExit, match="1"):
+        with patch.object(sys, "argv", argv), pytest.raises(SystemExit) as exc_info:
             train.main()
 
-        assert "--positives is required for MLP architecture" in capsys.readouterr().err
+        assert exc_info.value.code == 2
+        assert "unrecognized arguments: --architecture mlp" in capsys.readouterr().err
 
     def test_main_temporal_exits_with_too_few_positive_files(
         self, capsys: pytest.CaptureFixture[str], tmp_path: Path

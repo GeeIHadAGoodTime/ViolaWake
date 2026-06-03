@@ -212,6 +212,10 @@ SPEECH_NEGATIVE_PHRASES = [
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 
+_TRAINING_SAMPLE_RATE = 16_000
+_TRAINING_FRAME_MS = 20
+_TRAINING_FRAME_SAMPLES = _TRAINING_SAMPLE_RATE * _TRAINING_FRAME_MS // 1000
+
 
 def _check_cancelled(check_cancelled: Callable[[], None] | None) -> None:
     """Raise immediately when the caller indicates cancellation."""
@@ -805,6 +809,91 @@ def _save_wav(audio: np.ndarray, path: Path, sample_rate: int = 16000) -> None:
         wf.writeframes(pcm_i16.tobytes())
 
 
+def _validate_training_audio_array(audio: np.ndarray, sample_rate: int, path: Path) -> np.ndarray:
+    """Validate the training audio contract and return mono float32 samples."""
+    import numpy as np
+
+    if sample_rate != _TRAINING_SAMPLE_RATE:
+        raise TrainingError(
+            f"Training audio must be {_TRAINING_SAMPLE_RATE} Hz mono; "
+            f"{path} is {sample_rate} Hz."
+        )
+
+    audio_array = np.asarray(audio, dtype=np.float32)
+    if audio_array.ndim == 1:
+        mono = audio_array
+    elif audio_array.ndim == 2:
+        if audio_array.shape[1] != 1:
+            raise TrainingError(
+                f"Training audio must be mono; {path} has {audio_array.shape[1]} channels."
+            )
+        mono = audio_array[:, 0]
+    else:
+        raise TrainingError(f"Training audio must be 1D or mono 2D audio; {path} is invalid.")
+
+    if mono.size == 0:
+        raise TrainingError(f"Training audio is empty: {path}")
+
+    return mono.astype(np.float32, copy=False)
+
+
+def _load_training_audio(path: Path) -> np.ndarray:
+    """Load training audio without resampling or channel mixing.
+
+    Generic SDK loading may resample for user convenience. Training cannot:
+    a 22 kHz or stereo clip in the corpus is an audio-contract breach, so it
+    must fail before embeddings are extracted.
+    """
+    import wave
+
+    import numpy as np
+
+    path = Path(path)
+    load_errors: list[str] = []
+
+    try:
+        import soundfile as sf
+
+        audio, sample_rate = sf.read(str(path), dtype="float32", always_2d=True)
+        return _validate_training_audio_array(audio, int(sample_rate), path)
+    except TrainingError:
+        raise
+    except Exception as exc:
+        load_errors.append(f"soundfile: {type(exc).__name__}: {exc}")
+
+    if path.suffix.lower() == ".wav":
+        try:
+            with wave.open(str(path), "rb") as wf:
+                sample_rate = wf.getframerate()
+                channels = wf.getnchannels()
+                sample_width = wf.getsampwidth()
+                raw = wf.readframes(wf.getnframes())
+
+            if channels != 1:
+                raise TrainingError(f"Training audio must be mono; {path} has {channels} channels.")
+            if sample_rate != _TRAINING_SAMPLE_RATE:
+                raise TrainingError(
+                    f"Training audio must be {_TRAINING_SAMPLE_RATE} Hz mono; "
+                    f"{path} is {sample_rate} Hz."
+                )
+
+            if sample_width == 2:
+                audio = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+            elif sample_width == 4:
+                audio = np.frombuffer(raw, dtype=np.int32).astype(np.float32) / 2147483648.0
+            else:
+                raise TrainingError(
+                    f"Training WAV must use 16-bit or 32-bit PCM; {path} has {sample_width} bytes."
+                )
+            return _validate_training_audio_array(audio, sample_rate, path)
+        except TrainingError:
+            raise
+        except Exception as exc:
+            load_errors.append(f"wave: {type(exc).__name__}: {exc}")
+
+    raise TrainingError(f"Failed to load training audio {path}: {'; '.join(load_errors)}")
+
+
 # ---------------------------------------------------------------------------
 # Positive augmentation and temporal embedding helpers
 # ---------------------------------------------------------------------------
@@ -1031,8 +1120,6 @@ def _extract_temporal_embeddings(
         source_indices: Source file index for each embedding (for group-aware split).
         tags: Tag string for each embedding.
     """
-    from violawake_sdk.audio import load_audio
-
     try:
         from openwakeword.model import Model as OWWModel
     except ImportError as e:
@@ -1047,10 +1134,7 @@ def _extract_temporal_embeddings(
     failures = 0
 
     for file_idx, wav_path in enumerate(audio_files):
-        audio = load_audio(wav_path)
-        if audio is None:
-            failures += 1
-            continue
+        audio = _load_training_audio(wav_path)
 
         audio_i16 = _prepare_audio_for_oww(
             audio,
@@ -1107,7 +1191,7 @@ def _extract_mlp_embeddings(
     import numpy as np
 
     from violawake_sdk._constants import CLIP_SAMPLES
-    from violawake_sdk.audio import center_crop, load_audio
+    from violawake_sdk.audio import center_crop
 
     try:
         from openwakeword.model import Model as OWWModel
@@ -1124,10 +1208,7 @@ def _extract_mlp_embeddings(
     failures = 0
 
     for file_idx, wav_path in enumerate(audio_files):
-        audio = load_audio(wav_path)
-        if audio is None:
-            failures += 1
-            continue
+        audio = _load_training_audio(wav_path)
 
         # Guard against zero-energy files (corrupted or silent recordings).
         # If these slip through upload validation, they corrupt training:
@@ -1327,7 +1408,6 @@ def _train_temporal_cnn(
 
     # -- Load and augment positives before embedding extraction ---------------
     from violawake_sdk._constants import SAMPLE_RATE
-    from violawake_sdk.audio import load_audio
 
     validation_fraction = 0.2
     raw_pos_audio: list[np.ndarray] = []
@@ -1335,13 +1415,9 @@ def _train_temporal_cnn(
     augment_candidates: list[np.ndarray] = []
     augment_candidate_source_ids: list[int] = []
     augment_target_paths = set(augment_source_files or pos_files)
-    load_failures = 0
 
     for file_idx, wav_path in enumerate(pos_files):
-        audio = load_audio(wav_path)
-        if audio is None:
-            load_failures += 1
-            continue
+        audio = _load_training_audio(wav_path)
         raw_pos_audio.append(audio)
         raw_pos_source_ids.append(file_idx)
         if wav_path in augment_target_paths:
@@ -1381,9 +1457,6 @@ def _train_temporal_cnn(
         print("\nStep 2: Positive augmentation disabled; using original clips only.")
     elif verbose:
         print("\nStep 2: No positive clips available for augmentation; using originals only.")
-
-    if verbose and load_failures > 0:
-        print(f"  Skipped {load_failures} positive files during audio loading")
 
     # -- Extract temporal embeddings -----------------------------------------
     if verbose:
