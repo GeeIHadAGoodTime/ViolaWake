@@ -9,6 +9,142 @@
 #       - <path to a test that proves the detector catches the broken shape>
 #       - <path to a test that proves the detector stays quiet on the fixed shape>
 #
-# This bootstrap file intentionally starts with an empty registry. Audit lanes
-# add entries through the orchestrator integration commit.
-gates: []
+# Populated by the 2026-06-03 audit integration commit from per-lane planned
+# gate specs rolled up in _diag/2026-06-03/INTEGRATION_PLAN.md.
+
+gates:
+  - gate_id: audio-source-contract-strict
+    contract: SDK audio sources fail closed on non-16kHz mono 16-bit 320-sample-frame input.
+    detector: tests/unit/test_audio_source.py
+    own_tests:
+      - tests/unit/test_audio_source.py::TestFileSource::test_rejects_wrong_wav_sample_rate
+      - tests/unit/test_audio_source.py::TestMicrophoneSourceContract
+
+  - gate_id: oww-backbone-integrity-fail-closed
+    contract: The installed OWW backbone hash must match the pinned registry hash before inference sessions load.
+    detector: tests/unit/test_oww_backbone.py
+    own_tests:
+      - tests/unit/test_oww_backbone.py::TestBackboneIntegrity::test_integrity_mismatch_raises
+      - tests/unit/test_oww_backbone.py::TestBackboneIntegrity::test_integrity_match_passes
+
+  - gate_id: wake-detector-oracle-probes
+    contract: Lane 1 oracle locks threshold 0.80, SDK audio constants, 96-dim OWW embeddings, and all four policy gates.
+    detector: tests/unit/test_wake_detector_oracle.py
+    own_tests:
+      - tests/unit/test_wake_detector_oracle.py::test_default_threshold_is_080_and_rejects_050_score
+      - tests/unit/test_wake_detector_oracle.py::test_detect_exercises_all_four_policy_gates_end_to_end
+
+  - gate_id: wake-detector-per-category-far-bars
+    contract: Benchmark v2 negative categories must stay at or below documented default-threshold false-accept bars.
+    detector: tests/unit/test_wake_detector_oracle.py
+    own_tests:
+      - tests/unit/test_wake_detector_oracle.py::test_benchmark_v2_negative_categories_stay_under_documented_bars
+      - tests/unit/test_wake_detector_oracle.py::test_default_threshold_is_080_and_rejects_050_score
+
+  - gate_id: voice-pipeline-error-surfacing
+    contract: VoicePipeline must surface no-op STT, TTS misconfiguration, and always-on VAD probe failures instead of silently returning to idle or deadlocking.
+    detector: tests/unit/test_voice_pipeline_oracle_probes.py
+    own_tests:
+      - tests/unit/test_voice_pipeline_oracle_probes.py::test_noop_stt_empty_text_is_a_pipeline_error
+      - tests/unit/test_voice_pipeline_oracle_probes.py::test_tts_wrong_voice_is_a_pipeline_error_from_command_path
+      - tests/unit/test_voice_pipeline_oracle_probes.py::test_vad_always_on_stops_recording_at_max_duration
+
+  - gate_id: stt-import-cause
+    contract: STTEngine must distinguish a missing faster-whisper package from installed-but-broken transitive imports.
+    detector: tests/unit/test_stt_tts_engines.py
+    own_tests:
+      - tests/unit/test_stt_tts_engines.py::TestSTTEngineErrorHandling::test_import_error_when_faster_whisper_missing
+      - tests/unit/test_stt_tts_engines.py::TestSTTEngineErrorHandling::test_import_error_preserves_transitive_dependency_failure
+
+  - gate_id: wasm-python-score-parity
+    contract: Built WASM and Python SDK must score the same 10 shared 16k mono 20ms-frame samples within score-space L_inf tolerance, and must catch wrong frame stride plus wrong classifier model probes.
+    detector: wasm/scripts/wasm_parity_audit.py
+    own_tests:
+      - wasm/scripts/wasm_parity_audit.py
+      - wasm/scripts/wasm_parity_audit.py --corpus-dir <real-10-sample-corpus>
+
+  - gate_id: wasm-live-demo-model-load
+    contract: The deployed WASM demo must reach listening state, request all three ONNX models, and emit no browser console or request failures.
+    detector: wasm/scripts/live_wasm_smoke.py
+    own_tests:
+      - wasm/scripts/live_wasm_smoke.py
+      - wasm/scripts/live_wasm_smoke.py --url http://127.0.0.1:8765/wasm/demo/ --origin http://127.0.0.1:8765
+
+  - gate_id: training-audio-contract
+    contract: Detects training pipeline acceptance of non-16 kHz or non-mono audio before embedding extraction.
+    detector: tests/unit/test_train.py
+    own_tests:
+      - tests/unit/test_train.py::TestTrainHelpers::test_load_training_audio_rejects_wrong_sample_rate
+      - tests/unit/test_train.py::TestTrainHelpers::test_extract_temporal_embeddings_rejects_wrong_sample_rate_before_embedding
+      - tests/unit/test_train.py::TestTrainHelpers::test_load_training_audio_accepts_16khz_mono
+
+  - gate_id: public-accuracy-claim-reproducer
+    contract: Public benchmark claims must reproduce from pinned score artifacts, match the registered model SHA, and fail on label/category mismatches.
+    detector: benchmark_v2/reproduce_claims.py
+    own_tests:
+      - tests/unit/test_benchmark_reproduce_claims.py::test_validate_model_metadata_rejects_wrong_sha
+      - tests/unit/test_benchmark_reproduce_claims.py::test_score_validation_rejects_positive_row_under_negative_path
+      - tests/unit/test_benchmark_reproduce_claims.py::test_reproducer_current_artifacts_pass
+
+  - gate_id: installed-project-scripts-smoke
+    contract: Every published pyproject console script remains installed and its help path exits 0 after editable install.
+    detector: tests/unit/test_cli.py
+    own_tests:
+      - tests/unit/test_cli.py::TestInstalledProjectScripts::test_distribution_metadata_exposes_all_published_cli_scripts
+      - tests/unit/test_cli.py::TestInstalledProjectScripts::test_installed_script_help_exits_zero
+
+  - gate_id: release-wheel-public-surface-smoke
+    contract: Built wheels must expose the documented top-level imports, compatibility shim, ModelCache, tools modules, and console scripts before PyPI publish.
+    detector: .github/workflows/release.yml
+    own_tests:
+      - tests/integration/test_sdk_surface.py
+      - tests/unit/test_models.py
+
+  - gate_id: all-modelspec-live-url-sha
+    contract: Every ModelSpec in MODEL_REGISTRY must have a live HTTPS artifact URL whose downloaded bytes match the pinned SHA-256.
+    detector: scripts/verify_models.py
+    own_tests:
+      - _diag/2026-06-03/model-verify-all-report.json
+
+  - gate_id: live-backend-oracle-contract
+    contract: Live backend proof scripts must use backend/OpenAPI-backed routes and request field names.
+    detector: tests/live/test_live_oracle_contract.py
+    own_tests:
+      - tests/live/test_live_oracle_contract.py::test_live_billing_oracle_uses_documented_checkout_route
+      - tests/live/test_live_oracle_contract.py::test_full_pipeline_download_token_uses_resource_id
+
+  - gate_id: frontend-api-url-baked
+    contract: Production frontend JS bundles must contain https://api.violawake.com/api, and an absent VITE_API_URL build must be detected by the same-origin "/api" fallback.
+    detector: _diag/2026-06-03/lane9_bundle_api_probe.py
+    own_tests:
+      - _diag/2026-06-03/lane9_bundle_api_probe.py
+
+  - gate_id: frontend-spa-route-render
+    contract: Auth and console routes must preserve their requested route and render expected SPA selectors instead of falling through to the marketing homepage.
+    detector: _diag/2026-06-03/lane9_live_probe.py
+    own_tests:
+      - _diag/2026-06-03/lane9_live_probe.py
+
+  - gate_id: backup-restore-drill-freshness
+    contract: Latest R2 Postgres backup must be fresh and restorable into scratch Postgres without writing production containers.
+    detector: scripts/backup_restore_drill.py
+    own_tests:
+      - scripts/backup_restore_drill.py --inspect-only
+
+  - gate_id: lane11-public-copy-claims
+    contract: Public copy must not contain unsupported self-certification, legal-review, or fixed-latency benchmark claims.
+    detector: scripts/generate_docs.py
+    own_tests:
+      - scripts/generate_docs.py --check-public-copy
+
+  - gate_id: lane11-api-public-surface-docs
+    contract: Generated public API docs must include every exported SDK public symbol.
+    detector: scripts/generate_docs.py
+    own_tests:
+      - scripts/generate_docs.py --check-api-public-surface
+
+  - gate_id: lane11-docs-registry-coverage
+    contract: Living docs, ADRs, and contract-authoritative docs must be represented in docs/REGISTRY.md.
+    detector: docs/REGISTRY.md
+    own_tests:
+      - docs/REGISTRY.md
