@@ -6,7 +6,6 @@ without requiring hardware (no microphone, no network).
 
 from __future__ import annotations
 
-import struct
 import tempfile
 import types
 import wave
@@ -22,17 +21,30 @@ from violawake_sdk.audio_source import (
     AudioSource,
     CallbackSource,
     FileSource,
+    MicrophoneSource,
 )
 
 
-def _write_wav(path: Path, samples: np.ndarray, sample_rate: int = 16000) -> None:
+def _write_wav(
+    path: Path,
+    samples: np.ndarray,
+    sample_rate: int = 16000,
+    *,
+    channels: int = 1,
+    sample_width: int = 2,
+) -> None:
     """Write a WAV file with int16 PCM data."""
-    int16_data = (samples * 32767).clip(-32768, 32767).astype(np.int16)
+    if sample_width == 1:
+        data = ((samples + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
+    else:
+        data = (samples * 32767).clip(-32768, 32767).astype(np.int16)
+    if channels > 1:
+        data = np.repeat(data[:, None], channels, axis=1).reshape(-1)
     with wave.open(str(path), "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
+        wf.setnchannels(channels)
+        wf.setsampwidth(sample_width)
         wf.setframerate(sample_rate)
-        wf.writeframes(int16_data.tobytes())
+        wf.writeframes(data.tobytes())
 
 
 class TestAudioSourceProtocol:
@@ -224,6 +236,35 @@ class TestFileSource:
             assert len(frame) == FRAME_BYTES
             source.stop()
 
+    @pytest.mark.parametrize("sample_rate", [8000, 22050, 48000])
+    def test_rejects_wrong_wav_sample_rate(self, sample_rate: int) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "wrong-rate.wav"
+            _write_wav(path, np.zeros(FRAME_SAMPLES, dtype=np.float32), sample_rate=sample_rate)
+            source = FileSource(path)
+            with pytest.raises(ValueError, match="audio contract"):
+                source.start()
+
+    def test_rejects_stereo_wav(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "stereo.wav"
+            _write_wav(path, np.zeros(FRAME_SAMPLES, dtype=np.float32), channels=2)
+            source = FileSource(path)
+            with pytest.raises(ValueError, match="audio contract"):
+                source.start()
+
+    def test_rejects_non_16bit_wav(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "eight-bit.wav"
+            _write_wav(
+                path,
+                np.zeros(FRAME_SAMPLES, dtype=np.float32),
+                sample_width=1,
+            )
+            source = FileSource(path)
+            with pytest.raises(ValueError, match="audio contract"):
+                source.start()
+
     def test_read_non_wav_via_soundfile(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.flac"
@@ -261,15 +302,38 @@ class TestFileSource:
                 assert source.read_frame() is None
                 source.stop()
 
+    def test_rejects_non_wav_wrong_sample_rate_via_soundfile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "test.flac"
+            path.write_bytes(b"fake-flac")
+
+            class FakeSoundFile:
+                def __init__(self, *_args, **_kwargs) -> None:
+                    self.samplerate = 48000
+                    self.channels = 1
+
+                def close(self) -> None:
+                    return None
+
+            fake_soundfile = types.ModuleType("soundfile")
+            fake_soundfile.SoundFile = FakeSoundFile
+
+            with patch.dict("sys.modules", {"soundfile": fake_soundfile}):
+                source = FileSource(path)
+                with pytest.raises(ValueError, match="audio contract"):
+                    source.start()
+
     def test_non_wav_without_soundfile_raises(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "test.flac"
             path.write_bytes(b"fake-flac")
 
             source = FileSource(path)
-            with patch.dict("sys.modules", {"soundfile": None}):
-                with pytest.raises(ImportError, match="pip install soundfile"):
-                    source.start()
+            with (
+                patch.dict("sys.modules", {"soundfile": None}),
+                pytest.raises(ImportError, match="pip install soundfile"),
+            ):
+                source.start()
 
 
 class TestNetworkSource:
@@ -280,3 +344,16 @@ class TestNetworkSource:
         source = NetworkSource(protocol="http")
         with pytest.raises(ValueError, match="Unsupported protocol"):
             source.start()
+
+
+class TestMicrophoneSourceContract:
+    """MicrophoneSource must not open non-contract audio streams."""
+
+    @pytest.mark.parametrize("sample_rate", [8000, 22050, 48000])
+    def test_rejects_wrong_sample_rate(self, sample_rate: int) -> None:
+        with pytest.raises(ValueError, match="audio contract"):
+            MicrophoneSource(sample_rate=sample_rate)
+
+    def test_rejects_wrong_frame_samples(self) -> None:
+        with pytest.raises(ValueError, match="20ms frame"):
+            MicrophoneSource(frame_samples=960)

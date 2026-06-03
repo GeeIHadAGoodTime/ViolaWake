@@ -21,6 +21,22 @@ The canonical training recipe for production-quality wake word models. This pipe
 
 Cross-seed stability (seeds 42, 43, 44): EER = 0.0077 +/- 0.0004
 
+### Benchmark v2 Per-Category FAR Bars
+
+These are no-regression bars for the checked-in `benchmark_v2/violawake_scores_v2.csv`
+artifact at the default detection threshold of `0.80`. They are not a substitute
+for device-specific always-on FAR certification; they lock the published benchmark
+corpus categories so a release cannot silently accept more negatives than the
+current reference artifact.
+
+| Negative category | Documented bar at threshold 0.80 |
+|-------------------|----------------------------------|
+| `adversarial_alexa` | 0 false accepts / 105 clips (FAR <= 0.000000) |
+| `adversarial_viola` | 5 false accepts / 105 clips (FAR <= 0.047619) |
+| `noise` | 0 false accepts / 20 clips (FAR <= 0.000000) |
+| `speech` | 22 false accepts / 200 clips (FAR <= 0.110000) |
+| `speech_existing` | 3 false accepts / 270 clips (FAR <= 0.011111) |
+
 ## Training Data Composition
 
 13,146 total samples (1,495 positive, 11,651 negative):

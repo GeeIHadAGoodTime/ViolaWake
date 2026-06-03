@@ -2,25 +2,24 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections import deque
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
+from violawake_sdk._exceptions import ModelLoadError, ModelNotFoundError
+from violawake_sdk.models import ModelSpec
 from violawake_sdk.oww_backbone import (
-    EMBEDDING_DIM,
-    MEL_FRAMES_PER_EMBEDDING,
-    OWW_CHUNK_SAMPLES,
-    SAMPLE_RATE,
     _MAX_RAW_SAMPLES,
-    _RingBuffer,
+    EMBEDDING_DIM,
+    OWW_CHUNK_SAMPLES,
     OpenWakeWordBackbone,
     OpenWakeWordBackbonePaths,
+    _RingBuffer,
     resolve_openwakeword_backbone_paths,
 )
-from violawake_sdk._exceptions import ModelNotFoundError
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # _RingBuffer tests
@@ -157,17 +156,21 @@ class TestRingBufferEdgeCases:
 class TestResolveBackbonePaths:
 
     def test_raises_when_openwakeword_not_installed(self):
-        with patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=None):
-            with pytest.raises(ModelNotFoundError, match="openwakeword"):
-                resolve_openwakeword_backbone_paths()
+        with (
+            patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=None),
+            pytest.raises(ModelNotFoundError, match="openwakeword"),
+        ):
+            resolve_openwakeword_backbone_paths()
 
     def test_raises_when_models_missing(self, tmp_path):
         spec = MagicMock()
         spec.submodule_search_locations = [str(tmp_path)]
         (tmp_path / "resources" / "models").mkdir(parents=True)
-        with patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=spec):
-            with pytest.raises(ModelNotFoundError, match="missing"):
-                resolve_openwakeword_backbone_paths("onnx")
+        with (
+            patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=spec),
+            pytest.raises(ModelNotFoundError, match="missing"),
+        ):
+            resolve_openwakeword_backbone_paths("onnx")
 
     def test_resolves_onnx_paths(self, tmp_path):
         models_dir = tmp_path / "resources" / "models"
@@ -197,12 +200,28 @@ class TestResolveBackbonePaths:
 # OpenWakeWordBackbone tests (mocked ONNX sessions)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _model_spec_for_fake_backbone(mel_path, emb_path):
+    mel_sha = hashlib.sha256(mel_path.read_bytes()).hexdigest()
+    emb_sha = hashlib.sha256(emb_path.read_bytes()).hexdigest()
+    combined_sha = hashlib.sha256((mel_sha + emb_sha).encode()).hexdigest()
+    return ModelSpec(
+        name="oww_backbone",
+        url="https://example.invalid/openwakeword",
+        sha256=combined_sha,
+        size_bytes=mel_path.stat().st_size + emb_path.stat().st_size,
+        description="test backbone",
+        version="test",
+    )
+
+
 def _make_mock_backend(tmp_path):
     """Create a mock backend whose sessions return plausible shapes."""
     models_dir = tmp_path / "resources" / "models"
     models_dir.mkdir(parents=True)
-    (models_dir / "melspectrogram.onnx").write_bytes(b"fake")
-    (models_dir / "embedding_model.onnx").write_bytes(b"fake")
+    mel_path = models_dir / "melspectrogram.onnx"
+    emb_path = models_dir / "embedding_model.onnx"
+    mel_path.write_bytes(b"fake-mel")
+    emb_path.write_bytes(b"fake-embedding")
 
     spec_mock = MagicMock()
     spec_mock.submodule_search_locations = [str(tmp_path)]
@@ -220,13 +239,16 @@ def _make_mock_backend(tmp_path):
     backend.name = "onnx"
     backend.load.side_effect = [mel_session, emb_session]
 
-    return backend, spec_mock
+    return backend, spec_mock, _model_spec_for_fake_backbone(mel_path, emb_path)
 
 
 @pytest.fixture
 def backbone(tmp_path):
-    backend, spec_mock = _make_mock_backend(tmp_path)
-    with patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=spec_mock):
+    backend, spec_mock, backbone_spec = _make_mock_backend(tmp_path)
+    with (
+        patch("violawake_sdk.oww_backbone.importlib.util.find_spec", return_value=spec_mock),
+        patch("violawake_sdk.models.MODEL_REGISTRY", {"oww_backbone": backbone_spec}),
+    ):
         bb = OpenWakeWordBackbone(backend)
     return bb
 
@@ -295,6 +317,46 @@ class TestBackbonePushAudio:
         b = backbone.last_embedding
         assert a is not b
         np.testing.assert_array_equal(a, b)
+
+
+class TestBackboneIntegrity:
+    """The OWW backbone is part of the inference contract."""
+
+    def test_integrity_match_passes(self, tmp_path):
+        models_dir = tmp_path / "resources" / "models"
+        models_dir.mkdir(parents=True)
+        mel_path = models_dir / "melspectrogram.onnx"
+        emb_path = models_dir / "embedding_model.onnx"
+        mel_path.write_bytes(b"mel")
+        emb_path.write_bytes(b"emb")
+        paths = OpenWakeWordBackbonePaths(melspectrogram=mel_path, embedding_model=emb_path)
+        spec = _model_spec_for_fake_backbone(mel_path, emb_path)
+
+        with patch("violawake_sdk.models.MODEL_REGISTRY", {"oww_backbone": spec}):
+            OpenWakeWordBackbone._verify_backbone_integrity(paths)
+
+    def test_integrity_mismatch_raises(self, tmp_path):
+        models_dir = tmp_path / "resources" / "models"
+        models_dir.mkdir(parents=True)
+        mel_path = models_dir / "melspectrogram.onnx"
+        emb_path = models_dir / "embedding_model.onnx"
+        mel_path.write_bytes(b"mel")
+        emb_path.write_bytes(b"emb")
+        paths = OpenWakeWordBackbonePaths(melspectrogram=mel_path, embedding_model=emb_path)
+        bad_spec = ModelSpec(
+            name="oww_backbone",
+            url="https://example.invalid/openwakeword",
+            sha256="0" * 64,
+            size_bytes=6,
+            description="bad test backbone",
+            version="test",
+        )
+
+        with (
+            patch("violawake_sdk.models.MODEL_REGISTRY", {"oww_backbone": bad_spec}),
+            pytest.raises(ModelLoadError, match="OWW backbone hash mismatch"),
+        ):
+            OpenWakeWordBackbone._verify_backbone_integrity(paths)
 
 
 class TestBackboneReset:

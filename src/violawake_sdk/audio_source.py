@@ -33,6 +33,37 @@ logger = logging.getLogger(__name__)
 # Standard frame size: 20ms at 16kHz = 320 samples = 640 bytes (int16)
 FRAME_SAMPLES = 320
 FRAME_BYTES = FRAME_SAMPLES * 2  # int16 = 2 bytes per sample
+EXPECTED_CHANNELS = 1
+EXPECTED_SAMPLE_WIDTH_BYTES = 2
+
+
+def _format_audio_contract(sample_rate: int, channels: int, sample_width_bytes: int) -> str:
+    return f"{sample_rate}Hz/{channels}ch/{sample_width_bytes * 8}bit"
+
+
+def _validate_audio_contract(
+    *,
+    source_name: str,
+    sample_rate: int,
+    channels: int,
+    sample_width_bytes: int = EXPECTED_SAMPLE_WIDTH_BYTES,
+) -> None:
+    if (
+        sample_rate == SAMPLE_RATE
+        and channels == EXPECTED_CHANNELS
+        and sample_width_bytes == EXPECTED_SAMPLE_WIDTH_BYTES
+    ):
+        return
+    expected = _format_audio_contract(
+        SAMPLE_RATE,
+        EXPECTED_CHANNELS,
+        EXPECTED_SAMPLE_WIDTH_BYTES,
+    )
+    actual = _format_audio_contract(sample_rate, channels, sample_width_bytes)
+    raise ValueError(
+        f"{source_name} violates ViolaWake audio contract: expected {expected} "
+        f"20ms PCM frames, got {actual}"
+    )
 
 
 @runtime_checkable
@@ -75,6 +106,16 @@ class MicrophoneSource:
         sample_rate: int = SAMPLE_RATE,
         frame_samples: int = FRAME_SAMPLES,
     ) -> None:
+        _validate_audio_contract(
+            source_name="MicrophoneSource",
+            sample_rate=sample_rate,
+            channels=EXPECTED_CHANNELS,
+        )
+        if frame_samples != FRAME_SAMPLES:
+            raise ValueError(
+                "MicrophoneSource violates ViolaWake audio contract: expected "
+                f"{FRAME_SAMPLES} samples per 20ms frame, got {frame_samples}"
+            )
         self._device_index = device_index
         self._sample_rate = sample_rate
         self._frame_samples = frame_samples
@@ -162,15 +203,17 @@ class FileSource:
             sr = self._wf.getframerate()
             ch = self._wf.getnchannels()
             sw = self._wf.getsampwidth()
-            if sr != SAMPLE_RATE or ch != 1 or sw != 2:
-                logger.warning(
-                    "FileSource: %s is %dHz/%dch/%dbit; expected 16kHz/1ch/16bit. "
-                    "Audio may not be interpreted correctly.",
-                    self._path.name,
-                    sr,
-                    ch,
-                    sw * 8,
+            try:
+                _validate_audio_contract(
+                    source_name=f"FileSource({self._path.name})",
+                    sample_rate=sr,
+                    channels=ch,
+                    sample_width_bytes=sw,
                 )
+            except ValueError:
+                self._wf.close()
+                self._wf = None
+                raise
         else:
             try:
                 import soundfile as sf
@@ -183,14 +226,16 @@ class FileSource:
             self._sf = sf.SoundFile(str(self._path), "r")
             sr = self._sf.samplerate  # type: ignore[attr-defined]
             ch = self._sf.channels  # type: ignore[attr-defined]
-            if sr != SAMPLE_RATE or ch != 1:
-                logger.warning(
-                    "FileSource: %s is %dHz/%dch; expected 16kHz/1ch. "
-                    "Audio will be decoded but should be resampled externally.",
-                    self._path.name,
-                    sr,
-                    ch,
+            try:
+                _validate_audio_contract(
+                    source_name=f"FileSource({self._path.name})",
+                    sample_rate=sr,
+                    channels=ch,
                 )
+            except ValueError:
+                self._sf.close()  # type: ignore[attr-defined]
+                self._sf = None
+                raise
 
         logger.info("FileSource started: %s", self._path.name)
 
