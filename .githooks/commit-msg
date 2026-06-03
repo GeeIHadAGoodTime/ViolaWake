@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+set -eu
+
+python scripts/check_ratchet_rule.py --message-file "$1" --staged

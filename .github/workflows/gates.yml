@@ -1,0 +1,22 @@
+name: Quality Gates
+
+on:
+  pull_request:
+
+jobs:
+  gates:
+    name: Gate framework
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run direct-main-commit checker
+        run: python scripts/check_no_direct_main_commits.py --ci
+
+      - name: Run ratchet rule checker
+        run: >
+          python scripts/check_ratchet_rule.py
+          --commit-range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

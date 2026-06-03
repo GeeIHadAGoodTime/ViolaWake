@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+python scripts/check_no_direct_main_commits.py
+python scripts/check_ratchet_rule.py --pre-commit

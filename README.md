@@ -1232,7 +1232,7 @@ No format conversion needed. ViolaWake reads the same 16kHz mono WAV/FLAC files 
 git clone https://github.com/GeeIHadAGoodTime/ViolaWake
 cd ViolaWake
 pip install -e ".[dev]"
-pre-commit install
+git config core.hooksPath .githooks
 pytest tests/
 ```
 
