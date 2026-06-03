@@ -174,7 +174,7 @@ export class OWWBackbone {
       pcmI16 = new Int16Array(audioFrame.length);
       for (let i = 0; i < audioFrame.length; i++) {
         const s = Math.max(-1, Math.min(1, audioFrame[i]));
-        pcmI16[i] = Math.round(s * 32767);
+        pcmI16[i] = Math.trunc(s * 32767);
       }
     }
 

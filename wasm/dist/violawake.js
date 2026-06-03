@@ -132,7 +132,7 @@ class OWWBackbone {
             pcmI16 = new Int16Array(audioFrame.length);
             for (let i = 0; i < audioFrame.length; i++) {
                 const s = Math.max(-1, Math.min(1, audioFrame[i]));
-                pcmI16[i] = Math.round(s * 32767);
+                pcmI16[i] = Math.trunc(s * 32767);
             }
         }
         // Prepend remainder from previous call
@@ -268,6 +268,7 @@ class OWWBackbone {
  *   embedding_model.onnx  — from openwakeword Python package
  *   temporal_cnn.onnx     — ViolaWake classifier (GitHub Releases)
  */
+const FRAME_SAMPLES = (SAMPLE_RATE / 1000) * 20;
 // ---------------------------------------------------------------------------
 // WakeDetector
 // ---------------------------------------------------------------------------
@@ -314,16 +315,23 @@ class WakeDetector {
         // { name, shape } entries across releases, so support both forms.
         const shape = this._getClassifierInputShape(this.classifierInputName);
         if (shape?.length === 3) {
+            this._validateClassifierInputShape(shape);
             this.isTemporal = true;
             this.temporalSeqLen = typeof shape[1] === "number" && shape[1] > 0 ? shape[1] : 9;
         }
         else if (shape?.length === 2) {
+            this._validateClassifierInputShape(shape);
             this.isTemporal = false;
         }
         else if (this._classifierLooksTemporal()) {
             this.isTemporal = true;
             this.temporalSeqLen = 9;
         }
+        else {
+            throw new Error(`Classifier model has unsupported input shape ${JSON.stringify(shape)}; expected ` +
+                `[1, ${EMBEDDING_DIM}] or [1, seq_len, ${EMBEDDING_DIM}].`);
+        }
+        this._validateClassifierOutputShape();
     }
     /**
      * Process a 20ms audio frame (320 samples at 16kHz, float32 in [-1, 1]).
@@ -370,6 +378,7 @@ class WakeDetector {
         if (!this.backbone || !this.classifierSession) {
             throw new Error("WakeDetector not loaded. Call load() first.");
         }
+        this._validateAudioFrame(audioBuffer);
         const { produced, embedding } = await this.backbone.pushAudio(audioBuffer);
         let score;
         if (embedding === null) {
@@ -460,6 +469,60 @@ class WakeDetector {
             : metadata[inputName];
         const shape = inputMeta?.dimensions ?? inputMeta?.shape;
         return Array.isArray(shape) ? shape : null;
+    }
+    _getClassifierOutputShape() {
+        const metadata = this.classifierSession?.outputMetadata;
+        if (!metadata) {
+            return null;
+        }
+        const outputName = this.classifierSession.outputNames[0];
+        const outputMeta = Array.isArray(metadata)
+            ? metadata.find((entry) => entry?.name === outputName) ?? metadata[0]
+            : metadata[outputName];
+        const shape = outputMeta?.dimensions ?? outputMeta?.shape;
+        return Array.isArray(shape) ? shape : null;
+    }
+    _validateClassifierInputShape(shape) {
+        const lastDim = shape[shape.length - 1];
+        if (lastDim !== EMBEDDING_DIM) {
+            throw new Error(`Classifier model input must end with ${EMBEDDING_DIM} OWW embedding dimensions; ` +
+                `got shape ${JSON.stringify(shape)}.`);
+        }
+        if (shape.length === 3) {
+            const seqLen = shape[1];
+            if (typeof seqLen === "number" && seqLen < 1) {
+                throw new Error(`Classifier temporal sequence length must be >= 1; got ${seqLen}.`);
+            }
+        }
+    }
+    _validateClassifierOutputShape() {
+        const shape = this._getClassifierOutputShape();
+        if (shape === null) {
+            return;
+        }
+        const concreteDims = shape.filter((dim) => typeof dim === "number");
+        const elementCount = concreteDims.reduce((acc, dim) => acc * dim, 1);
+        if (concreteDims.length > 0 && elementCount !== 1) {
+            throw new Error(`Classifier model output must be a single scalar score; got shape ${JSON.stringify(shape)}.`);
+        }
+    }
+    _validateAudioFrame(audioBuffer) {
+        if (!(audioBuffer instanceof Float32Array)) {
+            throw new TypeError("audioBuffer must be a Float32Array.");
+        }
+        if (audioBuffer.length !== FRAME_SAMPLES) {
+            throw new RangeError(`audioBuffer must contain exactly ${FRAME_SAMPLES} samples ` +
+                `(20ms at ${SAMPLE_RATE}Hz); got ${audioBuffer.length}.`);
+        }
+        for (let i = 0; i < audioBuffer.length; i++) {
+            const sample = audioBuffer[i];
+            if (!Number.isFinite(sample)) {
+                throw new RangeError(`audioBuffer sample ${i} is not finite.`);
+            }
+            if (sample < -1 || sample > 1.0) {
+                throw new RangeError(`audioBuffer sample ${i} must be normalized to [-1, 1]; got ${sample}.`);
+            }
+        }
     }
     _classifierLooksTemporal() {
         return /temporal|convgru|gru/i.test(this.classifierModelUrl);
