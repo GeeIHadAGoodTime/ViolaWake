@@ -109,6 +109,10 @@ export declare class WakeDetector {
     private _runTemporalClassifier;
     private _runMlpClassifier;
     private _getClassifierInputShape;
+    private _getClassifierOutputShape;
+    private _validateClassifierInputShape;
+    private _validateClassifierOutputShape;
+    private _validateAudioFrame;
     private _classifierLooksTemporal;
     private _computeRms;
 }

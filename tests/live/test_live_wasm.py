@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import re
+import threading
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -20,7 +22,7 @@ except ImportError:  # pragma: no cover
 pytestmark = pytest.mark.live
 
 
-WASM_DEMO_PATHS = ("/wasm-demo/", "/demo")
+WASM_DEMO_PATHS = ("/wasm/demo/", "/wasm-demo/", "/demo")
 LOCAL_WASM_DIST = PROJECT_ROOT / "wasm" / "dist" / "violawake.js"
 
 
@@ -40,6 +42,30 @@ async def _find_live_demo(site_url: str) -> tuple[str | None, dict[str, int]]:
             if response.status_code == 200 and looks_like_wasm_demo:
                 return url, statuses
     return None, statuses
+
+
+def _find_live_demo_blocking(site_url: str) -> tuple[str | None, dict[str, int]]:
+    import asyncio
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(_find_live_demo(site_url))
+
+    result: dict[str, Any] = {}
+
+    def _run() -> None:
+        try:
+            result["value"] = asyncio.run(_find_live_demo(site_url))
+        except BaseException as exc:  # pragma: no cover - surfaced in caller
+            result["error"] = exc
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result["value"]
 
 
 @pytest.mark.smoke
@@ -62,9 +88,7 @@ async def test_wasm_demo_route_reachable_or_local_dist_present(
 
 
 def test_wasm_demo_requests_onnx_models(site_url: str, browser_context: object) -> None:
-    import asyncio
-
-    demo_url, statuses = asyncio.run(_find_live_demo(site_url))
+    demo_url, statuses = _find_live_demo_blocking(site_url)
     if demo_url is None:
         pytest.skip(f"No live WASM demo route is served: {statuses}")
 
@@ -76,12 +100,16 @@ def test_wasm_demo_requests_onnx_models(site_url: str, browser_context: object) 
 
     page.on("request", lambda request: onnx_urls.append(request.url) if ".onnx" in request.url else None)
     page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
-    page.goto(demo_url, wait_until="networkidle")
+    page.set_default_timeout(20_000)
+    page.goto(demo_url, wait_until="domcontentloaded", timeout=20_000)
     expect(page.get_by_role("button", name=re.compile("Start", re.I))).to_be_visible()
     page.get_by_role("button", name=re.compile("Start", re.I)).click()
     page.wait_for_timeout(8000)
 
-    assert any(url.endswith(".onnx") or ".onnx" in url for url in onnx_urls), onnx_urls
+    assert any(url.endswith(".onnx") or ".onnx" in url for url in onnx_urls), {
+        "onnx_urls": onnx_urls,
+        "console_errors": console_errors,
+    }
     assert console_errors == []
     page.close()
 
