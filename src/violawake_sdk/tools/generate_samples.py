@@ -3,6 +3,8 @@ violawake-generate CLI -- Generate wake word training samples via TTS.
 
 Entry point: ``violawake-generate`` (declared in pyproject.toml).
 
+Requires: ``pip install "violawake[generate]"``.
+
 Headless alternative to ``violawake-collect``: synthesises positive wake word
 samples using Edge TTS voices, with optional augmentation (noise, reverb) and
 confusable-negative generation.  Requires no microphone -- works on CI servers,

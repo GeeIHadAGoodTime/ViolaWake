@@ -3,6 +3,8 @@ violawake-train CLI -- Train a custom wake word model.
 
 Entry point: ``violawake-train`` (declared in pyproject.toml).
 
+Requires: ``pip install "violawake[training]"``.
+
 Architecture: TemporalCNN classifier head on top of frozen OpenWakeWord (OWW)
 audio embeddings. Operates on 9-frame windows of 96-dim OWW embeddings (~25K
 params). This is the same architecture as the production Viola model.

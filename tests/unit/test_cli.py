@@ -38,16 +38,22 @@ EXPECTED_PROJECT_SCRIPTS = {
 
 
 INSTALLED_SCRIPT_HELP_MARKERS = {
-    "violawake-train": ("violawake-train", "--word", "--positives", "--output"),
-    "violawake-eval": ("violawake-eval", "--model", "--test-dir"),
-    "violawake-collect": ("violawake-collect", "--word", "--output"),
+    "violawake-train": (
+        "violawake-train",
+        "--word",
+        "--positives",
+        "--output",
+        "violawake[training]",
+    ),
+    "violawake-eval": ("violawake-eval", "--model", "--test-dir", "violawake[training]"),
+    "violawake-collect": ("violawake-collect", "--word", "--output", "violawake[audio]"),
     "violawake-download": ("violawake-download", "--model", "--list"),
     "violawake-download-corpus": ("violawake-download-corpus", "--target-dir"),
     "violawake-expand-corpus": ("violawake-expand-corpus", "--corpus", "--list"),
     "violawake-streaming-eval": ("violawake-streaming-eval", "--audio", "--audio-dir"),
     "violawake-test-confusables": ("violawake-test-confusables", "--wake-word"),
     "violawake-contamination-check": ("violawake-contamination-check", "--train", "--eval"),
-    "violawake-generate": ("violawake-generate", "--word", "--output"),
+    "violawake-generate": ("violawake-generate", "--word", "--output", "violawake[generate]"),
 }
 
 
