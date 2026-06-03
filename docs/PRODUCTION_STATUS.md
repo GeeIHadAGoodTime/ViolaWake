@@ -36,6 +36,18 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 
 ## NOT verified (and what would verify it)
 
+- ❌ **API tunnel currently healthy.** Read-only audit on 2026-06-03 found
+  Cloudflare Tunnel `violawake-api`
+  (`7dbef1da-74e3-4d7f-bba9-aad4a3e72150`) reporting `down`, while
+  `https://api.violawake.com/api/health` and `/openapi.json` returned HTTP
+  530. Do not mark the backend live again until the tunnel is reconnected and
+  `/api/health` returns HTTP 200 from outside Docker.
+- ❌ **Nightly R2 backups are current.** Read-only R2 listing on 2026-06-03
+  found latest Postgres/app-data backup objects dated 2026-05-10. Verify the
+  Windows scheduled task, run `scripts/backup_to_r2_wrangler.sh`, then run
+  `python scripts/backup_restore_drill.py --max-age-hours 36 --env-file
+  .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env` before moving
+  this back to verified.
 - ✅ **Email actually sends. Resend configured 2026-05-07 20:31 UTC.** Domain `violawake.com` verified on Resend (DNS records autoconfigured via Cloudflare integration). `VIOLAWAKE_RESEND_API_KEY` set in `.env.production`, backend restarted. Verified live by registering two test users post-restart and observing backend log `violawake.email: Sent email to ... for subject Verify your ViolaWake email` followed by `email_verified=False` on the resulting user (confirming the email-required path is now active rather than the auto-verify fallback). Real-inbox delivery to a live mailbox not yet confirmed — recommend one register-and-verify with a real mailbox before announcing.
 - ❌ **Stripe checkout completes end-to-end (LIVE mode).** Checkout URL is issued in `cs_live_*` form. We have NOT confirmed: real card charge succeeds, webhook fires, subscription tier updates to `developer` in our DB within 30s, refund handling works, recurring invoice next month. To verify: charge your own real card $29, observe `tier=developer`, refund/cancel the subscription, observe `tier=free`.
 - ❌ **Account lockout actually triggers.** New code adds `failed_login_count` + `locked_until` columns and sets them on bad attempts. We confirmed the rate-limit (slowapi) blocks after 4 attempts, but we have NOT confirmed the per-account lockout (which would persist across IP changes). To verify: 5 wrong logins on one account, then a 6th from a fresh IP should still 401 with "Account temporarily locked".
