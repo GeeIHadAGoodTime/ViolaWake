@@ -163,7 +163,6 @@ tests/unit/test_detector_config.py
 tests/integration/test_wake_detector_e2e.py
 docs/adr/ADR-001-onnx-runtime.md
 docs/adr/ADR-002-oww-feature-extractor.md
-docs/PROVEN_TRAINING_RECIPE.md (the inference-contract half)
 ```
 
 **Success criteria (lane SC):**
@@ -259,6 +258,11 @@ console/frontend/dist/wasm/                       # built assets only
 tests/live/test_live_wasm.py
 ```
 
+**Cross-lane dependencies:** Lane 9 consumes the committed WASM assets through
+the frontend bundle, but `console/frontend/dist/wasm/` remains Lane 3-owned.
+Frontend build changes that move or rename the WASM bundle must coordinate
+with Lane 3.
+
 **Success criteria:**
 - WASM detector + Python SDK agree to within documented tolerance on a
   shared corpus subset (Python is the reference).
@@ -305,10 +309,13 @@ data/                                              # hf_cache, operator/, ...
 corpus/                                            # librispeech, musan,
                                                   # OWW features
 experiments/                                       # score-CSV exploration
-docs/PROVEN_TRAINING_RECIPE.md                     # (the training half)
+docs/PROVEN_TRAINING_RECIPE.md                     # canonical training recipe
 docs/TRAINING_PIPELINE_AUDIT_2026-05-07.md
-docs/ROADMAP_10_OF_10.md                           # training/eval roadmap
 ```
+
+**Cross-lane dependencies:** Lane 1 consumes the inference-contract portions
+of `docs/PROVEN_TRAINING_RECIPE.md`; contract-affecting recipe changes need
+Wake Detection review.
 
 **Success criteria:**
 - A from-scratch retrain on the documented corpus reaches the documented
@@ -513,6 +520,10 @@ docs/api/                                          # generated FastAPI docs
                                                   # this is backend OpenAPI)
 ```
 
+**Cross-lane dependencies:** Lane 11 may verify `docs/api/` regeneration as
+part of doc-sync and public-claim checks, but the generated files and OpenAPI
+source contract stay Lane 8-owned.
+
 **Success criteria:**
 - `GET /api/health` returns 200 from the live tunnel under nominal load.
 - The full sign-up → training-job → model-download flow completes on a
@@ -546,10 +557,6 @@ landed, but coverage gaps remain (full responsive check, cross-browser).
 console/frontend/                                  # React + Vite +
                                                   # everything BUT
                                                   # dist/wasm/
-console/frontend/dist/                             # built bundle
-                                                  # (gitignored except
-                                                  # what's intentionally
-                                                  # committed)
 tests/live/test_live_website.py
 tests/live/ACCESSIBILITY_AUDIT_2026-05-07.md
 .github/workflows/deploy-pages.yml
@@ -667,6 +674,11 @@ docs/archive/                                      # superseded docs
                                                   # (kept for trace)
 ```
 
+**Cross-lane dependencies:** Lane 12 may cite `docs/archive/` during
+governance reviews, but process and audit archives live in `_diag/`.
+`docs/archive/` is only for superseded public/developer docs registered in
+`docs/REGISTRY.md`.
+
 **Success criteria:**
 - Every numeric claim in `README.md`, the comparison pages, and the
   PyPI description traces to a named script + corpus in Lane 5.
@@ -698,21 +710,18 @@ check (see CLAUDE.md → "Orchestrator startup checklist").
 ```
 CLAUDE.md
 docs/LANE_LEDGER.md                                # this file
-docs/archive/                                      # → ALSO referenced by
-                                                  # Marketing; resolve by
-                                                  # moving Governance's
-                                                  # archives to
-                                                  # _diag/ instead
 audit/active/                                      # to be created;
                                                   # investigations live here
 _diag/                                             # dated investigation
                                                   # artifacts
-docs/ROADMAP_10_OF_10.md                          # ← also referenced by
-                                                  # Lane 4; resolve to
-                                                  # ONE lane (recommend
-                                                  # Training; remove from
-                                                  # Governance)
+docs/ROADMAP_10_OF_10.md                          # product roadmap
 ```
+
+**Cross-lane dependencies:** Lane 4 depends on the training/eval milestones in
+`docs/ROADMAP_10_OF_10.md`, but the multi-subsystem roadmap remains
+Governance-owned so roadmap updates stay coordinated across lanes. Lane 11
+owns archived public/developer docs under `docs/archive/`; Governance archives
+process and audit evidence under `_diag/`.
 
 **Why this lane exists:** the LANE_LEDGER itself, this CLAUDE.md, audit
 artifacts, and investigation dirs all need a home. Without one, they
