@@ -7,6 +7,8 @@ default threshold 0.80, and all four decision-policy gates.
 
 from __future__ import annotations
 
+import csv
+from collections import defaultdict
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,6 +24,15 @@ from violawake_sdk.wake_detector import (
     SAMPLE_RATE,
     WakeDetector,
 )
+
+BENCHMARK_V2_NEGATIVE_BARS = {
+    # category: (max false accepts at threshold 0.80, expected checked-in clip count)
+    "adversarial_alexa": (0, 105),
+    "adversarial_viola": (5, 105),
+    "noise": (0, 20),
+    "speech": (22, 200),
+    "speech_existing": (3, 270),
+}
 
 
 def _backend_session(score: float) -> MagicMock:
@@ -85,3 +96,19 @@ def test_detect_exercises_all_four_policy_gates_end_to_end(
     assert cooldown_detector.detect(loud_noise_frame) is False
 
     assert _detector(score=0.95).detect(loud_noise_frame, is_playing=True) is False
+
+
+def test_benchmark_v2_negative_categories_stay_under_documented_bars() -> None:
+    scores_path = Path(__file__).resolve().parents[2] / "benchmark_v2" / "violawake_scores_v2.csv"
+    categories: dict[str, list[float]] = defaultdict(list)
+    with scores_path.open(newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row["label"] == "negative":
+                categories[row["category"]].append(float(row["score"]))
+
+    assert set(BENCHMARK_V2_NEGATIVE_BARS).issubset(categories)
+    for category, (max_false_accepts, expected_total) in BENCHMARK_V2_NEGATIVE_BARS.items():
+        scores = categories[category]
+        false_accepts = sum(score >= DEFAULT_THRESHOLD for score in scores)
+        assert len(scores) == expected_total
+        assert false_accepts <= max_false_accepts
