@@ -77,29 +77,31 @@ The backup script uploads two objects per run:
 - `r2://violawake-backups/postgres/YYYY-MM-DD.sql.gz`
 - `r2://violawake-backups/app-data/YYYY-MM-DD.tar.gz`
 
-Required credentials:
+Required credentials for the scheduled Wrangler path:
 
 - `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN` with R2 bucket read/create permissions for privacy verification
-- `VIOLAWAKE_BACKUP_R2_ACCESS_KEY_ID`
-- `VIOLAWAKE_BACKUP_R2_SECRET_ACCESS_KEY`
+- `CLOUDFLARE_API_TOKEN` with R2 bucket read/create/list/object-read permissions
+- Wrangler logged in on the operator account used by Windows Task Scheduler
 
-If the script exits with a Cloudflare R2 `403`, create or extend the API token
-with R2 bucket read/create permissions. Do not use `--allow-unverified-privacy`
-for production backups unless you have manually confirmed the bucket has no
-public domain or custom-domain access.
+`scripts/backup_to_r2.py` is still available for S3-compatible R2 access, but
+that path additionally requires `VIOLAWAKE_BACKUP_R2_ACCESS_KEY_ID` and
+`VIOLAWAKE_BACKUP_R2_SECRET_ACCESS_KEY`.
 
-Manual run:
+Manual run of the same path used by Task Scheduler:
 
 ```bash
 cd /j/CLAUDE/PROJECTS/Wakeword
-python scripts/backup_to_r2.py --env-file .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env
+set -a
+source /j/CLAUDE/PROJECTS/FewerJobs/.env
+source .env.production
+set +a
+bash scripts/backup_to_r2_wrangler.sh
 ```
 
-Access check without dumping user data:
+Freshness and SQL-integrity check without starting Docker:
 
 ```bash
-python scripts/backup_to_r2.py --check-only --env-file .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env
+python scripts/backup_restore_drill.py --inspect-only --max-age-hours 36 --env-file .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env
 ```
 
 Windows Task Scheduler:
@@ -110,28 +112,35 @@ schtasks /Create /TN "ViolaWake Nightly R2 Backup" /XML "J:\CLAUDE\PROJECTS\Wake
 
 ## Restore procedure
 
-Set the same R2 env vars used by `scripts/backup_to_r2.py`, then download the target date:
+Restore drills MUST go into scratch Postgres. Do not pipe a backup into
+`wakeword-postgres-1`; that writes to production.
+
+Run the automated scratch restore drill:
 
 ```bash
-DATE=YYYY-MM-DD
-mkdir -p restore
-aws --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" s3 cp "s3://violawake-backups/postgres/${DATE}.sql.gz" "restore/${DATE}.sql.gz"
-aws --endpoint-url "https://${CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com" s3 cp "s3://violawake-backups/app-data/${DATE}.tar.gz" "restore/${DATE}.tar.gz"
+cd /j/CLAUDE/PROJECTS/Wakeword
+python scripts/backup_restore_drill.py --max-age-hours 36 --env-file .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env
 ```
 
-Restore Postgres:
+Expected success output includes:
 
-```bash
-gunzip -c "restore/${DATE}.sql.gz" | docker exec -i wakeword-postgres-1 psql -U violawake -d violawake
+```text
+Latest backup: r2://violawake-backups/postgres/YYYY-MM-DD.sql.gz
+Backup age: <36.0 hours
+Restore query OK:
+tables=<number>
+alembic_versions=<number>
 ```
 
-Restore `/app/data`:
+Emergency production restore is a separate founder-authorized operation. The
+operator should first pass the scratch restore drill, then stop writes to the
+production backend, take a fresh production snapshot, and only then restore
+into `wakeword-postgres-1`.
 
-```bash
-docker exec wakeword-backend-1 sh -lc 'mkdir -p /app/data && find /app/data -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
-cat "restore/${DATE}.tar.gz" | docker exec -i wakeword-backend-1 tar -xzf - -C /app/data
-docker compose -f docker-compose.production.yml restart backend
-```
+For `/app/data`, first download and inspect the matching tarball, then restore
+to a scratch directory or scratch container. Do not wipe `/app/data` in
+`wakeword-backend-1` during a drill.
+
 
 ## Live mic test
 
