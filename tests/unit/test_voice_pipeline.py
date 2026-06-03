@@ -334,7 +334,8 @@ class TestSpeak:
         pipeline._tts = None
         # _get_tts returns None when import fails
         with patch.object(pipeline, "_get_tts", return_value=None):
-            pipeline.speak("Hello")  # Should not raise
+            with pytest.raises(PipelineError, match="TTS not available"):
+                pipeline.speak("Hello")
 
     def test_speak_noop_when_stop_event_set(self) -> None:
         """speak() should do nothing if the pipeline is stopping."""
@@ -356,13 +357,14 @@ class TestSpeak:
         mock_tts.play.assert_called_once_with(b"audio_data")
 
     def test_speak_handles_tts_exception(self) -> None:
-        """speak() should log but not raise if TTS fails."""
+        """speak() should surface TTS failures instead of hiding them."""
         pipeline = _build_pipeline()
         pipeline._enable_tts = True
         mock_tts = MagicMock()
         mock_tts.synthesize.side_effect = RuntimeError("TTS broke")
         with patch.object(pipeline, "_get_tts", return_value=mock_tts):
-            pipeline.speak("Hello")  # Should not raise
+            with pytest.raises(PipelineError, match="TTS playback failed"):
+                pipeline.speak("Hello")
 
 
 # ---------------------------------------------------------------------------
@@ -558,11 +560,12 @@ class TestTranscribeAndRespond:
     """Test _transcribe_and_respond error and edge-case paths."""
 
     def test_stt_not_available(self) -> None:
-        """When STT is missing, returns to IDLE without crashing."""
+        """When STT is missing, the pipeline surfaces an error."""
         pipeline = _build_pipeline()
         pipeline._state = _STATE_TRANSCRIBING
         with patch.object(pipeline, "_get_stt", return_value=None):
-            pipeline._transcribe_and_respond(b"\x00" * 640)
+            with pytest.raises(PipelineError, match="STT not available"):
+                pipeline._transcribe_and_respond(b"\x00" * 640)
         assert pipeline._state == _STATE_IDLE
 
     def test_odd_length_audio_truncated(self) -> None:
@@ -583,19 +586,20 @@ class TestTranscribeAndRespond:
         assert pipeline._state == _STATE_IDLE
 
     def test_empty_audio_skips_transcription(self) -> None:
-        """Empty audio buffer is skipped."""
+        """Empty audio at the STT stage is surfaced as a pipeline error."""
         pipeline = _build_pipeline()
         pipeline._state = _STATE_TRANSCRIBING
         mock_stt = MagicMock()
 
         with patch.object(pipeline, "_get_stt", return_value=mock_stt):
-            pipeline._transcribe_and_respond(b"")
+            with pytest.raises(PipelineError, match="empty audio buffer"):
+                pipeline._transcribe_and_respond(b"")
         # Empty after truncation check -> skip
         mock_stt.transcribe.assert_not_called()
         assert pipeline._state == _STATE_IDLE
 
     def test_empty_transcription_returns_to_idle(self) -> None:
-        """Whitespace-only transcription does not dispatch command."""
+        """Whitespace-only transcription raises and does not dispatch command."""
         pipeline = _build_pipeline()
         pipeline._state = _STATE_TRANSCRIBING
         mock_stt = MagicMock()
@@ -607,7 +611,8 @@ class TestTranscribeAndRespond:
             called.append(text)
 
         with patch.object(pipeline, "_get_stt", return_value=mock_stt):
-            pipeline._transcribe_and_respond(b"\x01\x00" * 320)
+            with pytest.raises(PipelineError, match="empty transcription"):
+                pipeline._transcribe_and_respond(b"\x01\x00" * 320)
         assert called == []
         assert pipeline._state == _STATE_IDLE
 
@@ -648,14 +653,15 @@ class TestTranscribeAndRespond:
         assert pipeline._state == _STATE_IDLE
 
     def test_transcription_exception_returns_to_idle(self) -> None:
-        """Exception in STT returns to IDLE."""
+        """Exception in STT raises PipelineError and returns to IDLE."""
         pipeline = _build_pipeline()
         pipeline._state = _STATE_TRANSCRIBING
         mock_stt = MagicMock()
         mock_stt.transcribe.side_effect = RuntimeError("STT crashed")
 
         with patch.object(pipeline, "_get_stt", return_value=mock_stt):
-            pipeline._transcribe_and_respond(b"\x01\x00" * 320)
+            with pytest.raises(PipelineError, match="Transcription failed"):
+                pipeline._transcribe_and_respond(b"\x01\x00" * 320)
         assert pipeline._state == _STATE_IDLE
 
 
@@ -744,11 +750,11 @@ class TestDispatchWithTTS:
 class TestLazyEngineLoading:
     """Test _get_stt and _get_tts lazy loading."""
 
-    def test_get_stt_returns_none_on_import_error(self) -> None:
+    def test_get_stt_raises_on_import_error(self) -> None:
         pipeline = _build_pipeline()
         with patch("builtins.__import__", side_effect=ImportError("no stt")):
-            result = pipeline._get_stt()
-        assert result is None
+            with pytest.raises(ImportError, match="no stt"):
+                pipeline._get_stt()
 
     def test_get_stt_caches_engine(self) -> None:
         pipeline = _build_pipeline()

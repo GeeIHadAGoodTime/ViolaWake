@@ -151,9 +151,19 @@ class STTEngine:
 
             try:
                 from faster_whisper import WhisperModel  # type: ignore[import]
+            except ModuleNotFoundError as e:
+                if e.name == "faster_whisper":
+                    raise ImportError(
+                        "faster-whisper is not installed. "
+                        "Install with: pip install 'violawake[stt]'"
+                    ) from e
+                raise ImportError(
+                    f"faster-whisper is installed but failed to import dependency "
+                    f"'{e.name}': {e}"
+                ) from e
             except ImportError as e:
                 raise ImportError(
-                    "faster-whisper is not installed. Install with: pip install 'violawake[stt]'"
+                    f"faster-whisper is installed but failed to import: {e}"
                 ) from e
 
             logger.info("Loading Whisper model '%s'...", self.model_name)

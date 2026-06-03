@@ -11,6 +11,7 @@ Tests:
 
 from __future__ import annotations
 
+import builtins
 import sys
 import time
 from pathlib import Path
@@ -166,6 +167,19 @@ class TestSTTEngineErrorHandling:
         # Remove faster_whisper from sys.modules if present
         with patch.dict("sys.modules", {"faster_whisper": None}):
             with pytest.raises(ImportError, match="faster-whisper"):
+                engine.transcribe(np.array([0.1], dtype=np.float32))
+
+    def test_import_error_preserves_transitive_dependency_failure(self) -> None:
+        engine = STTEngine(model="base")
+        real_import = builtins.__import__
+
+        def fake_import(name: str, *args: object, **kwargs: object) -> object:
+            if name == "faster_whisper":
+                raise ImportError("DLL load failed while importing _core")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=fake_import):
+            with pytest.raises(ImportError, match="installed but failed to import"):
                 engine.transcribe(np.array([0.1], dtype=np.float32))
 
     def test_transcribe_empty_segments(self) -> None:

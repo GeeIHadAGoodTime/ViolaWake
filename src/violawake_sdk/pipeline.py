@@ -7,7 +7,7 @@ import inspect
 import logging
 import threading
 from collections.abc import Callable, Iterator
-from typing import Any, Literal, Protocol, TypeAlias
+from typing import Any, Literal, NoReturn, Protocol, TypeAlias
 
 import numpy as np
 
@@ -27,6 +27,7 @@ PipelineEventName: TypeAlias = Literal[
     "transcribe_start",
     "transcribe_end",
     "response",
+    "error",
 ]
 PipelineEventCallback: TypeAlias = Callable[..., object]
 
@@ -38,6 +39,7 @@ _SUPPORTED_EVENTS: frozenset[PipelineEventName] = frozenset(
         "transcribe_start",
         "transcribe_end",
         "response",
+        "error",
     }
 )
 
@@ -227,17 +229,25 @@ class VoicePipeline:
         """Synthesize and play text via TTS."""
         if not self._enable_tts or self._stop_event.is_set():
             return
-
-        tts = self._get_tts()
-        if tts is None:
-            logger.warning("TTS not available - install 'violawake[tts]'")
+        if not text.strip():
             return
 
         try:
+            tts = self._get_tts()
+            if tts is None:
+                self._fail(
+                    "TTS not available - install 'violawake[tts]'",
+                    stage="tts",
+                )
             audio = tts.synthesize(text)
+            if np.asarray(audio).size == 0:
+                self._fail("TTS synthesized empty audio for non-empty text", stage="tts")
             tts.play(audio)
+        except PipelineError:
+            raise
         except Exception as exc:
             logger.exception("TTS playback failed for text '%.50s': %s", text, exc)
+            self._fail(f"TTS playback failed: {exc}", stage="tts", cause=exc)
 
     def _run_loop(self) -> None:
         """Main microphone capture and detection loop."""
@@ -286,16 +296,18 @@ class VoicePipeline:
 
     def _transcribe_and_respond(self, audio_bytes: bytes) -> None:
         """Transcribe audio and dispatch command handlers."""
-        stt = self._get_stt()
-        if stt is None:
-            logger.warning("STT not available - install 'violawake[stt]'")
-            self._set_last_command(None)
-            self._emit("transcribe_end", text="")
-            self._set_state(_STATE_IDLE)
-            return
-
         transcribe_end_emitted = False
         try:
+            stt = self._get_stt()
+            if stt is None:
+                self._set_last_command(None)
+                self._emit("transcribe_end", text="")
+                transcribe_end_emitted = True
+                self._fail(
+                    "STT not available - install 'violawake[stt]'",
+                    stage="stt",
+                )
+
             if len(audio_bytes) % 2 != 0:
                 logger.warning(
                     "Audio buffer length %d is not a multiple of 2 bytes (int16); truncating",
@@ -308,7 +320,7 @@ class VoicePipeline:
                 self._set_last_command(None)
                 self._emit("transcribe_end", text="")
                 transcribe_end_emitted = True
-                return
+                self._fail("empty audio buffer reached STT stage", stage="stt")
 
             pcm = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
             if self._streaming_stt:
@@ -328,24 +340,34 @@ class VoicePipeline:
             else:
                 text = stt.transcribe(pcm)
 
-            self._set_last_command(text.strip() or None)
+            stripped_text = text.strip()
+            self._set_last_command(stripped_text or None)
             self._emit("transcribe_end", text=text)
             transcribe_end_emitted = True
+
+            if not stripped_text:
+                self._fail("STT produced empty transcription", stage="stt")
 
             if self._stop_event.is_set():
                 logger.debug("Pipeline stopping; dropping transcription result")
                 return
 
-            if text.strip():
-                logger.info("Command: '%s'", text)
-                self._dispatch_command(text)
-            else:
-                logger.debug("Empty transcription - returning to idle")
-        except Exception:
+            logger.info("Command: '%s'", stripped_text)
+            self._dispatch_command(stripped_text)
+        except PipelineError:
+            raise
+        except ImportError as exc:
+            logger.exception("STT unavailable")
+            if not transcribe_end_emitted:
+                self._set_last_command(None)
+                self._emit("transcribe_end", text="")
+            self._fail(f"STT unavailable: {exc}", stage="stt", cause=exc)
+        except Exception as exc:
             logger.exception("Transcription failed")
             if not transcribe_end_emitted:
                 self._set_last_command(None)
                 self._emit("transcribe_end", text="")
+            self._fail(f"Transcription failed: {exc}", stage="stt", cause=exc)
         finally:
             self._clear_worker_thread()
             self._set_state(_STATE_IDLE)
@@ -366,18 +388,20 @@ class VoicePipeline:
                     break
                 try:
                     response = handler(text)
-                    if not response:
-                        continue
-                    self._emit(
-                        "response",
-                        command=text,
-                        response=response,
-                        handler=handler.__name__,
-                    )
-                    if self._enable_tts and not self._stop_event.is_set():
-                        self.speak(response)
                 except Exception:
                     logger.exception("Command handler '%s' failed", handler.__name__)
+                    continue
+
+                if not response:
+                    continue
+                self._emit(
+                    "response",
+                    command=text,
+                    response=response,
+                    handler=handler.__name__,
+                )
+                if self._enable_tts and not self._stop_event.is_set():
+                    self.speak(response)
         finally:
             self._set_state(_STATE_IDLE)
 
@@ -448,6 +472,20 @@ class VoicePipeline:
         accepted = {name: value for name, value in payload.items() if name in signature.parameters}
         callback(**accepted)
 
+    def _fail(
+        self,
+        message: str,
+        *,
+        stage: str,
+        cause: BaseException | None = None,
+    ) -> NoReturn:
+        """Emit a pipeline error event and raise ``PipelineError``."""
+        error = PipelineError(message)
+        self._emit("error", error=error, stage=stage, cause=cause)
+        if cause is not None:
+            raise error from cause
+        raise error
+
     def _set_state(self, state: str) -> None:
         """Update the pipeline state under lock."""
         with self._state_lock:
@@ -484,13 +522,10 @@ class VoicePipeline:
     def _get_stt(self) -> LazySTTEngine | None:
         """Lazy-load the STT engine."""
         if self._stt is None:
-            try:
-                from violawake_sdk.stt import STTEngine
+            from violawake_sdk.stt import STTEngine
 
-                self._stt = STTEngine(model=self._stt_model)
-                self._stt.prewarm()
-            except ImportError:
-                return None
+            self._stt = STTEngine(model=self._stt_model)
+            self._stt.prewarm()
         return self._stt
 
     def _get_tts(self) -> LazyTTSEngine | None:
