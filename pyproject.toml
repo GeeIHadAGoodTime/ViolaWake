@@ -160,6 +160,7 @@ Repository = "https://github.com/GeeIHadAGoodTime/ViolaWake"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
+    "_diag/",
     "_training_corpus/",
     "benchmark_v2/",
     "benchmark_oww/",
@@ -191,7 +192,7 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/violawake_sdk"]
+packages = ["src/violawake_sdk", "src/violawake"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

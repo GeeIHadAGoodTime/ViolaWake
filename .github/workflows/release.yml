@@ -83,6 +83,63 @@ jobs:
           pip install twine
           twine check dist/*
 
+      - name: Smoke test built wheel
+        run: |
+          python -m venv .wheel-smoke
+          . .wheel-smoke/bin/activate
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          python - <<'PY'
+          import importlib
+          import importlib.metadata as metadata
+
+          import violawake
+          import violawake_sdk
+          from violawake_sdk import *  # noqa: F401,F403
+          from violawake_sdk.models import ModelCache
+
+          required_modules = [
+              "violawake_sdk.tools.download_model",
+              "violawake_sdk.tools.evaluate",
+              "violawake_sdk.tools.train",
+              "violawake_sdk.tools.collect_samples",
+              "violawake_sdk.tools.download_corpus",
+              "violawake_sdk.tools.expand_corpus",
+              "violawake_sdk.tools.streaming_eval",
+              "violawake_sdk.tools.test_confusables",
+              "violawake_sdk.tools.contamination_check",
+              "violawake_sdk.tools.generate_samples",
+          ]
+          for module_name in required_modules:
+              importlib.import_module(module_name)
+
+          scripts = {
+              ep.name: ep.value
+              for ep in metadata.entry_points(group="console_scripts")
+              if ep.name.startswith("violawake-")
+          }
+          missing_scripts = {
+              "violawake-train",
+              "violawake-eval",
+              "violawake-collect",
+              "violawake-download",
+              "violawake-download-corpus",
+              "violawake-expand-corpus",
+              "violawake-streaming-eval",
+              "violawake-test-confusables",
+              "violawake-contamination-check",
+              "violawake-generate",
+          } - set(scripts)
+          if missing_scripts:
+              raise SystemExit(f"missing console scripts: {sorted(missing_scripts)}")
+          if violawake.__version__ != violawake_sdk.__version__:
+              raise SystemExit("violawake shim version does not match violawake_sdk")
+          if not callable(ModelCache):
+              raise SystemExit("ModelCache is not importable")
+          print(f"wheel smoke ok: violawake {violawake_sdk.__version__}")
+          PY
+          violawake-download --help >/tmp/violawake-download-help.txt
+
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -170,7 +227,7 @@ jobs:
   update-docs:
     name: Update model registry
     runs-on: ubuntu-22.04
-    needs: github-release
+    needs: [validate, github-release]
 
     steps:
       - uses: actions/checkout@v4
@@ -188,4 +245,4 @@ jobs:
           git config user.email "bot@violawake.dev"
           git add src/violawake_sdk/models.py
           git commit -m "chore: update model registry for v${{ needs.validate.outputs.version }}" || echo "No changes to commit"
-          git push origin main
+          git push origin HEAD:master
