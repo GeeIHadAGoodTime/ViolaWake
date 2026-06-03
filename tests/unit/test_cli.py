@@ -413,6 +413,44 @@ class TestDownloadCLI:
                     dl_mod.main()
                 assert exc_info.value.code == 1
 
+    def test_download_falls_back_to_builtin_downloader_without_download_extra(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Core installs should still support the documented model download command."""
+        from violawake_sdk.models import ModelSpec
+        import violawake_sdk.models as models
+        import violawake_sdk.tools.download_model as dl_mod
+
+        fake_spec = ModelSpec(
+            name="temporal_cnn",
+            url="https://example.com/temporal_cnn.onnx",
+            sha256="a" * 64,
+            size_bytes=4,
+            description="test model",
+        )
+        downloaded_path = tmp_path / "temporal_cnn.onnx"
+
+        def missing_download_extra(*args: object, **kwargs: object) -> Path:
+            raise ImportError("requests is required for model downloading")
+
+        def builtin_download(model_name: str, spec: ModelSpec) -> Path:
+            downloaded_path.write_bytes(b"fake")
+            return downloaded_path
+
+        monkeypatch.setattr(models, "MODEL_REGISTRY", {"temporal_cnn": fake_spec})
+        monkeypatch.setattr(models, "download_model", missing_download_extra)
+        monkeypatch.setattr(models, "_auto_download_model", mock.Mock(side_effect=builtin_download))
+        monkeypatch.setattr(models, "get_model_dir", lambda: tmp_path)
+        monkeypatch.setattr(sys, "argv", ["violawake-download", "--model", "temporal_cnn"])
+
+        dl_mod.main()
+
+        models._auto_download_model.assert_called_once_with("temporal_cnn", fake_spec)
+        assert f"Done. Models cached to {tmp_path}" in capsys.readouterr().out
+
     def test_cli_wrapper_help(self) -> None:
         """The cli.download wrapper re-exports the same main."""
         result = _run_cli("violawake_sdk.cli.download", ["--help"])
