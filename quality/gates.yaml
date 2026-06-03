@@ -1,0 +1,14 @@
+# Quality Gate Registry
+#
+# Schema:
+# gates:
+#   - gate_id: <kebab-case-id>
+#     contract: <one sentence describing the regression shape this gate catches>
+#     detector: <path to the detector script>
+#     own_tests:
+#       - <path to a test that proves the detector catches the broken shape>
+#       - <path to a test that proves the detector stays quiet on the fixed shape>
+#
+# This bootstrap file intentionally starts with an empty registry. Audit lanes
+# add entries through the orchestrator integration commit.
+gates: []
