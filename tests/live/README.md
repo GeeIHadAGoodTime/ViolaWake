@@ -54,7 +54,6 @@ VIOLAWAKE_LIVE=1 pytest tests/live --no-cov -ra -vv
 
 ## Interpreting Common Failures
 
-- `/api/billing/checkout-session` returns `404`: the deployed API does not expose the endpoint named in the claim. Current source uses `/api/billing/checkout`.
 - `/api/billing/checkout` returns `503`: Stripe secret or price env vars are not configured on the backend.
 - Registration returns `email_verified=true`: Resend is disabled or email sending failed and the backend auto-verified the user.
 - Email test skips with an unverified user: Resend may be configured, but no automated inbox was provided to verify delivery.

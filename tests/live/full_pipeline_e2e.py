@@ -170,7 +170,7 @@ def main() -> int:
 
         # ──────────────────────────────────────────────────────────────────
         step("7. Issue download token + download the model ONNX")
-        r = client.post("/api/auth/download-token", json={"action": "model_download", "model_id": model_id})
+        r = client.post("/api/auth/download-token", json={"action": "model_download", "resource_id": model_id})
         if r.status_code != 200:
             fail(f"download-token {r.status_code}: {r.text}")
         dl_token = r.json().get("token") or r.json().get("download_token")
