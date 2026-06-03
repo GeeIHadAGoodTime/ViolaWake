@@ -135,9 +135,7 @@ Mycroft Precise and Snowboy still matter as search and migration channels, but t
 
 ### 5.1 Open SDK Plus Real Console
 
-This is the biggest narrative correction.
-
-ViolaWake is no longer forced into the weakest possible position of "great training code, but you still need the CLI." The product now includes a working browser-based recording and training flow, which materially improves its competitiveness against both Picovoice and ad-hoc OSS workflows.
+ViolaWake is no longer limited to "great training code, but you still need the CLI." The product now includes a working browser-based recording and training flow, which materially improves its competitiveness against both Picovoice and ad-hoc OSS workflows.
 
 ### 5.2 Portable Ownership
 

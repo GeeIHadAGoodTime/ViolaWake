@@ -18,6 +18,8 @@
 
 | Document | Path | Scope | Last Updated | Staleness Signals |
 |----------|------|-------|-------------|-------------------|
+| **Project Contract** | `CLAUDE.md` | Repo rules, launch evidence, public-copy canon, lane discipline, and operator workflow | 2026-06-03 | Any lane, release, deploy, public-copy, or workflow rule change |
+| **Lane Ledger** | `docs/LANE_LEDGER.md` | Authoritative lane ownership, scope status, oracle status, and lane success criteria | 2026-06-03 | Lane ownership, scope, oracle, or capability-map change |
 | **Production Status** | `docs/PRODUCTION_STATUS.md` | Current live state, what's verified, operational levers — read FIRST after any deploy | 2026-05-07 | Any deploy, env-var change, or smoke-test result |
 | **Deployment** | `docs/DEPLOYMENT.md` | How frontend + backend + tunnel actually deploy. Manual steps, not auto. | 2026-05-07 | Hosting platform change, tunnel reconfig, env-var schema change |
 | **Operations Runbook** | `docs/OPERATIONS_RUNBOOK.md` | Procedures for dashboard-mediated config changes (Resend, Stripe live mode, key rotation). Things only the operator can do. | 2026-05-07 | New external service added, account / key change |
@@ -25,6 +27,8 @@
 | **SEO Audit** | `docs/SEO_AUDIT.md` | Crawler audit, competitor facts, keyword landscape, and static marketing architecture decision. | 2026-05-08 | SEO architecture, crawler behavior, competitor positioning, or SERP target change |
 | **SEO Runbook** | `docs/SEO_RUNBOOK.md` | Search Console, Bing Webmaster, IndexNow, Cloudflare Crawler Hints, Plausible funnel setup, and post-deploy crawler checks. | 2026-05-08 | Indexing workflow, analytics event, sitemap, or crawler-file change |
 | **SEO Outreach** | `docs/SEO_OUTREACH.md` | Rules-aware GitHub/dev.to/Reddit/HN outreach targets for cited discovery. | 2026-05-08 | New outreach target, launch post, or citation strategy change |
+| Developer Docs Landing | `docs/index.html` | Static SDK docs landing page that links README, API docs, and contributor docs | 2026-06-03 | README, PyPI package metadata, API docs path, or public install guidance change |
+| Generated API Docs | `docs/api/index.html` | pdoc-generated public API reference entry point | 2026-06-03 | Public SDK symbol added, removed, renamed, or doc generation tool changes |
 | Product Requirements | `docs/PRD.md` | What we build, feature priorities, metrics | 2026-03-17 | New competitive entrant, market shift, major pivot |
 | Test Strategy | `docs/TEST_STRATEGY.md` | Testing philosophy, tiers, coverage requirements | 2026-03-17 | New test tier added, CI pipeline change |
 | Business Plan | `docs/BUSINESS_PLAN.md` | Revenue model, pricing, growth | 2026-03-26 | Pricing or market strategy change |
@@ -36,6 +40,7 @@
 | Architecture | `docs/ARCHITECTURE.md` | System architecture overview | 2026-04-05 | Major structural change |
 | Changelog | `CHANGELOG.md` | Release history and notable changes | 2026-04-05 | New release shipped |
 | Security | `SECURITY.md` | Security policy, vulnerability reporting | 2026-04-05 | New threat model or disclosure process change |
+| Console Security Notes | `docs/SECURITY.md` | Console upload hardening, container security notes, and WAF rule status | 2026-06-03 | Upload limits, decoder sidecar, container hardening, WAF rules, or security-control change |
 | Contributing | `CONTRIBUTING.md` | Contributor guidelines, dev setup | 2026-04-05 | Process or tooling change |
 | Progress | `PROGRESS.md` | Current development progress tracker | 2026-04-05 | Milestone completion or priority shift |
 | Release Notes | `RELEASE_NOTES.md` | User-facing release notes | 2026-04-05 | New release shipped |
@@ -101,6 +106,7 @@ Documents at the repo root that are audit-era records and candidates for archiva
 | Functional Gap Analysis | `FUNCTIONAL_GAP_ANALYSIS.md` | Point-in-time gap audit doc |
 | E2E Readiness | `E2E_READINESS.md` | Point-in-time end-to-end readiness audit doc |
 | Adversary Audit | `ADVERSARY_AUDIT.md` | Point-in-time adversary/security audit doc |
+| Build vs Buy Audit | `BUILD_VS_BUY_AUDIT.md` | Point-in-time console build-vs-buy audit doc |
 
 ---
 

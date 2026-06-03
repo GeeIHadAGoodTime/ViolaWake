@@ -1,6 +1,6 @@
 # ViolaWake SDK - Open Source Custom Wake Word Detection
 
-**The open-source alternative to Porcupine.** A production-tested wake word engine with accessible training, ONNX inference, and a Python-first SDK.
+**The open-source alternative to Porcupine.** A wake word SDK with accessible training, ONNX inference, and a Python-first API.
 
 [![PyPI version](https://badge.fury.io/py/violawake.svg)](https://badge.fury.io/py/violawake)
 [![CI](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml/badge.svg)](https://github.com/GeeIHadAGoodTime/ViolaWake/actions/workflows/ci.yml)
@@ -33,7 +33,7 @@ Feature comparison below is a public-docs snapshot plus current ViolaWake SDK ca
 | **Python SDK** | First-class | C wrapper | First-class |
 | **Commercial licensing** | Free SDK | Commercial plans | Free |
 
-**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, production-hardened data augmentation (gain, time stretch, pitch shift, noise mixing, pink noise, synthetic RIR), and a 4-gate decision policy that suppresses false positives during music playback. In our [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md) run on a shared 700-file negative corpus and 180 TTS positives per system, ViolaWake's `temporal_cnn` model reached **EER 5.49%** vs openWakeWord `alexa` at **8.24%**; both systems were evaluated on their own wake word and on synthetic/TTS audio rather than real-speaker recordings.
+**Our moat:** Open training code, transparent evaluation with reproducible benchmarks, documented data augmentation (gain, time stretch, pitch shift, noise mixing, pink noise, synthetic RIR), and a 4-gate decision policy that suppresses false positives during music playback. In our [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md) run on a shared 700-file negative corpus and 180 TTS positives per system, ViolaWake's `temporal_cnn` model reached **EER 5.49%** vs openWakeWord `alexa` at **8.24%**; both systems were evaluated on their own wake word and on synthetic/TTS audio rather than real-speaker recordings.
 
 > **A note on accuracy claims:** Benchmark v2 uses 20 Edge TTS voices, 3 augmentations (clean, noisy, reverb), 1280-sample streaming inference, and a shared negative set spanning adversarial confusables, speech, and noise. Real-world accuracy depends on your microphones, speakers, and background audio. Reproduce or extend the benchmark via [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md), then run `violawake-eval` on your own data.
 
@@ -353,12 +353,12 @@ with VADEngine(backend="webrtc") as vad:
     print(vad.backend_name)  # "webrtc", "silero", or "rms"
 ```
 
-| Backend | Engine | Latency | Accuracy | Dependencies |
-|---------|--------|---------|----------|--------------|
-| `webrtc` | WebRTC VAD | <1ms | Good | `webrtcvad` (install via `[vad]` extra) |
-| `silero` | Silero VAD | ~2ms | Best | `torch` or `onnxruntime` |
-| `rms` | RMS heuristic | <0.1ms | Basic | None (built-in) |
-| `auto` | Best available | Varies | Varies | Tries webrtc -> silero -> rms |
+| Backend | Engine | Operational role | Dependencies |
+|---------|--------|------------------|--------------|
+| `webrtc` | WebRTC VAD | Default low-overhead VAD | `webrtcvad` (install via `[vad]` extra) |
+| `silero` | Silero VAD | Neural VAD option | `torch` or `onnxruntime` |
+| `rms` | RMS heuristic | Built-in fallback | None |
+| `auto` | Best available | Tries webrtc -> silero -> rms | Optional extras as installed |
 
 ---
 
@@ -664,12 +664,12 @@ detector = WakeDetector(
 └─────────────────────────────────────────────────────────────┘
 ```
 
-| Module | Engine | Size | Latency |
-|--------|--------|------|---------|
-| Wake word | Temporal CNN on OWW embeddings (ONNX) | 102 KB wake head + 1.33 MB shared OWW backbone = 1.43 MB total runtime footprint | ~8ms/frame |
-| VAD | WebRTC VAD / Silero / RMS heuristic | <1 MB | <1ms/frame |
-| STT | faster-whisper `base` | 145 MB | 0.5-2s |
-| TTS | Kokoro-82M (ONNX) | 326 MB | 0.3-0.8s/sentence |
+| Module | Engine | Notes |
+|--------|--------|-------|
+| Wake word | Temporal CNN on OWW embeddings (ONNX) | On-device wake detector |
+| VAD | WebRTC VAD / Silero / RMS heuristic | Optional speech gating |
+| STT | faster-whisper `base` | Optional transcription backend |
+| TTS | Kokoro ONNX | Optional local speech synthesis |
 
 ### Inference Backends
 
@@ -730,11 +730,11 @@ violawake-eval \
 
 Three architectures are available for training:
 
-| Architecture | Class | Params | Best For |
-|-------------|-------|--------|----------|
-| `temporal_cnn` | `TemporalCNN` | ~25K | **Production default** -- best accuracy/speed tradeoff |
-| `temporal_convgru` | `TemporalConvGRU` | ~18K | Smallest model, hybrid CNN+GRU |
-| `mlp` | MLP on single embedding | ~4K | Legacy, fastest inference |
+| Architecture | Class | Role |
+|-------------|-------|------|
+| `temporal_cnn` | `TemporalCNN` | **Production default** -- best benchmarked accuracy/speed tradeoff |
+| `temporal_convgru` | `TemporalConvGRU` | Reserve hybrid CNN+GRU architecture |
+| `mlp` | MLP on single embedding | Legacy architecture |
 
 ### Training Infrastructure
 
@@ -766,11 +766,11 @@ Synthetic room impulse responses can be generated automatically when no real RIR
 ### Auto-Generated Training Data
 
 `violawake-train` automatically generates:
-- **TTS positives** -- 20 Edge TTS voices x 3 phrase variants x 3 augmentation conditions
+- **TTS positives** -- Edge TTS voices, phrase variants, and augmentation conditions
 - **Confusable negatives** -- 16+ phonetic variants via phonetic substitution tables (b/p, d/t, f/v, g/j, etc.)
 - **Speech negatives** -- common English phrases that are not the wake word
 
-### Proof: "Operator" Custom Wake Word (89 seconds, EER 7.2%)
+### Proof: "Operator" Custom Wake Word Benchmark
 
 | | ViolaWake "viola" | ViolaWake "operator" | OWW "alexa" (pre-trained) |
 |---|---|---|---|
@@ -778,7 +778,7 @@ Synthetic room impulse responses can be generated automatically when no real RIR
 | **ROC AUC** | 0.988 | 0.984 | 0.956 |
 | **Training time** | ~48s | **89s** | N/A (pre-trained) |
 
-Full methodology: [`benchmark_v2/OPERATOR_BENCHMARK.md`](benchmark_v2/OPERATOR_BENCHMARK.md)
+Full methodology and reproducer: [`benchmark_v2/OPERATOR_BENCHMARK.md`](benchmark_v2/OPERATOR_BENCHMARK.md)
 
 ### Programmatic Evaluation API
 
@@ -811,7 +811,7 @@ ViolaWake also ships a full browser-based alternative to the CLI training flow. 
 ### Workflow
 
 1. **Register** and verify your email
-2. **Record** 10 voice samples in the browser
+2. **Record** voice samples in the browser
 3. **Train** — the server trains a model and streams progress via SSE
 4. **Download** the finished `.onnx` model from the training page or dashboard
 
@@ -925,20 +925,20 @@ violawake-contamination-check --train data/train/ --eval data/test/ --cosine-thr
 
 Models are versioned and published to GitHub Releases. Download separately (too large for PyPI):
 
-For wake detection, `violawake-download` fetches the ViolaWake head only. `WakeDetector` also depends on the shared OpenWakeWord backbone runtime managed by the installed `openwakeword` package. In product docs, use the current registry-backed footprint: **102 KB wake head + 1.33 MB shared backbone = 1.43 MB total runtime footprint**.
+For wake detection, `violawake-download` fetches the ViolaWake head only. `WakeDetector` also depends on the shared OpenWakeWord backbone runtime managed by the installed `openwakeword` package. Use `violawake-list-models` or the model registry for current artifact sizes and hashes.
 
 ```bash
-violawake-download --model temporal_cnn           # default wake head, 102 KB
-violawake-download --model kokoro_v1_0             # TTS model, 326 MB
-violawake-download --model kokoro_voices_v1_0      # TTS voices, 28 MB
+violawake-download --model temporal_cnn           # default wake head
+violawake-download --model kokoro_v1_0             # TTS model
+violawake-download --model kokoro_voices_v1_0      # TTS voices
 ```
 
-| Model | Type | Size | EER* | Notes |
-|-------|------|------|------|-------|
-| `temporal_cnn.onnx` | Temporal CNN on OWW embeddings | 102 KB | 5.49% | Production default; pairs with 1.33 MB shared OWW backbone for 1.43 MB total runtime footprint |
-| `temporal_convgru.onnx` | Temporal Conv-GRU on OWW embeddings | ~81 KB | -- | Reserve model |
-| ~~`r3_10x_s42.onnx`~~ | MLP on OWW embeddings | ~34 KB | -- | **Deprecated** |
-| `kokoro-v1.0.onnx` | Kokoro-82M TTS | ~326 MB | -- | Apache 2.0 |
+| Model | Type | Benchmark / status | Notes |
+|-------|------|--------------------|-------|
+| `temporal_cnn.onnx` | Temporal CNN on OWW embeddings | 5.49% EER in benchmark v2 | Production default |
+| `temporal_convgru.onnx` | Temporal Conv-GRU on OWW embeddings | Not public-benchmarked | Reserve model |
+| ~~`r3_10x_s42.onnx`~~ | MLP on OWW embeddings | Not current | **Deprecated** |
+| `kokoro-v1.0.onnx` | Kokoro TTS | Not a wake benchmark model | Apache 2.0 |
 
 *EER from [`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md): shared 700-file negative corpus, 180 TTS positives per system, same 20 voices, same 3 augmentations, 1280-sample streaming inference.
 
@@ -1054,14 +1054,16 @@ Safe to share a `WakeDetector` across threads. For asyncio, use `AsyncWakeDetect
 
 ## Performance Benchmarks
 
-Measured on i7-12700H, Windows 11, RTX 3060 (CPU inference):
+Run latency benchmarks on your target machine instead of relying on a fixed
+hardware snapshot:
 
-| Operation | Latency (p50) | Latency (p99) |
-|-----------|--------------|--------------|
-| Wake word inference (20ms frame) | 7.8 ms | 12.1 ms |
-| VAD (WebRTC, 20ms frame) | 0.4 ms | 0.8 ms |
-| STT (Whisper base, 3s audio) | 680 ms | 1.2s |
-| TTS first audio (Kokoro, 1 sentence) | 310 ms | 580 ms |
+```bash
+pytest tests/benchmarks/bench_latency.py --benchmark-json=benchmark-results/latency.json
+```
+
+The benchmark suite covers wake-word inference, VAD, STT, and TTS latency. It
+skips model-dependent cases when the required model files or optional extras
+are not installed.
 
 **Wake word accuracy** ([`benchmark_v2/BENCHMARK_REPORT_v2.md`](benchmark_v2/BENCHMARK_REPORT_v2.md)):
 - In benchmark v2, `temporal_cnn` scored **EER 5.49%** and **ROC AUC 0.9877** on a shared 700-file negative corpus and 180 TTS positives.
