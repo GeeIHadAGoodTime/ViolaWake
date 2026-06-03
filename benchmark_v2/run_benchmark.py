@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sys
 import time
 import wave
@@ -30,15 +31,13 @@ from pathlib import Path
 import numpy as np
 
 # ── ViolaWake imports ──
-sys.path.insert(0, "J:/CLAUDE/PROJECTS/Wakeword/src")
-from violawake_sdk.wake_detector import WakeDetector
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # ── OpenWakeWord imports ──
-from openwakeword.model import Model as OWWModel
 
 # ── Paths ──
-CORPUS_DIR = Path("J:/CLAUDE/PROJECTS/Wakeword/benchmark_v2/corpus")
-OUTPUT_DIR = Path("J:/CLAUDE/PROJECTS/Wakeword/benchmark_v2")
+CORPUS_DIR = Path(os.environ.get("VIOLAWAKE_BENCHMARK_CORPUS", REPO_ROOT / "benchmark_v2" / "corpus"))
+OUTPUT_DIR = Path(os.environ.get("VIOLAWAKE_BENCHMARK_OUTPUT", REPO_ROOT / "benchmark_v2"))
 
 # Streaming config — matches OWW backbone's native chunk size
 CHUNK_SAMPLES = 1280  # 80ms at 16kHz
@@ -72,7 +71,7 @@ def load_wav_int16(path: Path) -> np.ndarray:
 
 # ── Streaming scoring ──
 
-def score_violawake_streaming(detector: WakeDetector, audio: np.ndarray) -> tuple[float, list[float]]:
+def score_violawake_streaming(detector, audio: np.ndarray) -> tuple[float, list[float]]:
     """Score audio through ViolaWake in 1280-sample streaming chunks.
 
     Returns (max_score, all_chunk_scores).
@@ -92,7 +91,7 @@ def score_violawake_streaming(detector: WakeDetector, audio: np.ndarray) -> tupl
     return max_score, chunk_scores
 
 
-def score_oww_streaming(model: OWWModel, audio: np.ndarray, model_name: str = "alexa") -> tuple[float, list[float]]:
+def score_oww_streaming(model, audio: np.ndarray, model_name: str = "alexa") -> tuple[float, list[float]]:
     """Score audio through OWW in 1280-sample streaming chunks.
 
     Returns (max_score, all_chunk_scores).
@@ -257,13 +256,18 @@ def collect_positives(wake_word: str) -> list[Path]:
 
 def evaluate_violawake(neg_files: list[Path], pos_files: list[Path]) -> SystemResults:
     """Evaluate ViolaWake temporal_cnn on the corpus using streaming inference."""
+    from violawake_sdk.models import get_model_path
+    from violawake_sdk.wake_detector import WakeDetector
+
     print(f"\n{'='*70}")
     print("Evaluating ViolaWake (temporal_cnn) — streaming 80ms chunks")
     print(f"{'='*70}")
 
-    # Initialize detector with very low threshold to get raw scores
-    # Use direct path to avoid auto-download attempt
-    model_path = "J:/CLAUDE/PROJECTS/Wakeword/experiments/models/j5_temporal/temporal_cnn.onnx"
+    # Initialize detector with very low threshold to get raw scores.
+    # Resolve through the registry so the pinned ModelSpec SHA is enforced.
+    model_path = os.environ.get("VIOLAWAKE_TEMPORAL_CNN_MODEL")
+    if not model_path:
+        model_path = str(get_model_path("temporal_cnn", auto_download=True))
     detector = WakeDetector(model=model_path, threshold=0.01, cooldown_s=0.0)
     result = SystemResults(name="ViolaWake", wake_word="viola")
 
@@ -307,6 +311,8 @@ def evaluate_violawake(neg_files: list[Path], pos_files: list[Path]) -> SystemRe
 
 def evaluate_oww(neg_files: list[Path], pos_files: list[Path]) -> SystemResults:
     """Evaluate OpenWakeWord (alexa) on the corpus using streaming inference."""
+    from openwakeword.model import Model as OWWModel
+
     print(f"\n{'='*70}")
     print("Evaluating OpenWakeWord (alexa) — streaming 80ms chunks")
     print(f"{'='*70}")
@@ -550,6 +556,19 @@ def generate_report(vw: SystemResults, oww: SystemResults, neg_count_by_category
 
 # ── Main ──
 
+def _model_metadata() -> dict[str, str | int]:
+    """Return the pinned registry metadata for the ViolaWake benchmark model."""
+    from violawake_sdk.models import MODEL_REGISTRY
+
+    spec = MODEL_REGISTRY["temporal_cnn"]
+    return {
+        "name": spec.name,
+        "version": spec.version,
+        "sha256": spec.sha256,
+        "size_bytes": spec.size_bytes,
+    }
+
+
 def main():
     print("=" * 70)
     print("ViolaWake vs OpenWakeWord -- Corrected Benchmark v2")
@@ -621,6 +640,7 @@ def main():
             "version": "2",
             "chunk_samples": CHUNK_SAMPLES,
             "sample_rate": SAMPLE_RATE,
+            "model": _model_metadata(),
             "n_voices": 20,
             "n_viola_pos": len(vw.pos_scores),
             "n_alexa_pos": len(oww.pos_scores),
