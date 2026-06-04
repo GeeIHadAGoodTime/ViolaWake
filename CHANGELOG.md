@@ -7,20 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-06-04
+
 ### SDK
 - Add the documented `ModelCache` wrapper in `violawake_sdk.models` while preserving the existing `get_model_path()`, `download_model()`, and `list_cached_models()` functions.
-- Restore the `violawake` compatibility package in built wheels so `import violawake` matches the README contract.
+- Restore the `violawake` compatibility package in built wheels so `import violawake` matches the README contract. **The 0.2.6 wheel shipped without it; users hitting `ModuleNotFoundError: violawake` on `pip install violawake==0.2.6` should upgrade to 0.2.7.**
 - Include the documented `WakewordDetector` compatibility alias in `violawake_sdk.__all__` so `from violawake_sdk import *` exposes the full documented top-level surface.
+- Wake detector audio sources now fail closed on contract drift (non-16 kHz mono, wrong frame stride). OWW backbone integrity check fails closed on hash mismatch.
+- VoicePipeline surfaces no-op STT, TTS-misconfiguration, and always-on VAD failures instead of silently returning to idle. STT engine preserves the real `faster-whisper` transitive import cause rather than reporting "package missing."
+- Training pipeline enforces the 16 kHz mono audio contract at the loader; mis-rated audio fails fast before embedding extraction. Fixes `_train_mlp_on_oww` `training_start` NameError reachable on every successful MLP-on-OWW training path.
 
 ### Packaging
 - Add release-wheel smoke coverage that installs the built wheel, imports `violawake` and `violawake_sdk`, verifies all `violawake-*` console-script targets are present, and runs `violawake-download --help` from the wheel install.
 - Exclude `_diag/` audit artifacts from source distributions.
 
-### Unreleased Changes Since v0.2.6
-- Training pipeline: enforce the temporal-only wake model path, stream temporal corpus loading, report corpus generation progress, make cancellation unblock queued jobs, and wrap fatal control-flow exits.
-- Console/API: add privileged service-key paths for backend integrations, point the frontend at `api.violawake.com`, improve account-password UI state, and support bring-your-own-audio recording uploads.
-- Operations and launch hardening: add SEO/content hardening, R2 backup paths and scheduled-task fixes, launch hardening workflows, a backend memory-limit increase, and the Viola bridge compose override.
-- Governance/docs: rewrite `CLAUDE.md` and add the lane ledger for the 2026-06-03 audit cycle.
+### Browser / WASM
+- Fix WASM/Python score parity bug: `Math.trunc` instead of `Math.round` for float→int16 conversion (was producing score drift across the same audio).
+- Demo page (`/wasm/demo/`): force single-threaded ORT to avoid CSP `blob:` script-source rejection on the deployed site.
+
+### Console (SaaS) & Frontend
+- Add public-claim reproducer (`benchmark_v2/reproduce_claims.py`) and Ratchet gate so every headline benchmark number traces to a checked-in script + corpus at a pinned model SHA.
+- Live backend oracle now uses the actual API contract (`/api/billing/checkout`, `resource_id` in `DownloadTokenRequest`) — earlier oracle pointed at nonexistent routes/fields.
+- SPA route rewrite preserves `/login`, `/register`, `/dashboard` against Cloudflare clean-URL canonicalization (was collapsing back to `/`).
+- Public copy aligns with reproducible claims; unreproducible operator benchmark numbers removed.
+
+### Operations
+- R2 Postgres backup restore drill (`scripts/backup_restore_drill.py`) with stale-backup detection + non-prod scratch-container restore + `--inspect-only` SQL sanity asserting both CREATE TABLE and COPY public.* sections are present.
+- Stale deploy-launch helper retired in favor of the documented `docs/DEPLOYMENT.md` flow.
+- Quality-gate framework: `quality/gates.yaml` registry, mechanical pre-commit hooks (`scripts/check_no_direct_main_commits.py`, `scripts/check_ratchet_rule.py`), CI workflow.
+
+### Governance
+- Rewrite `CLAUDE.md` and add `docs/LANE_LEDGER.md` for the 2026-06-03 audit cycle (12 disjoint lanes following PMBOK WBS + DDD bounded contexts + business capability mapping).
 
 ## [0.2.6] - 2026-05-08
 
