@@ -52,11 +52,13 @@ ADRs are immutable once accepted. To change an architecture decision, create a n
 
 | ADR | Title | Status | Path |
 |-----|-------|--------|------|
-| ADR-001 | ONNX Runtime for all model inference | Accepted | `docs/adr/ADR-001-onnx-runtime.md` |
-| ADR-002 | OpenWakeWord embeddings as feature extractor backbone | Accepted | `docs/adr/ADR-002-oww-feature-extractor.md` |
+| ADR-001 | ONNX Runtime for all model inference | Superseded by ADR-006 | `docs/adr/ADR-001-onnx-runtime.md` |
+| ADR-002 | OpenWakeWord embeddings as feature extractor backbone | Superseded by ADR-007 | `docs/adr/ADR-002-oww-feature-extractor.md` |
 | ADR-003 | Python SDK first (not C library) | Accepted | `docs/adr/ADR-003-python-first.md` |
 | ADR-004 | Open-core licensing strategy | Accepted | `docs/adr/ADR-004-open-core.md` |
 | ADR-005 | PyPI distribution + separate model hosting | Accepted | `docs/adr/ADR-005-packaging.md` |
+| ADR-006 | Multi-runtime inference (ONNX + TFLite) | Accepted | `docs/adr/ADR-006-multi-runtime-inference.md` |
+| ADR-007 | TemporalCNN wake head on frozen OWW backbone | Accepted | `docs/adr/ADR-007-temporal-cnn-wake-head.md` |
 
 ---
 
