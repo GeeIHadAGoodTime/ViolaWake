@@ -21,12 +21,19 @@ __pycache__
 .idea
 *.swp
 
-# Environment and secrets
+# Environment and secrets — exclude ALL env files from the build context.
+# Production runtime env comes from `docker compose --env-file .env.production`,
+# which is read-at-runtime and never baked into image layers. The earlier
+# `!.env.production` negation forced the secrets file INTO the build context;
+# while no current Dockerfile COPYs it, leaving the door open is a footgun —
+# a future `COPY . .` would silently leak CLOUDFLARE_TUNNEL_TOKEN,
+# VIOLAWAKE_ADMIN_TOKEN, and Stripe keys into the published image.
+# Only the redaction-safe example is allowed back in.
 .env
 .env.local
 .env.*.local
+.env.production
 !.env.example
-!.env.production
 
 # Docs and non-runtime files
 docs/
