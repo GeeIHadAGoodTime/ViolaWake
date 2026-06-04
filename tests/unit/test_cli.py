@@ -16,6 +16,7 @@ import importlib.metadata as metadata
 import os
 import subprocess
 import sys
+import sysconfig
 import textwrap
 from pathlib import Path
 from unittest import mock
@@ -72,14 +73,31 @@ def _run_cli(module: str, args: list[str], *, timeout: int = 30) -> subprocess.C
 
 
 def _installed_script_path(script_name: str) -> Path:
-    """Return the installed console script path for the current interpreter."""
-    scripts_dir = Path(sys.executable).resolve().parent
+    """Return the installed console script path for the current interpreter.
+
+    On Linux/macOS pip installs console scripts next to ``python`` (typically
+    a ``bin/`` directory). On Windows the canonical location is the ``Scripts``
+    subdirectory next to ``python.exe`` (sysconfig "scripts" path), not the
+    Python prefix itself — without checking ``Scripts`` the test wrongly
+    reports the binary missing on hosted Windows runners.
+    """
     suffixes = (".exe", ".cmd", ".bat", "") if os.name == "nt" else ("",)
-    for suffix in suffixes:
-        candidate = scripts_dir / f"{script_name}{suffix}"
-        if candidate.exists():
-            return candidate
-    return scripts_dir / script_name
+    candidate_dirs = [Path(sys.executable).resolve().parent]
+    scripts_from_sysconfig = sysconfig.get_path("scripts")
+    if scripts_from_sysconfig:
+        candidate_dirs.append(Path(scripts_from_sysconfig).resolve())
+    if os.name == "nt":
+        candidate_dirs.append(candidate_dirs[0] / "Scripts")
+    seen: set[Path] = set()
+    for scripts_dir in candidate_dirs:
+        if scripts_dir in seen:
+            continue
+        seen.add(scripts_dir)
+        for suffix in suffixes:
+            candidate = scripts_dir / f"{script_name}{suffix}"
+            if candidate.exists():
+                return candidate
+    return candidate_dirs[0] / script_name
 
 
 class TestInstalledProjectScripts:

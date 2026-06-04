@@ -35,7 +35,8 @@ from __future__ import annotations
 # without an editable install (rare in user code, common in CI before
 # `pip install -e .`).
 try:
-    from importlib.metadata import PackageNotFoundError, version as _pkg_version
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version as _pkg_version
 
     try:
         __version__ = _pkg_version("violawake")
