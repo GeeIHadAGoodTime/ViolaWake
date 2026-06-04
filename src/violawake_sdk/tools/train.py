@@ -1036,7 +1036,6 @@ def _extract_temporal_windows_from_audio(
     seq_len: int = 9,
 ) -> tuple[list[np.ndarray], list[int], list[str]]:
     """Extract temporal OWW embedding windows from in-memory audio arrays."""
-    import numpy as np
 
     try:
         from openwakeword.model import Model as OWWModel
@@ -2305,6 +2304,7 @@ def _train_mlp_on_oww(
     epochs_without_improvement = 0
     best_model_state = None
     best_ema_state_mlp = None
+    training_start = time.monotonic()
 
     for epoch in range(1, epochs + 1):
         model.train()

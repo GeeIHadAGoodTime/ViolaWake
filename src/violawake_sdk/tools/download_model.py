@@ -115,7 +115,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    from violawake_sdk.models import MODEL_REGISTRY, download_model, list_cached_models
+    from violawake_sdk.models import MODEL_REGISTRY, list_cached_models
 
     if args.list:
         print("Available models:")
