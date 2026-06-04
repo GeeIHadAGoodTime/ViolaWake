@@ -141,7 +141,7 @@ def resolve_openwakeword_backbone_paths(backend_name: str = "onnx") -> OpenWakeW
                 "OpenWakeWord backbone files are missing from the installed package: "
                 f"{missing_str}. Tried to auto-download via openwakeword.utils.download_models() "
                 "but files are still missing. Try: "
-                "`python -c \"from openwakeword.utils import download_models; download_models()\"`."
+                '`python -c "from openwakeword.utils import download_models; download_models()"`.'
             )
 
     return OpenWakeWordBackbonePaths(

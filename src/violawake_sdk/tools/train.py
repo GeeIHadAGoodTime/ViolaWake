@@ -69,6 +69,7 @@ logger = logging.getLogger(__name__)
 class TrainingError(RuntimeError):
     """Raised when programmatic training cannot continue safely."""
 
+
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
@@ -817,8 +818,7 @@ def _validate_training_audio_array(audio: np.ndarray, sample_rate: int, path: Pa
 
     if sample_rate != _TRAINING_SAMPLE_RATE:
         raise TrainingError(
-            f"Training audio must be {_TRAINING_SAMPLE_RATE} Hz mono; "
-            f"{path} is {sample_rate} Hz."
+            f"Training audio must be {_TRAINING_SAMPLE_RATE} Hz mono; {path} is {sample_rate} Hz."
         )
 
     audio_array = np.asarray(audio, dtype=np.float32)
@@ -1749,8 +1749,7 @@ def _train_temporal_cnn(
             print(
                 "\n" + "*" * 72 + "\n"
                 "WARNING: VIOLAWAKE_SKIP_QUALITY_GATE=1 — exporting failing model anyway.\n"
-                "         This is for E2E testing only. NEVER set this in production.\n"
-                + "*" * 72
+                "         This is for E2E testing only. NEVER set this in production.\n" + "*" * 72
             )
 
     model_exported = (quality_grade != "F") or skip_gate
@@ -2039,11 +2038,7 @@ def _run_quality_gate(
         # Pooled std with ddof=1 (sample variance). Floor variance at 1e-6 so a
         # degenerate model (all-same-score) doesn't divide by zero.
         pooled_var = max(
-            (
-                float(positive_scores.var(ddof=1))
-                + float(negative_scores_pool.var(ddof=1))
-            )
-            / 2.0,
+            (float(positive_scores.var(ddof=1)) + float(negative_scores_pool.var(ddof=1))) / 2.0,
             1e-6,
         )
         d_prime = (pos_mean - neg_mean) / (pooled_var**0.5)
@@ -2060,9 +2055,7 @@ def _run_quality_gate(
         "silence_source": silence_source,
         "d_prime": (round(float(d_prime), 4) if d_prime is not None else None),
         "positive_scores": [round(float(s), 6) for s in positive_scores.tolist()],
-        "negative_scores": [
-            round(float(s), 6) for s in negative_scores_pool.tolist()
-        ],
+        "negative_scores": [round(float(s), 6) for s in negative_scores_pool.tolist()],
         "positive_sample_count": int(len(positive_scores)),
         "negative_sample_count": int(len(negative_scores_pool)),
     }

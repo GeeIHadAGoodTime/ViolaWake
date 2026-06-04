@@ -158,13 +158,10 @@ class STTEngine:
                         "Install with: pip install 'violawake[stt]'"
                     ) from e
                 raise ImportError(
-                    f"faster-whisper is installed but failed to import dependency "
-                    f"'{e.name}': {e}"
+                    f"faster-whisper is installed but failed to import dependency '{e.name}': {e}"
                 ) from e
             except ImportError as e:
-                raise ImportError(
-                    f"faster-whisper is installed but failed to import: {e}"
-                ) from e
+                raise ImportError(f"faster-whisper is installed but failed to import: {e}") from e
 
             logger.info("Loading Whisper model '%s'...", self.model_name)
             t0 = time.perf_counter()

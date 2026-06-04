@@ -382,6 +382,7 @@ class TestBillingWebhooks:
         period_end = int(datetime(2030, 1, 1, tzinfo=timezone.utc).timestamp())
         event = {
             "id": f"evt_checkout_complete_{unique_suffix}",
+            "object": "event",
             "type": "checkout.session.completed",
             "data": {
                 "object": {
@@ -457,6 +458,7 @@ class TestBillingWebhooks:
 
         event = {
             "id": f"evt_subscription_deleted_{unique_suffix}",
+            "object": "event",
             "type": "customer.subscription.deleted",
             "data": {"object": {"id": subscription_id}},
         }
@@ -515,6 +517,7 @@ class TestBillingWebhooks:
         event_id = f"evt_idempotency_direct_test_{time.time_ns()}"
         event = {
             "id": event_id,
+            "object": "event",
             "type": "checkout.session.completed",
             "data": {
                 "object": {
