@@ -234,6 +234,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install package for registry update
+        # tools/update_model_registry.py imports violawake_sdk to read the
+        # current registry — install editable so the import works.
+        run: |
+          pip install onnxruntime numpy scipy requests tqdm
+          pip install -e . --no-deps
+
       - name: Update model SHA-256s in models.py
         run: |
           python tools/update_model_registry.py \

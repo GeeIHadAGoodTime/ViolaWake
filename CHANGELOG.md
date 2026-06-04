@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-06-04
+
+### Console Backend
+- Fix Stripe webhook handler `event.get("id")` AttributeError — `construct_event` returns a `_StripeObject` not a dict; use subscript access. Reachable on every real Stripe webhook delivery after the library version bump.
+
+### Packaging
+- Release workflow: install `violawake_sdk` editable in the `update-docs` job so `tools/update_model_registry.py` can import the package (was `ModuleNotFoundError`).
+
 ## [0.2.7] - 2026-06-04
 
 ### SDK

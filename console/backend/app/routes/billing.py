@@ -431,7 +431,10 @@ async def stripe_webhook(
         )
 
     # Deduplicate: Stripe may deliver the same event more than once.
-    event_id = event.get("id")
+    # NOTE: `event` is a stripe `_StripeObject`, not a dict. Dict methods
+    # like `.get()` raise AttributeError; use subscript access (which the
+    # stripe object implements as __getitem__).
+    event_id = event["id"]
     if not await _record_stripe_event_if_new(db, event_id):
         logger.debug("Duplicate webhook event ignored: %s", event_id)
         return {"status": "ok"}
