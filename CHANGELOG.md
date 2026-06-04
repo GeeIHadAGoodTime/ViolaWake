@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-06-04
+
+### Console Backend
+- Sweep all `.get()` calls on Stripe `_StripeObject` payloads in `console/backend/app/routes/billing.py` (the 0.2.8 fix only patched the webhook entry point; 11 more sites inside `_handle_checkout_completed` and `_handle_subscription_updated` had the same dict-API assumption). Added a `_stripe_get` helper that handles both `dict` and `_StripeObject`.
+
+### Security
+- `.dockerignore`: dropped the `!.env.production` negation that forced the production secrets file into the Docker build context (CLOUDFLARE_TUNNEL_TOKEN, VIOLAWAKE_ADMIN_TOKEN, Stripe keys). No current Dockerfile copied it, but a future `COPY . .` would silently bake secrets into the published image. Runtime env still comes from `docker compose --env-file .env.production`.
+
+### Docs / ADRs
+- ADR-006 supersedes ADR-001: multi-runtime inference (ONNX + TFLite) instead of ONNX-only.
+- ADR-007 supersedes ADR-002: temporal-CNN wake head on frozen OWW backbone instead of MLP-on-OWW.
+- `docs/REGISTRY.md` marks ADR-001/002 as Superseded; adds ADR-006/007 as Accepted.
+- `benchmark_v2/README.md` documents the three-layer reproducibility model (score-CSV reproducer → corpus → TTS rebuild) so Lane 5's "claim from clean clone" path is explicit.
+- `scripts/generate_docs.py` API-public-surface ratchet: pdoc emits `id="<name>"`, not `id="violawake_sdk.<name>"`. Fixed the anchor pattern; 25 SDK symbols now verified.
+
 ## [0.2.8] - 2026-06-04
 
 ### Console Backend
