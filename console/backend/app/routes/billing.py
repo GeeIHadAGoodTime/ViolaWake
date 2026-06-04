@@ -26,6 +26,22 @@ logger = logging.getLogger("violawake.billing")
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
+
+def _stripe_get(obj, key, default=None):
+    """Dict-like ``.get(key, default)`` for stripe ``_StripeObject`` AND plain dicts.
+
+    Newer ``stripe`` library versions return ``_StripeObject`` instances from
+    ``construct_event`` and the values inside ``data.object``. ``_StripeObject``
+    implements ``__getitem__`` but NOT ``.get(...)``, so calling ``obj.get(...)``
+    raises ``AttributeError: get`` (via ``__getattr__`` → ``__getitem__`` →
+    ``KeyError: 'get'``).
+    """
+    try:
+        # Plain dict fast-path
+        return obj.get(key, default) if isinstance(obj, dict) else default if not hasattr(obj, "__getitem__") else (obj[key] if key in obj else default)
+    except (KeyError, TypeError, AttributeError):
+        return default
+
 # ---------------------------------------------------------------------------
 # Tier limits — single source of truth
 # ---------------------------------------------------------------------------
@@ -558,14 +574,14 @@ def _tier_from_price_id(price_id: str) -> str:
 
 async def _handle_checkout_completed(db: AsyncSession, session: dict) -> None:
     """Handle checkout.session.completed: create/update subscription."""
-    metadata = session.get("metadata", {})
-    user_id_str = metadata.get("violawake_user_id")
-    tier = metadata.get("tier")
-    customer_id = session.get("customer")
-    subscription_id = session.get("subscription")
+    metadata = _stripe_get(session, "metadata", {})
+    user_id_str = _stripe_get(metadata, "violawake_user_id")
+    tier = _stripe_get(metadata, "tier")
+    customer_id = _stripe_get(session, "customer")
+    subscription_id = _stripe_get(session, "subscription")
 
     if not user_id_str:
-        logger.error("checkout.session.completed missing violawake_user_id in metadata: %s", session.get("id"))
+        logger.error("checkout.session.completed missing violawake_user_id in metadata: %s", _stripe_get(session, "id"))
         return
 
     user_id = int(user_id_str)
@@ -610,7 +626,7 @@ async def _handle_checkout_completed(db: AsyncSession, session: dict) -> None:
 
 async def _handle_subscription_updated(db: AsyncSession, subscription: dict) -> None:
     """Handle customer.subscription.updated: tier change, renewal, etc."""
-    stripe_sub_id = subscription.get("id")
+    stripe_sub_id = _stripe_get(subscription, "id")
     result = await db.execute(
         select(Subscription).where(Subscription.stripe_subscription_id == stripe_sub_id)
     )
@@ -620,7 +636,7 @@ async def _handle_subscription_updated(db: AsyncSession, subscription: dict) -> 
         return
 
     # Update status
-    stripe_status = subscription.get("status", "active")
+    stripe_status = _stripe_get(subscription, "status", "active")
     status_map = {
         "active": "active",
         "past_due": "past_due",
@@ -634,19 +650,19 @@ async def _handle_subscription_updated(db: AsyncSession, subscription: dict) -> 
     sub.status = status_map.get(stripe_status, "active")
 
     # Update period end
-    period_end = subscription.get("current_period_end")
+    period_end = _stripe_get(subscription, "current_period_end")
     if period_end:
         sub.current_period_end = datetime.fromtimestamp(period_end, tz=timezone.utc)
 
     # Update tier from the subscription's price
-    items = subscription.get("items", {}).get("data", [])
+    items = _stripe_get(_stripe_get(subscription, "items", {}), "data", [])
     if items:
         price_id = items[0].get("price", {}).get("id", "")
         if price_id:
             sub.tier = _tier_from_price_id(price_id)
 
     # Also check metadata for explicit tier override
-    meta_tier = subscription.get("metadata", {}).get("tier")
+    meta_tier = _stripe_get(_stripe_get(subscription, "metadata", {}), "tier")
     if meta_tier and meta_tier in TIER_LIMITS:
         sub.tier = meta_tier
 
@@ -659,7 +675,7 @@ async def _handle_subscription_updated(db: AsyncSession, subscription: dict) -> 
 
 async def _handle_subscription_deleted(db: AsyncSession, subscription: dict) -> None:
     """Handle customer.subscription.deleted: downgrade to free."""
-    stripe_sub_id = subscription.get("id")
+    stripe_sub_id = _stripe_get(subscription, "id")
     result = await db.execute(
         select(Subscription).where(Subscription.stripe_subscription_id == stripe_sub_id)
     )
