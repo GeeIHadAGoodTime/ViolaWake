@@ -134,3 +134,7 @@ tests/live/.smoke_last_output.txt
 !console/frontend/public/wasm/models/
 !console/frontend/public/wasm/models/**
 .wrangler/
+
+# Friction-enforcement hook runtime state (per-session, never committed)
+.viola/agents/question_budget_markers/
+.viola/agents/proof_claim_markers/

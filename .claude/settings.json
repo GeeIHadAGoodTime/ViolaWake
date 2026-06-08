@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "command": "python \"$(git rev-parse --show-toplevel)/.claude/hooks/question_budget_guard.py\"",
+            "type": "command"
+          },
+          {
+            "command": "python \"$(git rev-parse --show-toplevel)/.claude/hooks/proof_claim_lint.py\"",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "python \"$(git rev-parse --show-toplevel)/.claude/hooks/codex_guard.py\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Bash"
+      }
+    ]
+  }
+}
