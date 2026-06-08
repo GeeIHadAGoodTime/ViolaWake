@@ -228,6 +228,20 @@ def _cleanup_old_markers(directory: Path) -> None:
             continue
 
 
+def _is_markdown_heading_only(para: str) -> bool:
+    """True if the paragraph is JUST a markdown heading (one or more `#` lines).
+
+    Headings are intentionally short, often phrase-shaped (`## Verified in each repo`,
+    `### Tests green`), and don't carry the supporting evidence — that lives in the
+    paragraph after. Treating a heading as a standalone claim creates false-positives
+    where the lint blocks legitimate section labels.
+    """
+    lines = [ln.strip() for ln in para.splitlines() if ln.strip()]
+    if not lines:
+        return False
+    return all(re.match(r"^#{1,6}\s+\S", ln) for ln in lines)
+
+
 def evaluate(text: str) -> tuple[bool, str, str]:
     """Return (should_block, matched_claim, offending_paragraph).
 
@@ -242,6 +256,10 @@ def evaluate(text: str) -> tuple[bool, str, str]:
     for paragraph in paragraphs:
         para = paragraph.strip()
         if not para:
+            continue
+        # Markdown heading-only paragraphs aren't standalone claims — their
+        # evidence lives in the following body paragraph.
+        if _is_markdown_heading_only(para):
             continue
         claim_match = CLAIM_RE.search(para)
         if not claim_match:
