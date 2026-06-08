@@ -242,11 +242,31 @@ def _is_markdown_heading_only(para: str) -> bool:
     return all(re.match(r"^#{1,6}\s+\S", ln) for ln in lines)
 
 
+def _strip_code(text: str) -> str:
+    """Remove backtick-quoted content and fenced code blocks from text.
+
+    Inline `code` and fenced ```blocks``` are by definition literal references —
+    sample patterns, snippets, command literals, or quoted strings being discussed.
+    Matching a claim phrase INSIDE one is a false-positive (real example caught
+    2026-06-08: prose describing the hook's own pattern, where `` `verified in` ``
+    matched the claim regex).
+    """
+    # Triple-backtick fenced blocks first (may span newlines)
+    text = re.sub(r"```[\s\S]*?```", "", text)
+    # Single-backtick inline code (single line, non-greedy)
+    text = re.sub(r"`[^`\n]*`", "", text)
+    return text
+
+
 def evaluate(text: str) -> tuple[bool, str, str]:
     """Return (should_block, matched_claim, offending_paragraph).
 
     Block when: any paragraph contains a high-confidence claim, no hedge phrase
     in the same paragraph, and no evidence anchor in the same paragraph.
+
+    Inline code and fenced blocks are stripped before claim matching — they're
+    quoted references, not assertions. Evidence-anchor matching still runs on
+    the ORIGINAL paragraph so backticked commands/paths still count as anchors.
     """
     if not text:
         return False, "", ""
@@ -261,7 +281,11 @@ def evaluate(text: str) -> tuple[bool, str, str]:
         # evidence lives in the following body paragraph.
         if _is_markdown_heading_only(para):
             continue
-        claim_match = CLAIM_RE.search(para)
+        # Strip backtick/fenced code before claim matching (quoted references
+        # like `verified in` aren't assertions). Evidence matching still runs
+        # on the original `para` so backticked commands count as anchors.
+        para_no_code = _strip_code(para)
+        claim_match = CLAIM_RE.search(para_no_code)
         if not claim_match:
             continue
         # Hedged? skip — Claude is being honest about uncertainty
