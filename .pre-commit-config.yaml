@@ -1,4 +1,17 @@
 repos:
+  - repo: local
+    hooks:
+      - id: check-claudemd-approval
+        name: CLAUDE.md edits require explicit Jay-approved trailer + companion file
+        # Why: an unauthorized CLAUDE.md edit propagates to every future Claude
+        # session's context indefinitely; one bad sentence becomes systemic agent
+        # guidance until caught. Revert flow: CLAUDEMD-Revert: <sha>.
+        entry: python scripts/check_claudemd_approval.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.4.4
     hooks:
