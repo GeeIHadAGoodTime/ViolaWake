@@ -1,0 +1,25 @@
+node_modules/
+build/
+.wrangler/
+.react-router/
+*.tsbuildinfo
+*.tgz
+.env
+.env.*
+!.env.example
+.dev.vars
+!.dev.vars.example
+.vite/
+dist/
+snapshot-*.txt
+.agents/
+opencode.jsonc
+skills-lock.json
+.DS_Store
+worker-configuration.d.ts
+
+# The repo-root .gitignore has `lib/` (Python packaging convention) which sweeps
+# up this vendored worker's TypeScript SOURCE dirs. Force-track them — without
+# these files the worker does not build (Phase-1 vendoring bug, 2026-06-12).
+!workers/lib/
+!app/lib/
