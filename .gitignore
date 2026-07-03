@@ -11,13 +11,22 @@ dist/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Secrets / env files — broad match so backups (.env.bak, .env.production.bak_*)
+# and any variant are ignored, never packaged. Only *.example templates are kept.
+# (2026-05-08 incident: violawake 0.2.4 sdist leaked a live Stripe key via
+# unignored codex debris; .env.production.bak_* was a second, still-unignored
+# leak surface. See tests/unit/test_sdist_hygiene.py.)
 .env
-.env.production
-.env.staging
+.env.*
+!.env.example
+!.env.*.example
+
+# Virtual environments — match any .venv* / venv* variant, not just .venv
 .venv
+.venv*
 env/
 venv/
+venv*/
 ENV/
 
 # IDE

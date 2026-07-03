@@ -162,3 +162,13 @@ gates:
     own_tests:
       - tests/unit/test_spa_rewrite_target.py::test_detector_fails_on_the_pre_fix_shapes
       - tests/unit/test_spa_rewrite_target.py::test_detector_passes_on_the_fixed_and_benign_shapes
+
+  - gate_id: sdist-no-secrets-or-debris
+    contract: The built sdist must contain no secret-shaped content (Stripe sk_live/whsec, Postgres URL creds, Cloudflare tunnel token, private keys, cloud API keys) and no credential/agent-debris file names (.codex*, .env* except *.example, secrets.json, *.pem). Catches the 2026-05-08 violawake 0.2.4 leak class where unignored codex transcripts shipped a live Stripe key.
+    detector: tests/unit/test_sdist_hygiene.py
+    own_tests:
+      - tests/unit/test_sdist_hygiene.py::test_release_sdist_contains_no_secrets_or_debris
+      - tests/unit/test_sdist_hygiene.py::test_scanner_flags_codex_log_debris_by_name
+      - tests/unit/test_sdist_hygiene.py::test_scanner_flags_live_stripe_key_in_innocuous_file
+      - tests/unit/test_sdist_hygiene.py::test_scanner_flags_env_backup_and_postgres_and_tunnel
+      - tests/unit/test_sdist_hygiene.py::test_scanner_stays_quiet_on_clean_tree
