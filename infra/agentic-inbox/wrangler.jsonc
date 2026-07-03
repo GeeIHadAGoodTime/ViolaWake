@@ -1,0 +1,92 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "violawake-agentic-inbox",
+	"compatibility_date": "2025-11-28",
+	"main": "./workers/app.ts",
+	"workers_dev": false,
+	"routes": [
+		{
+			"pattern": "support-inbox.violawake.com",
+			"custom_domain": true
+		}
+	],
+	"observability": {
+		"enabled": true
+	},
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"vars": {
+		// ViolaWake support inbox. POLICY_AUD + TEAM_DOMAIN MUST be set before/at
+		// deploy (Cloudflare Access) or the HTTP/MCP surface fails closed — see
+		// DEPLOY.md. They are non-secret and may live here once the Access app
+		// exists. Inbound email() is NOT gated by Access.
+		//
+		// STANDALONE: this worker, its R2 bucket, its Access app + service token,
+		// and its VIOLAWAKE_INBOX_WORKER_* creds are all ViolaWake-scoped and share
+		// nothing with NOVVIOLA's `agentic-inbox` deployment (CLAUDE.md standalone
+		// rule). The Cloudflare account + Zero Trust org are the founder's and host
+		// both zones — that is not shared infrastructure.
+		"DOMAINS": "violawake.com",
+		"EMAIL_ADDRESSES": ["hello@violawake.com"],
+		"POLICY_AUD": "0ebf81cacaf8322a241af86ac776a59f6e96ce2a0ca0c70eb081059f152437d6", // pragma: allowlist secret (Access AUD tag - documented non-secret above)
+		"TEAM_DOMAIN": "https://violavoice.cloudflareaccess.com",
+		// Every inbound message (any address, via the zone catch-all -> worker) is
+		// forwarded to this Gmail safety-net copy unless a per-mailbox forwarding
+		// setting overrides it. Empty disables the default copy. (D4 — preserves the
+		// Gmail forward the old violawake-support-email worker provided.)
+		"EMAIL_FORWARD_COPY_TO": "violavoiceassistant@gmail.com"
+	},
+	"send_email": [
+		{
+			"name": "EMAIL",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "BUCKET",
+			"bucket_name": "violawake-agentic-inbox",
+			"preview_bucket_name": "violawake-agentic-inbox"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "MAILBOX",
+				"class_name": "MailboxDO"
+			},
+			{
+				"name": "EMAIL_AGENT",
+				"class_name": "EmailAgent"
+			},
+			{
+				"name": "EMAIL_MCP",
+				"class_name": "EmailMCP"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"MailboxDO"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"EmailAgent"
+			]
+		},
+		{
+			"tag": "v3",
+			"new_sqlite_classes": [
+				"EmailMCP"
+			]
+		}
+	]
+}

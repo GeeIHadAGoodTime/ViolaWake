@@ -15,6 +15,42 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 | Postgres | ✅ live | Local Docker `wakeword-postgres-1`, internal to `wakeword_default` network | 11+ days uptime |
 | Cloudflare Tunnel | ✅ live | Container `wakeword-tunnel-1`, tunnel UUID `7dbef1da-...` | 11+ days uptime |
 | SDK on PyPI | ✅ live | `violawake` v0.2.4 | 2026-05-07 (manually published via twine — `release.yml` had a chicken-and-egg bug where `pypi-publish.needs: [..., github-release]` and `github-release` 404'd on `fetch_release_models.py`, blocking PyPI even for valid wheels. Both fixed in same commit.) |
+| Support inbox | ✅ live | Cloudflare Worker `violawake-agentic-inbox`, `support-inbox.violawake.com` (Access-protected); R2 `violawake-agentic-inbox`; `hello@violawake.com` Email Routing → worker | 2026-07-03 (version `189b07e1`) |
+
+## Support inbox — agentic-inbox (2026-07-03)
+
+Customer-support inbox for `hello@violawake.com`, mirroring useviola.com's setup but
+**standalone** (own worker / R2 bucket / Access app / service token — shares nothing
+with NOVVIOLA). Source vendored at `infra/agentic-inbox/`; founder-side ops skill at
+`.claude/skills/support-inbox/`; deploy + rollback runbook + all resource ids at
+`infra/agentic-inbox/DEPLOY.md`.
+
+- **Worker** `violawake-agentic-inbox` deployed (version `189b07e1`) at custom domain
+  `support-inbox.violawake.com`; bindings MAILBOX/EMAIL_AGENT/EMAIL_MCP (DOs), EMAIL
+  (CF Email Service), BUCKET (R2 `violawake-agentic-inbox`), AI.
+- **Access** self-hosted app (AUD `0ebf81ca…`) + non-identity service-token policy.
+  Verified: no token → **403**, service token → **200**.
+- **Inbound cutover**: `hello@violawake.com` Email Routing rule
+  `5d6083a078794d4bb98d5e10a007b3cc` flipped from the old `violawake-support-email`
+  worker to this one. The worker re-forwards every inbound to
+  `violavoiceassistant@gmail.com` (`EMAIL_FORWARD_COPY_TO`), preserving the Gmail copy
+  (CF allows one action per rule, so the worker does the forward). Catch-all left as
+  `drop` (only `hello@` captured, as before).
+- **Verified live**: real test emails to `hello@violawake.com` captured with full
+  bodies + readable via the Access-authed REST API; audited outbound reply to a
+  founder-controlled address returned `{"status":"sent"}` and filed in `sent`.
+- **Rollback** (one API call): flip rule `5d6083a…` back to `violawake-support-email`
+  (left deployed, not deleted). Old Console `/api/email/inbound` auto-ack pipeline
+  intact.
+- **Behavior change flagged**: the old worker auto-acknowledged every sender with a
+  Resend "ticket VW-XXXX" reply; the agentic-inbox model is draft-and-approve (no
+  auto-send), so that auto-ack no longer fires — aligns with the founder's
+  approval-gated goal.
+- **Known**: a concurrent Cloudflare Durable-Object storage incident on 2026-07-03
+  intermittently 500'd both this inbox AND the useviola prod inbox (same platform
+  error); the worker re-throws on capture failure so CF/sender MTAs retry (a
+  during-incident message landed on retry after recovery — delayed, not dropped). The
+  physical Gmail-copy arrival is founder-confirmable in `violavoiceassistant@gmail.com`.
 
 ## Verified end-to-end (2026-05-07)
 
