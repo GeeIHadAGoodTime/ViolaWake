@@ -10,8 +10,8 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 
 | Layer | Status | Where | Last deploy |
 |---|---|---|---|
-| Frontend | ✅ live | Cloudflare Pages, project `violawake`, `violawake.com` | 2026-05-07 (commit `5d7ac2a` via `wrangler pages deploy`) |
-| Backend | ✅ live | Local Docker via Cloudflare Tunnel `violawake-api`, `api.violawake.com` | 2026-05-07 (image rebuilt from commit `5d7ac2a`) |
+| Frontend | ✅ live | Cloudflare Pages, project `violawake`, `violawake.com` | 2026-07-03 (commit `c85977a`, deploy `5b2de9f4`: bug-report button on every page + canonical `/app/` SPA rewrite target fixing the /verify-email & /reset-password deep-link 308 strip) |
+| Backend | ✅ live | Local Docker via Cloudflare Tunnel `violawake-api`, `api.violawake.com` | 2026-07-03 (image rebuilt from commit `4fb977b`: server-side GET /api/auth/verify-email + POST /api/public/bug-report; `VIOLAWAKE_SENTRY_DSN` wired to sentry.io project `viola-voice-assistant/violawake`) |
 | Postgres | ✅ live | Local Docker `wakeword-postgres-1`, internal to `wakeword_default` network | 11+ days uptime |
 | Cloudflare Tunnel | ✅ live | Container `wakeword-tunnel-1`, tunnel UUID `7dbef1da-...` | 11+ days uptime |
 | SDK on PyPI | ✅ live | `violawake` v0.2.4 | 2026-05-07 (manually published via twine — `release.yml` had a chicken-and-egg bug where `pypi-publish.needs: [..., github-release]` and `github-release` 404'd on `fetch_release_models.py`, blocking PyPI even for valid wheels. Both fixed in same commit.) |
