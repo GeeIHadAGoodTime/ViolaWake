@@ -127,6 +127,7 @@ all = [
 # Dev / CI
 dev = [
     "hatchling>=1.21",
+    "build>=1.0",  # required by the sdist-hygiene gate (builds+scans the real artifact)
     "pytest>=8.0",
     "pytest-cov>=4.1",
     "pytest-benchmark>=4.0",
@@ -184,6 +185,14 @@ exclude = [
     "*.mp3",
     "*.wav",
     "*.onnx",
+    # Secrets / agent debris — defense-in-depth beyond .gitignore so a secret
+    # never ships even if a file is untracked-but-not-ignored (the 0.2.4 leak
+    # shape). Enforced by tests/unit/test_sdist_hygiene.py.
+    ".env",
+    ".env.*",
+    ".codex*",
+    "secrets.json",
+    "*.pem",
 ]
 
 [tool.hatch.build.targets.wheel]
