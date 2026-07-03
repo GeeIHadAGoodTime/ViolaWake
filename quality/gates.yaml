@@ -148,3 +148,10 @@ gates:
     detector: docs/REGISTRY.md
     own_tests:
       - docs/REGISTRY.md
+
+  - gate_id: verification-email-server-side-link
+    contract: Email verification must succeed on link click via a server-side backend GET endpoint, not depend on the client-rendered SPA route that a CDN redirect can strip.
+    detector: console/tests/test_auth_email_routes.py
+    own_tests:
+      - console/tests/test_auth_email_routes.py::test_verification_email_links_to_backend_get_endpoint
+      - console/tests/test_auth_email_routes.py::test_get_verify_email_link_marks_verified_and_redirects
