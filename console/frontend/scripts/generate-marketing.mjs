@@ -449,6 +449,7 @@ function renderShell(page, bodyHtml, cssHref) {
       </article>
     </main>
     ${renderFooter()}
+    <script defer src="/bug-report.js"></script>
   </body>
 </html>
 `;

@@ -76,6 +76,23 @@ class MessageResponse(BaseModel):
     message: str
 
 
+# ── Public (anonymous bug report) ────────────────────────────────────────────
+
+class BugReportRequest(BaseModel):
+    """Anonymous bug report submitted from any public violawake.com page."""
+
+    message: str = Field(min_length=10, max_length=2000, description="What went wrong")
+    page: str = Field(default="", max_length=200, description="Page path where the bug was seen")
+    # Honeypot: hidden via CSS, invisible to humans. Bots that fill every
+    # field in a form trip this; a filled value means silently discard.
+    website: str = Field(default="", description="Leave empty")
+
+
+class BugReportResponse(BaseModel):
+    result: str = "received"
+    message: str = "Thanks for the report. We read every one."
+
+
 # ── Recordings ───────────────────────────────────────────────────────────────
 
 class RecordingResponse(BaseModel):

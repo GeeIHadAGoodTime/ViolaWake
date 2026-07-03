@@ -47,6 +47,17 @@ TRAINING_SUBMIT_LIMIT = "5/hour"
 CHECKOUT_LIMIT = "10/hour"
 PORTAL_LIMIT = "10/hour"
 TEAM_INVITE_LIMIT = "20/hour"
+# Public bug-report form: no login, so keep it strict — enough for a genuine
+# reporter to file a couple of tickets, tight enough to resist bulk spam
+# without needing a CAPTCHA.
+BUG_REPORT_LIMIT = "3/minute"
+
+
+def get_public_client_ip(request: Request) -> str:
+    """Public wrapper around the CF-aware IP resolver, for logging call sites
+    outside the rate limiter itself (e.g. structured logs on a captured
+    report) that want the same identity the limiter used."""
+    return _client_ip_key(request)
 
 
 # ---------------------------------------------------------------------------

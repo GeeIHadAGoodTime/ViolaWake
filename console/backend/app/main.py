@@ -28,7 +28,7 @@ from app.middleware import (
 )
 from app.monitoring import APP_VERSION, init_monitoring_state, log_exception, mark_startup_complete
 from app.rate_limit import limiter
-from app.routes import account, auth, billing, files, inbound_email, jobs, models, recordings, teams, training
+from app.routes import account, auth, billing, files, inbound_email, jobs, models, public, recordings, teams, training
 
 configure_logging()
 logger = logging.getLogger("violawake.console")
@@ -139,6 +139,7 @@ app.include_router(billing.router)
 app.include_router(files.router)
 app.include_router(teams.router)
 app.include_router(inbound_email.router)
+app.include_router(public.router)
 
 
 # ---------------------------------------------------------------------------
