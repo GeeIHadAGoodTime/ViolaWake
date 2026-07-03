@@ -13,7 +13,13 @@ import {
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const distRoot = path.join(frontendRoot, "dist");
 const today = "2026-05-08";
-const appShellRedirectTarget = "/app/index.html";
+// MUST be the canonical directory form ("/app/"), never a file path.
+// Cloudflare Pages 308-canonicalizes any ".html" rewrite target to its clean
+// URL (/app.html -> /app, /app/index.html -> /app/) BEFORE serving, turning
+// the 200 rewrite into a redirect that strips the original SPA path — which
+// broke /verify-email and /reset-password deep links for every user from
+// 2026-05-08 to 2026-07-03. Gate: spa-deep-link-rewrite-target.
+const appShellRedirectTarget = "/app/";
 
 function toPosix(value) {
   return value.replace(/\\/g, "/");
@@ -660,8 +666,8 @@ async function copyAppShell() {
     );
   }
   await mkdir(path.join(distRoot, "app"), { recursive: true });
-  // Cloudflare clean-URL handling can canonicalize /app.html to /app, which
-  // drops the original SPA route. Rewriting to a directory index preserves it.
+  // app/index.html backs the "/app/" rewrite target (the canonical directory
+  // form — see appShellRedirectTarget above for why it must not be a file path).
   await writeFile(path.join(distRoot, "app", "index.html"), appShell, "utf8");
   await writeFile(path.join(distRoot, "app.html"), appShell, "utf8");
 }

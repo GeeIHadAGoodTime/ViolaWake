@@ -155,3 +155,10 @@ gates:
     own_tests:
       - console/tests/test_auth_email_routes.py::test_verification_email_links_to_backend_get_endpoint
       - console/tests/test_auth_email_routes.py::test_get_verify_email_link_marks_verified_and_redirects
+
+  - gate_id: spa-deep-link-rewrite-target
+    contract: SPA-fallback rewrite targets in the Pages _redirects must be canonical directory paths; a ".html" target gets 308-canonicalized by Cloudflare Pages, stripping the deep-link path (the 2026-05-08 verify-email/reset-password breakage class).
+    detector: tests/unit/test_spa_rewrite_target.py
+    own_tests:
+      - tests/unit/test_spa_rewrite_target.py::test_detector_fails_on_the_pre_fix_shapes
+      - tests/unit/test_spa_rewrite_target.py::test_detector_passes_on_the_fixed_and_benign_shapes
