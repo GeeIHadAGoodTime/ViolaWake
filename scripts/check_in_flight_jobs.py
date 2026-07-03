@@ -47,8 +47,13 @@ def query_in_flight(container: str, db_path: str) -> dict[str, int]:
         print(json.dumps(dict(rows)))
         """
     ).strip()
+    # Exec as the container's app user: the hardened container drops ALL
+    # capabilities, so exec'ing as root (the docker exec default) lacks
+    # CAP_DAC_OVERRIDE and cannot open the app-owned SQLite file for the
+    # journal check — the guard then dies with "attempt to write a readonly
+    # database" (exit 2) instead of answering.
     result = subprocess.run(
-        ["docker", "exec", container, "python", "-c", snippet],
+        ["docker", "exec", "-u", "app", container, "python", "-c", snippet],
         capture_output=True,
         text=True,
         check=False,
