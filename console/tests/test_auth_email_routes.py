@@ -15,6 +15,7 @@ if backend_dir not in sys.path:
 
 from app.models import User
 from app.auth import reset_download_tokens
+from app.email_service import EmailService
 from app.routes import auth as auth_routes
 from app.schemas import (
     ForgotPasswordRequest,
@@ -210,6 +211,82 @@ async def test_forgot_password_and_reset_password_flow(
     assert len(fake_email_service.password_reset_emails) == 1
     assert login_response.user.email == email
     assert login_response.user.email_verified is False
+
+
+# ---------------------------------------------------------------------------
+# Gate: verification-email-server-side-link
+#
+# Regression guard for the production incident where every real signup after
+# the frontend was moved behind a CDN redirect stayed unverified: the
+# verification email linked to the client-rendered SPA route
+# (`{console}/verify-email?token=`), which the CDN 308-redirected away from,
+# so the SPA page never mounted and the verify API was never called. The fix
+# links the email to a server-side GET endpoint that verifies on click. These
+# tests fail on the old shape (SPA link + no GET handler) and pass on the fix.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_verification_email_links_to_backend_get_endpoint(monkeypatch) -> None:
+    """The verification email must link to the backend GET verify endpoint,
+    not the client-rendered SPA route that a CDN redirect can strip."""
+    captured: dict[str, str] = {}
+
+    async def _capture(self, to: str, subject: str, html: str) -> bool:  # noqa: ANN001
+        captured["html"] = html
+        return True
+
+    monkeypatch.setattr(EmailService, "_send_email", _capture)
+    svc = EmailService(
+        api_key="test-key",
+        console_base_url="https://violawake.com",
+        api_base_url="https://api.violawake.com",
+    )
+
+    await svc.send_verification_email(to="user@example.com", token="TOK123", name="User")
+
+    html = captured["html"]
+    # New shape: server-side backend endpoint.
+    assert "https://api.violawake.com/api/auth/verify-email?token=TOK123" in html
+    # Old shape (the bug): a bare SPA route on the console domain.
+    assert 'href="https://violawake.com/verify-email' not in html
+
+
+@pytest.mark.asyncio
+async def test_get_verify_email_link_marks_verified_and_redirects(
+    fake_db: FakeSession,
+    fake_request,
+    fake_email_service: FakeEmailService,
+) -> None:
+    """Clicking the emailed GET link verifies the account server-side and
+    redirects the browser back to the console signed-in."""
+    email = f"getverify_{time.time_ns()}@example.com"
+    await auth_routes.register(
+        fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Get Verify"),
+        fake_db,
+    )
+    token = fake_email_service.verification_emails[0]["token"]
+
+    response = await auth_routes.verify_email_link(fake_request, token, fake_db)
+
+    assert response.status_code == 303
+    assert "verified=1" in response.headers["location"]
+    assert fake_db.users_by_email[email].email_verified is True
+    assert len(fake_email_service.welcome_emails) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_verify_email_link_bad_token_redirects_to_error(
+    fake_db: FakeSession,
+    fake_request,
+) -> None:
+    """A bad/expired token must redirect to login with an error flag rather
+    than surfacing a raw JSON 400 to a human clicking an email link."""
+    response = await auth_routes.verify_email_link(fake_request, "not-a-valid-token", fake_db)
+
+    assert response.status_code == 303
+    assert "verify_error=1" in response.headers["location"]
 
 
 def test_client_ip_ignores_x_forwarded_for_when_no_trusted_proxy(monkeypatch, fake_request) -> None:

@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     # Console URLs (for Stripe checkout redirect)
     console_base_url: str = "http://localhost:5173"
 
+    # Public base URL of THIS backend API (e.g. https://api.violawake.com).
+    # Used to build email links that hit a server-side endpoint directly
+    # instead of a client-rendered SPA route, so verification does not depend
+    # on the frontend's CDN routing being correct.
+    api_base_url: str = "http://localhost:8000"
+
     # Email
     resend_api_key: str = ""
     email_inbound_webhook_secret: str = ""

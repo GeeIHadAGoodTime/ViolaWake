@@ -19,10 +19,17 @@ FROM_ADDRESS = "ViolaWake <noreply@violawake.com>"
 class EmailService:
     """Send transactional emails through Resend."""
 
-    def __init__(self, api_key: str | None = None, console_base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        console_base_url: str | None = None,
+        api_base_url: str | None = None,
+    ) -> None:
         self._api_key = (api_key if api_key is not None else settings.resend_api_key).strip()
         base_url = console_base_url if console_base_url is not None else settings.console_base_url
         self._console_base_url = base_url.rstrip("/") + "/"
+        api_url = api_base_url if api_base_url is not None else settings.api_base_url
+        self._api_base_url = api_url.rstrip("/") + "/"
         self._warned_disabled = False
 
         if self.enabled:
@@ -36,8 +43,15 @@ class EmailService:
         return bool(self._api_key)
 
     async def send_verification_email(self, to: str, token: str, name: str) -> bool:
-        """Send a verification link after registration."""
-        verification_url = self._console_url("/verify-email", token=token)
+        """Send a verification link after registration.
+
+        The link points at the backend's own GET ``/api/auth/verify-email``
+        endpoint (not the client-rendered SPA route). Verification then happens
+        server-side on link click, so it does not depend on the frontend's CDN
+        routing serving the SPA page correctly. See the GET handler in
+        ``app/routes/auth.py`` and gate ``verification-email-server-side-link``.
+        """
+        verification_url = self._api_url("/api/auth/verify-email", token=token)
         html = self._render_email(
             heading="Confirm your email",
             intro=f"Hi {escape(name)}, please verify your email to finish setting up ViolaWake Console.",
@@ -188,6 +202,13 @@ class EmailService:
             url = f"{url}?{urlencode(query)}"
         return url
 
+    def _api_url(self, path: str, **query: str) -> str:
+        """Build a backend-API URL from the configured API base URL."""
+        url = urljoin(self._api_base_url, path.lstrip("/"))
+        if query:
+            url = f"{url}?{urlencode(query)}"
+        return url
+
     def _absolute_url(self, path_or_url: str) -> str:
         """Normalize relative paths against the console base URL."""
         if path_or_url.startswith(("http://", "https://")):
@@ -262,5 +283,6 @@ def get_email_service() -> EmailService:
         _email_service = EmailService(
             api_key=settings.resend_api_key,
             console_base_url=settings.console_base_url,
+            api_base_url=settings.api_base_url,
         )
     return _email_service

@@ -7,6 +7,7 @@ from typing import Annotated
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,8 +37,10 @@ from app.rate_limit import (
     VERIFY_EMAIL_LIMIT,
     key_by_user,
     limiter,
-    reset_rate_limits as reset_shared_rate_limits,
     set_rate_limit_user,
+)
+from app.rate_limit import (
+    reset_rate_limits as reset_shared_rate_limits,
 )
 from app.schemas import (
     AuthResponse,
@@ -269,15 +272,14 @@ async def issue_download_token(
     )
 
 
-@router.post("/verify-email", response_model=MessageResponse)
-@limiter.limit(VERIFY_EMAIL_LIMIT)
-async def verify_email(
-    request: Request,
-    body: VerifyEmailRequest,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> MessageResponse:
-    """Verify a user's email address from a signed token."""
-    user_id = decode_action_token(body.token, expected_purpose="verify_email")
+async def _apply_email_verification(token: str, db: AsyncSession) -> User:
+    """Decode a verify-email token and mark the user verified (idempotent).
+
+    Shared by the JSON POST endpoint (used by the SPA) and the GET endpoint
+    (used by the link in the verification email). Raises HTTPException on an
+    invalid/expired token or unknown user.
+    """
+    user_id = decode_action_token(token, expected_purpose="verify_email")
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -293,6 +295,50 @@ async def verify_email(
         await get_email_service().send_welcome(to=user.email, name=user.name)
         logger.info("Verified email for user %s", user.id)
 
+    return user
+
+
+@router.get("/verify-email")
+@limiter.limit(VERIFY_EMAIL_LIMIT)
+async def verify_email_link(
+    request: Request,
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> RedirectResponse:
+    """Verify an email from the link in the verification email, then redirect.
+
+    The verification email links directly here (a GET on the backend) rather
+    than to the client-rendered ``/verify-email`` SPA page. Verifying
+    server-side means a successful click no longer depends on the frontend's
+    CDN routing rendering the SPA route and running JavaScript — the historical
+    failure where the link 308-redirected away from the SPA route left every
+    real signup unverified. On success (or an already-verified account) the
+    browser is sent to the console signed-in; on a bad/expired token it is sent
+    to login with an error flag so the user can request a fresh link.
+    """
+    console = settings.console_base_url.rstrip("/")
+    try:
+        await _apply_email_verification(token, db)
+    except HTTPException:
+        return RedirectResponse(
+            url=f"{console}/login?verify_error=1",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    return RedirectResponse(
+        url=f"{console}/login?verified=1",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+@limiter.limit(VERIFY_EMAIL_LIMIT)
+async def verify_email(
+    request: Request,
+    body: VerifyEmailRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    """Verify a user's email address from a signed token (JSON API for the SPA)."""
+    await _apply_email_verification(body.token, db)
     return MessageResponse(message="Email verified successfully")
 
 
