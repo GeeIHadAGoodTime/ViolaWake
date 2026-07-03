@@ -19,6 +19,10 @@ services:
     build:
       context: .
       dockerfile: console/Dockerfile.backend
+    # GHCR mirror of the locally-built image so a fresh host can
+    # `docker compose pull backend` instead of rebuilding from source.
+    # On the build host, `docker compose build` produces this same name.
+    image: ghcr.io/geeihadagoodtime/wakeword-backend:latest
     restart: always
     read_only: true
     tmpfs:
@@ -77,6 +81,8 @@ services:
     build:
       context: .
       dockerfile: console/decoder/Dockerfile
+    # GHCR mirror — see backend note above.
+    image: ghcr.io/geeihadagoodtime/wakeword-decoder:latest
     restart: always
     read_only: true
     tmpfs:
