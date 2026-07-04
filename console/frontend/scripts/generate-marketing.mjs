@@ -448,6 +448,12 @@ function renderShell(page, bodyHtml, cssHref) {
     <script type="application/ld+json">${jsonLd}</script>
   </head>
   <body class="static-marketing">
+    <div class="static-viola-banner">
+      <div class="static-viola-banner-inner">
+        <span>ViolaWake is the open wake word engine behind Viola, a voice assistant.</span>
+        <a href="https://useviola.com">Come meet Viola &rarr;</a>
+      </div>
+    </div>
     ${renderNav(page)}
     <main class="static-main">
       <article class="static-prose">

@@ -2571,6 +2571,36 @@ a:hover {
   color: var(--text-primary, #f0f0f0);
 }
 
+.static-viola-banner {
+  border-bottom: 1px solid var(--border, #2a2a2a);
+  background: rgba(56, 211, 189, 0.06);
+  font-size: 0.9rem;
+  color: var(--text-secondary, #a0a0a0);
+}
+
+.static-viola-banner-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  text-align: center;
+}
+
+.static-viola-banner a {
+  color: #38d3bd;
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.static-viola-banner a:hover {
+  text-decoration: underline;
+}
+
 .static-nav {
   max-width: 1120px;
   margin: 0 auto;
