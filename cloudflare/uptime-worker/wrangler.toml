@@ -1,0 +1,18 @@
+# Off-box ViolaWake production down-detector — runs on Cloudflare's edge, NOT on
+# the prod host (Docker Desktop on Jay's machine). This is the only vantage that
+# survives the prod box dying. Mirror of NOVVIOLA's viola-uptime-detector,
+# retargeted at ViolaWake, paging the SAME red-alert Telegram channel.
+#
+# Secrets (set via `wrangler secret put`, never committed):
+#   VIOLA_ALERT_TELEGRAM_BOT_TOKEN  — same bot as Viola's alerts
+#   VIOLA_ALERT_TELEGRAM_CHAT_ID    — same chat as Viola's alerts
+name = "violawake-uptime-detector"
+main = "src/index.js"
+compatibility_date = "2025-05-01"
+
+# Cron: ping ViolaWake health every 5 minutes from the edge.
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+HEALTH_URL = "https://api.violawake.com/api/health"
