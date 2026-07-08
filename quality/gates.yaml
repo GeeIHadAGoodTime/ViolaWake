@@ -156,6 +156,13 @@ gates:
       - console/tests/test_auth_email_routes.py::test_verification_email_links_to_backend_get_endpoint
       - console/tests/test_auth_email_routes.py::test_get_verify_email_link_marks_verified_and_redirects
 
+  - gate_id: resend-verification-endpoint
+    contract: A rate-limited POST /api/auth/resend-verification must exist so a user whose 48h verification token expired can get a fresh link. It must be privacy-preserving (identical generic response for unverified, already-verified, and unknown emails) and only send for an existing unverified account. Closes the 2026-07-06 support-ticket class where an expired token left the user with no self-service recovery.
+    detector: console/tests/test_auth_email_routes.py
+    own_tests:
+      - console/tests/test_auth_email_routes.py::test_resend_verification_sends_new_link_for_unverified_account
+      - console/tests/test_auth_email_routes.py::test_resend_verification_is_silent_for_verified_and_unknown_emails
+
   - gate_id: spa-deep-link-rewrite-target
     contract: SPA-fallback rewrite targets in the Pages _redirects must be canonical directory paths; a ".html" target gets 308-canonicalized by Cloudflare Pages, stripping the deep-link path (the 2026-05-08 verify-email/reset-password breakage class).
     detector: tests/unit/test_spa_rewrite_target.py
