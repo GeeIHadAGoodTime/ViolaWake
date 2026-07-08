@@ -33,6 +33,7 @@ from app.rate_limit import (
     FORGOT_PASSWORD_LIMIT,
     LOGIN_LIMIT,
     REGISTER_LIMIT,
+    RESEND_VERIFICATION_LIMIT,
     RESET_PASSWORD_LIMIT,
     VERIFY_EMAIL_LIMIT,
     key_by_user,
@@ -52,6 +53,7 @@ from app.schemas import (
     LoginRequest,
     MessageResponse,
     RegisterRequest,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     UserDetailResponse,
     UserResponse,
@@ -362,6 +364,42 @@ async def forgot_password(
         )
 
     return MessageResponse(message="If an account exists for that email, a reset link has been sent.")
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+@limiter.limit(RESEND_VERIFICATION_LIMIT)
+async def resend_verification(
+    request: Request,
+    body: ResendVerificationRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MessageResponse:
+    """Re-send an email-verification link when an unverified account exists.
+
+    Verification tokens expire after 48h (EMAIL_VERIFICATION_TOKEN_HOURS) and
+    there was previously no way to request a fresh one, stranding any user
+    whose link expired (notably the 2026-05-08→07-03 deep-link outage cohort).
+
+    Privacy-preserving: always returns the same generic response so the
+    endpoint can't enumerate which emails have accounts or which are already
+    verified. Only sends when the account exists, is still unverified, and the
+    email service is enabled.
+    """
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if user is not None and not user.email_verified:
+        email_svc = get_email_service()
+        if email_svc.enabled:
+            verification_token = create_email_verification_token(user.id)
+            await email_svc.send_verification_email(
+                to=user.email,
+                token=verification_token,
+                name=user.name,
+            )
+            logger.info("Re-sent verification email for user %s", user.id)
+
+    return MessageResponse(
+        message="If an unverified account exists for that email, a new verification link has been sent.",
+    )
 
 
 @router.post("/reset-password", response_model=MessageResponse)

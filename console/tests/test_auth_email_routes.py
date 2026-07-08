@@ -21,6 +21,7 @@ from app.schemas import (
     ForgotPasswordRequest,
     LoginRequest,
     RegisterRequest,
+    ResendVerificationRequest,
     ResetPasswordRequest,
     VerifyEmailRequest,
 )
@@ -211,6 +212,82 @@ async def test_forgot_password_and_reset_password_flow(
     assert len(fake_email_service.password_reset_emails) == 1
     assert login_response.user.email == email
     assert login_response.user.email_verified is False
+
+
+# ---------------------------------------------------------------------------
+# Gate: resend-verification-endpoint
+#
+# Regression guard for the 2026-07-06 support-ticket class: a user whose 48h
+# verification token expired had NO self-service way to get a fresh link
+# (register was the only sender; forgot-password only re-sends a *reset*). The
+# fix adds a rate-limited, privacy-preserving POST /api/auth/resend-verification.
+# These tests fail on the old shape (no resend_verification handler) and pass
+# on the fix.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_sends_new_link_for_unverified_account(
+    fake_db: FakeSession,
+    fake_request,
+    fake_email_service: FakeEmailService,
+) -> None:
+    email = f"resend_{time.time_ns()}@example.com"
+    await auth_routes.register(
+        fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Resend Test"),
+        fake_db,
+    )
+    # Registration already sent one link; clear to isolate the resend.
+    fake_email_service.verification_emails.clear()
+
+    response = await auth_routes.resend_verification(
+        fake_request,
+        ResendVerificationRequest(email=email),
+        fake_db,
+    )
+
+    assert response.message.startswith("If an unverified account exists")
+    assert len(fake_email_service.verification_emails) == 1
+    assert fake_email_service.verification_emails[0]["to"] == email
+
+    # The re-sent token must actually verify the account end-to-end.
+    token = fake_email_service.verification_emails[0]["token"]
+    await auth_routes.verify_email(fake_request, VerifyEmailRequest(token=token), fake_db)
+    assert fake_db.users_by_email[email].email_verified is True
+
+
+@pytest.mark.asyncio
+async def test_resend_verification_is_silent_for_verified_and_unknown_emails(
+    fake_db: FakeSession,
+    fake_request,
+    fake_email_service: FakeEmailService,
+) -> None:
+    # Already-verified account: same generic response, but no new email.
+    email = f"resendverified_{time.time_ns()}@example.com"
+    await auth_routes.register(
+        fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Verified Test"),
+        fake_db,
+    )
+    token = fake_email_service.verification_emails[0]["token"]
+    await auth_routes.verify_email(fake_request, VerifyEmailRequest(token=token), fake_db)
+    fake_email_service.verification_emails.clear()
+
+    verified_resp = await auth_routes.resend_verification(
+        fake_request, ResendVerificationRequest(email=email), fake_db,
+    )
+    assert verified_resp.message.startswith("If an unverified account exists")
+    assert len(fake_email_service.verification_emails) == 0
+
+    # Unknown account: same generic response, no email (no enumeration leak).
+    unknown_resp = await auth_routes.resend_verification(
+        fake_request,
+        ResendVerificationRequest(email=f"nobody_{time.time_ns()}@example.com"),
+        fake_db,
+    )
+    assert unknown_resp.message.startswith("If an unverified account exists")
+    assert len(fake_email_service.verification_emails) == 0
 
 
 # ---------------------------------------------------------------------------
