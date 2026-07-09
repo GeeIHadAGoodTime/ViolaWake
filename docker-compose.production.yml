@@ -117,13 +117,18 @@ services:
       backend:
         condition: service_healthy
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    restart: always
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      backend:
-        condition: service_healthy
+  # RETIRED 2026-07-09: this connector served Cloudflare tunnel 7dbef1da, which
+  # was an orphaned tunnel with NO DNS routing to it (api.violawake.com is served
+  # by the separate violawake-api-server tunnel a4961724). The tunnel was deleted
+  # as part of the #326 Cloudflare estate cleanup. Left commented (not removed) so
+  # the retirement is discoverable; re-enable only against a live, DNS-routed tunnel.
+  # tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   restart: always
+  #   command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
 
 volumes:
   pgdata:
