@@ -70,6 +70,17 @@ class TrainingError(RuntimeError):
     """Raised when programmatic training cannot continue safely."""
 
 
+class ModelQualityGateError(TrainingError):
+    """Raised when a freshly trained model fails the deployment quality gate
+    (grade F) and ONNX export is blocked.
+
+    This is an EXPECTED outcome, not a bug: it means the user's recordings were
+    too few / too weak for the model to separate the wake word from negatives.
+    The job is correctly marked failed and the user is told, but consumers (the
+    Console backend's error classifier) treat this distinctly from an unexpected
+    error so it does not page ops via Sentry (GlitchTip violawake issue 28)."""
+
+
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
@@ -1839,7 +1850,7 @@ def _train_temporal_cnn(
             print(f"Load with:  WakeDetector(model='{output_path}')")
 
     if quality_grade == "F" and not skip_gate:
-        raise RuntimeError(
+        raise ModelQualityGateError(
             "Model failed the quality gate with grade F; ONNX export was blocked. "
             f"See {config_path} for quality metrics."
         )
