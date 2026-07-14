@@ -74,11 +74,15 @@ class ModelQualityGateError(TrainingError):
     """Raised when a freshly trained model fails the deployment quality gate
     (grade F) and ONNX export is blocked.
 
-    This is an EXPECTED outcome, not a bug: it means the user's recordings were
-    too few / too weak for the model to separate the wake word from negatives.
-    The job is correctly marked failed and the user is told, but consumers (the
-    Console backend's error classifier) treat this distinctly from an unexpected
-    error so it does not page ops via Sentry (GlitchTip violawake issue 28)."""
+    This is an EXPECTED outcome, not a bug: the model scored at or above the
+    deployment detection threshold on no-wake audio (silence, speech, or
+    confusable words), i.e. it would false-fire on the wrong sound, so it is not
+    shipped. This is usually run-to-run training variance rather than a problem
+    with the user's recordings (root cause CL-20260714-4c23 / #1184 / #1465), so
+    a retrain with the same recordings often passes. The job is correctly marked
+    failed and the user is told, but consumers (the Console backend's error
+    classifier) treat this distinctly from an unexpected error so it does not
+    page ops via Sentry (GlitchTip violawake issue 28)."""
 
 
 # Module-level temp directory override. When set, all tempfile operations use
@@ -1850,9 +1854,21 @@ def _train_temporal_cnn(
             print(f"Load with:  WakeDetector(model='{output_path}')")
 
     if quality_grade == "F" and not skip_gate:
+        # User-facing message: no internal paths (str(exc) is published to the
+        # client via the Console's job_queue), accurate about WHY (post-#1465 a
+        # grade-F means the model scored at/above the detection threshold on
+        # no-wake audio -- a real false-fire risk -- not that the recording was
+        # bad), and actionable (training has run-to-run variance, so a retrain
+        # with the same recordings usually passes). The full per-axis metrics are
+        # in the logged quality-gate block above for operators.
         raise ModelQualityGateError(
-            "Model failed the quality gate with grade F; ONNX export was blocked. "
-            f"See {config_path} for quality metrics."
+            "Your wake word didn't pass the quality check, so it wasn't saved. On "
+            "no-wake audio (silence, everyday speech, or similar-sounding words) the "
+            f"model scored at or above the {deployment_threshold:.2f} detection "
+            "threshold, which means it would trigger on the wrong sound. Wake-word "
+            "training varies run to run, so the quickest fix is to train again with "
+            "the same recordings. If it keeps failing, add a few more clear "
+            "recordings of your wake word, said a little differently each time."
         )
 
     return config
@@ -1861,6 +1877,55 @@ def _train_temporal_cnn(
 # ---------------------------------------------------------------------------
 # Post-training quality gate
 # ---------------------------------------------------------------------------
+
+# Silence-subgrade safety-margin tiers, expressed as FRACTIONS of the deployment
+# threshold so the whole silence ladder tracks the real false-fire line instead of
+# a hardcoded constant. The load-bearing C->F cliff is the deployment threshold
+# itself: the silence subgrade measures the model's worst score on no-wake (near-
+# silence) audio, and a score at/above the deployment threshold is exactly a model
+# that would fire on quiet input at deployment (a real false-fire) -- so it fails;
+# a score below the threshold cannot fire at deployment and must not be forced to
+# grade F on silence grounds (it is then graded on the speech/confusable axes,
+# which already measure against the same deployment threshold via _fp_rate).
+#
+# Before #1465 the cliff was a hardcoded 0.50, disconnected from the 0.80
+# deployment threshold (DEFAULT_THRESHOLD, _constants.py): it blocked ~75% of real
+# models whose near-silence score sat in 0.53-0.79 -- below 0.80, unable to fire at
+# deployment -- for run-to-run training variance, not real risk (root cause
+# CL-20260714-4c23 / #1184; founder decision #1465, aligned at the deployment
+# threshold given the independent inference-time RMS silence guard at
+# wake_detector.py Gate 1). The A/B tiers preserve their historical margins
+# (0.20 / 0.30 at threshold 0.80) but are now derived, so if the deployment
+# threshold ever moves the entire ladder moves with it.
+_SILENCE_A_THRESHOLD_FRACTION = 0.25  # A: silence < 0.25  * threshold
+_SILENCE_B_THRESHOLD_FRACTION = 0.375  # B: silence < 0.375 * threshold
+# C: silence < 1.0 * threshold (the false-fire line); at/above => grade F.
+
+
+def _grade_quality(
+    speech_fp_rate: float,
+    confusable_fp_rate: float,
+    silence_max_score: float,
+    deployment_threshold: float,
+) -> str:
+    """Grade a model A/B/C/F from its no-wake false-fire measurements.
+
+    All three subgrades are measured against the SAME deployment threshold: speech
+    and confusable via their false-positive rate at the threshold, and silence via
+    whether its worst near-silence window would fire at the threshold. The silence
+    C->F cliff is the deployment threshold; the A/B silence tiers are fractions of
+    it (see the module constants above). No silence bar is hardcoded.
+    """
+    silence_a_bar = _SILENCE_A_THRESHOLD_FRACTION * deployment_threshold
+    silence_b_bar = _SILENCE_B_THRESHOLD_FRACTION * deployment_threshold
+    silence_f_bar = deployment_threshold  # at/above the deployment threshold => would false-fire
+    if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence_max_score < silence_a_bar:
+        return "A"
+    if speech_fp_rate < 0.05 and confusable_fp_rate < 0.10 and silence_max_score < silence_b_bar:
+        return "B"
+    if speech_fp_rate < 0.10 and confusable_fp_rate < 0.20 and silence_max_score < silence_f_bar:
+        return "C"
+    return "F"
 
 
 def _run_quality_gate(
@@ -1923,19 +1988,6 @@ def _run_quality_gate(
             "C": "CAUTION",
             "F": "FAIL",
         }[grade]
-
-    def _grade_quality(
-        speech_fp_rate: float,
-        confusable_fp_rate: float,
-        silence_max_score: float,
-    ) -> str:
-        if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence_max_score < 0.20:
-            return "A"
-        if speech_fp_rate < 0.05 and confusable_fp_rate < 0.10 and silence_max_score < 0.30:
-            return "B"
-        if speech_fp_rate < 0.10 and confusable_fp_rate < 0.20 and silence_max_score < 0.50:
-            return "C"
-        return "F"
 
     model.eval()
     model = model.to(torch_device)
@@ -2026,7 +2078,9 @@ def _run_quality_gate(
         silence_max_score = 1.0
         silence_source = "none"
         silence_window_count = 0
-    grade = _grade_quality(speech_fp_rate, confusable_fp_rate, silence_max_score)
+    grade = _grade_quality(
+        speech_fp_rate, confusable_fp_rate, silence_max_score, deployment_threshold
+    )
 
     # Pool every non-positive score we collected into the negative distribution
     # used for d-prime. silence_scores prefers pure silence; near_silence is the
