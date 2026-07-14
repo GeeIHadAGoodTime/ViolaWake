@@ -1,0 +1,16 @@
+# Force LF line endings on shell scripts and other exec/interpreter files
+# regardless of a contributor's local core.autocrlf setting.
+#
+# Incident (2026-07-14): a Windows checkout with core.autocrlf=true silently
+# converted console/backend/entrypoint.sh to CRLF. The Docker image built from
+# that checkout baked in a corrupted shebang ("#!/bin/sh\r\n"), and the
+# container crash-looped in production with
+# "exec /app/entrypoint.sh: no such file or directory" -- a classic symptom of
+# a CRLF-mangled shebang, not a missing file. Any future Windows-built image
+# would silently repeat this without this file.
+* text=auto
+
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+Dockerfile* text eol=lf
+*.py text eol=lf

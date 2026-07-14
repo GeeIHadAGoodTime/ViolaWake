@@ -70,6 +70,16 @@ services:
     networks:
       - default
       - decoder-net
+      # Reach the shared self-hosted GlitchTip instance (VIOLAWAKE_SENTRY_DSN
+      # points at http://glitchtip-web:8080, a NOVVIOLA-stack container).
+      # Incident (2026-07-14): this was previously attached by an undocumented
+      # one-off `docker network connect`, which does NOT survive a normal
+      # `docker compose up -d backend` recreate (the documented deploy step in
+      # docs/DEPLOYMENT.md) -- so a routine backend deploy silently dropped
+      # GlitchTip connectivity, and error reporting failed closed with no
+      # visible symptom (the container stayed healthy; only Sentry sends
+      # failed, buried in logs as urllib3 NameResolutionError retries).
+      - novviola_viola-local
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
@@ -140,3 +150,8 @@ networks:
   default:
   decoder-net:
     internal: true
+  # Shared cross-stack network (created by the NOVVIOLA cloud compose stack)
+  # that hosts glitchtip-web. Must already exist on the host; see the backend
+  # service's networks: comment above for why this is declared explicitly.
+  novviola_viola-local:
+    external: true

@@ -57,6 +57,19 @@ Last verified end-to-end: **2026-05-07**. If you're reading this and the archite
 
 ### Deploy
 
+**Building on a Windows checkout: watch for CRLF.** Incident (2026-07-14): a
+build from a Windows git worktree with `core.autocrlf=true` silently converted
+`console/backend/entrypoint.sh` to CRLF line endings. The image built fine, but
+the container crash-looped in production with
+`exec /app/entrypoint.sh: no such file or directory` -- a corrupted shebang
+(`#!/bin/sh\r\n`), not a missing file. `.gitattributes` now pins `*.sh`/
+`entrypoint.sh` to `eol=lf` regardless of local git config, but if you ever see
+that exact error after a Windows-built image, this is almost certainly it --
+prefer building directly on the target Linux host (`/opt/viola/Wakeword` on the
+box) over shipping a Windows-built image. Verify with
+`docker run --rm --entrypoint sh <image> -c "head -c20 /app/entrypoint.sh | od -c"`
+before deploying -- expect `\n` after `sh`, never `\r\n`.
+
 ```bash
 cd /j/CLAUDE/PROJECTS/Wakeword
 
