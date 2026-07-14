@@ -123,6 +123,17 @@ def classify_exception(exc: Exception) -> ErrorClassification:
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
         return ErrorClassification(EXPECTED_ERROR, "timeout", logging.INFO)
 
+    # A model that fails the deployment quality gate (grade F) is an EXPECTED
+    # outcome for weak/insufficient user recordings -- the training job is
+    # correctly marked failed and the user is told, but it is NOT a code bug and
+    # must not page ops via Sentry. Matched by class name across the MRO so this
+    # stays decoupled from the (heavy) violawake_sdk import; the SDK raises
+    # violawake_sdk.tools.train.ModelQualityGateError (GlitchTip violawake issue
+    # 28, 2026-07-12). WARNING is below the Sentry LoggingIntegration ERROR
+    # event_level, so it becomes a breadcrumb, not a captured event.
+    if any(base.__name__ == "ModelQualityGateError" for base in type(exc).__mro__):
+        return ErrorClassification(EXPECTED_ERROR, "model_quality", logging.WARNING)
+
     if isinstance(exc, ValueError):
         return ErrorClassification(UNEXPECTED_ERROR, "data", logging.WARNING)
 

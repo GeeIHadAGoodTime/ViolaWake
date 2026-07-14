@@ -179,3 +179,10 @@ gates:
       - tests/unit/test_sdist_hygiene.py::test_scanner_flags_live_stripe_key_in_innocuous_file
       - tests/unit/test_sdist_hygiene.py::test_scanner_flags_env_backup_and_postgres_and_tunnel
       - tests/unit/test_sdist_hygiene.py::test_scanner_stays_quiet_on_clean_tree
+
+  - gate_id: console-quality-gate-block-is-expected-not-bug
+    contract: A grade-F model quality-gate block (ONNX export blocked for weak/insufficient user recordings) is an EXPECTED training outcome and must be classified expected/WARNING (below the Sentry LoggingIntegration ERROR event_level), never an unexpected "bug"/ERROR that pages ops via GlitchTip (violawake issue 28, 2026-07-12). Classification keys off the ModelQualityGateError type, never the message text.
+    detector: console/backend/tests/test_monitoring_quality_gate_classification.py
+    own_tests:
+      - console/backend/tests/test_monitoring_quality_gate_classification.py::test_quality_gate_error_is_expected_and_below_sentry_level
+      - console/backend/tests/test_monitoring_quality_gate_classification.py::test_bare_runtimeerror_grade_f_message_is_still_the_old_bug_shape
