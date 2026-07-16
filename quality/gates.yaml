@@ -186,3 +186,10 @@ gates:
     own_tests:
       - console/backend/tests/test_monitoring_quality_gate_classification.py::test_quality_gate_error_is_expected_and_below_sentry_level
       - console/backend/tests/test_monitoring_quality_gate_classification.py::test_bare_runtimeerror_grade_f_message_is_still_the_old_bug_shape
+
+  - gate_id: sdk-silence-subgrade-derived-from-deploy-threshold
+    contract: The training quality gate's silence subgrade C->F cliff MUST be DERIVED from the deployment threshold (DEFAULT_THRESHOLD / _run_quality_gate deployment_threshold), never a hardcoded constant disconnected from it. A near-silence max score below the deployment threshold cannot false-fire at deployment, so it must not force grade F; only silence at/above the deployment threshold fails, and the A/B tiers are fractions of the same threshold. Reds if any silence bar is hardcoded (e.g. the old 0.50) or otherwise does not track the threshold it protects (issue #1465, CL-20260714-4c23 / #1184).
+    detector: tests/unit/test_quality_gate_silence_bar.py
+    own_tests:
+      - tests/unit/test_quality_gate_silence_bar.py::test_silence_cliff_is_the_deployment_threshold_not_hardcoded_050
+      - tests/unit/test_quality_gate_silence_bar.py::test_silence_bar_tracks_the_deployment_threshold

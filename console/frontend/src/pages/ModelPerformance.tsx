@@ -212,7 +212,7 @@ function getRecommendations(
     );
   } else {
     recommendations.push(
-      `Grade F failed the quality gate. Add cleaner positives, include confusable phrases, and retrain before deployment.`,
+      `Grade F: on no-wake audio (silence, speech, or similar-sounding words) the model scored at or above the detection threshold, so it would trigger on the wrong sound and was not saved. This is usually run-to-run training variance, so training again with the same recordings often passes; if it keeps failing, add a few more clear recordings of your wake word.`,
     );
   }
 
