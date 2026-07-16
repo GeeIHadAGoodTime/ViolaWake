@@ -204,7 +204,7 @@ jobs:
           cache: pip
 
       - name: Install PortAudio
-        run: sudo apt-get install -y portaudio19-dev
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
 
       - name: Install all extras
         run: |
@@ -251,7 +251,7 @@ jobs:
           cache: pip
 
       - name: Install PortAudio
-        run: sudo apt-get install -y portaudio19-dev
+        run: sudo apt-get update && sudo apt-get install -y portaudio19-dev
 
       - name: Install all extras
         run: |
