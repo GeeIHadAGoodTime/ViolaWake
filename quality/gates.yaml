@@ -193,3 +193,12 @@ gates:
     own_tests:
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_cliff_is_the_deployment_threshold_not_hardcoded_050
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_bar_tracks_the_deployment_threshold
+
+  - gate_id: training-queue-wedge-detection
+    contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.
+    detector: console/tests/test_training_queue_wedge.py
+    own_tests:
+      - console/tests/test_training_queue_wedge.py::test_paused_breaker_pending_is_blocked_not_dispatchable
+      - console/tests/test_training_queue_wedge.py::test_health_paused_blocked_only_is_ok
+      - console/tests/test_training_queue_wedge.py::test_health_genuine_dispatch_wedge_is_error
+      - console/tests/test_training_queue_wedge.py::test_health_normal_backlog_all_slots_busy_is_ok

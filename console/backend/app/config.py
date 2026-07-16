@@ -61,6 +61,12 @@ class Settings(BaseSettings):
     training_timeout: int = 1800  # seconds (30 minutes)
     max_concurrent_jobs: int = 2
     negatives_corpus_dir: str = ""  # Path to curated negative audio corpus (paid tier)
+    # A *dispatchable* pending job (not blocked by a paused/backoff circuit
+    # breaker) that has waited longer than this while a worker slot is free is a
+    # genuine dispatcher wedge -> health reports ERROR so it pages, instead of
+    # sitting silent for hours (issue #1481). Backlog with all slots busy, and
+    # jobs blocked only by a paused/backoff breaker, are NOT wedges.
+    training_queue_wedge_threshold_seconds: int = 600
 
     # Retention cleanup (0 = disabled)
     recording_retention_days: int = 90  # Days to keep recordings; 0 disables automatic cleanup
