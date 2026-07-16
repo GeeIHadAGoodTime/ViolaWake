@@ -55,7 +55,7 @@ services:
     env_file:
       - .env.production
     environment:
-      - VIOLAWAKE_DB_URL=postgresql+asyncpg://violawake:${POSTGRES_PASSWORD}@postgres:5432/violawake
+      - VIOLAWAKE_DB_URL=postgresql+asyncpg://violawake:${POSTGRES_PASSWORD}@wakeword-postgres-1:5432/violawake
       - VIOLAWAKE_NEGATIVES_CORPUS_DIR=/app/negatives
       - VIOLAWAKE_USE_DECODER_SIDECAR=${VIOLAWAKE_USE_DECODER_SIDECAR:-0}
       - VIOLAWAKE_DECODER_SIDECAR_URL=http://decoder:8001/decode
