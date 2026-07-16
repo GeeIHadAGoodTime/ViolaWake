@@ -107,17 +107,53 @@ async def _check_training_queue() -> dict[str, Any]:
     worker_status = dict(queue_snapshot["worker_status"])
     worker_status["persisted_running_jobs"] = int(queue_snapshot["persisted_running_jobs"])
 
-    component_status = HEALTH_STATUS_OK
-    if not worker_status["worker_task_running"] or worker_status["active_workers"] > worker_status["max_workers"]:
-        component_status = HEALTH_STATUS_ERROR
-    elif queue_depth > 0:
-        component_status = HEALTH_STATUS_DEGRADED
+    blocked_pending_jobs = int(queue_snapshot.get("blocked_pending_jobs", 0))
+    oldest_pending_age_s = queue_snapshot.get("oldest_pending_age_s")
+    oldest_dispatchable_pending_age_s = queue_snapshot.get("oldest_dispatchable_pending_age_s")
 
-    return {
+    # Honest wedge detection (issue #1481). A non-empty queue is NORMAL: work is
+    # dispatched near-instantly whenever a worker slot frees up, so a backlog
+    # while every slot is busy, and jobs blocked only by a paused/backoff
+    # circuit breaker (which no worker can pick up until the user resumes), are
+    # both healthy. The queue is genuinely WEDGED -- and must page rather than
+    # sit silent for hours -- only when the dispatcher fails to pick up runnable
+    # work: the worker task died, more jobs are running than slots allow, or a
+    # *dispatchable* pending job has waited past the wedge threshold while a slot
+    # is free. The pre-fix "any queue_depth > 0 => degraded" rule both
+    # false-alarmed on ordinary backlog and pinned the backend unhealthy forever
+    # on a single paused-breaker job, making the signal useless for paging.
+    wedge_threshold_s = settings.training_queue_wedge_threshold_seconds
+    component_status = HEALTH_STATUS_OK
+    wedge_reason: str | None = None
+    if not worker_status["worker_task_running"]:
+        component_status = HEALTH_STATUS_ERROR
+        wedge_reason = "worker task not running"
+    elif worker_status["active_workers"] > worker_status["max_workers"]:
+        component_status = HEALTH_STATUS_ERROR
+        wedge_reason = "more running jobs than worker slots"
+    elif (
+        worker_status["available_slots"] > 0
+        and oldest_dispatchable_pending_age_s is not None
+        and oldest_dispatchable_pending_age_s > wedge_threshold_s
+    ):
+        component_status = HEALTH_STATUS_ERROR
+        wedge_reason = (
+            f"dispatchable job pending {oldest_dispatchable_pending_age_s:.0f}s "
+            f"(> {wedge_threshold_s}s) with {worker_status['available_slots']} free slot(s)"
+        )
+
+    result: dict[str, Any] = {
         "status": component_status,
         "queue_depth": queue_depth,
+        "blocked_pending_jobs": blocked_pending_jobs,
+        "oldest_pending_age_s": oldest_pending_age_s,
+        "oldest_dispatchable_pending_age_s": oldest_dispatchable_pending_age_s,
+        "wedge_threshold_s": wedge_threshold_s,
         "worker_status": worker_status,
     }
+    if wedge_reason is not None:
+        result["wedge_reason"] = wedge_reason
+    return result
 
 
 def _check_storage() -> dict[str, Any]:

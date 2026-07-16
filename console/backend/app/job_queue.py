@@ -467,21 +467,61 @@ class JobQueue:
             return await self._get_circuit_breaker_with_conn(conn, user_id)
 
     async def runtime_snapshot(self) -> dict[str, Any]:
-        """Return queue depth and worker state for health checks."""
+        """Return queue depth and worker state for health checks.
+
+        Beyond raw counts this exposes the *wedge* signal the health check
+        keys on (issue #1481): the age of the oldest pending job that is
+        actually **dispatchable** -- i.e. not blocked by a paused or
+        backing-off circuit breaker. A job blocked by a paused breaker can
+        never be dispatched until the user resumes, so counting it as a stuck
+        queue (the pre-fix behaviour) flagged the whole backend unhealthy
+        forever with no worker able to touch it. ``oldest_dispatchable_pending_age_s``
+        rises only when the dispatcher genuinely fails to pick up runnable work.
+        """
+        now = _utcnow()
         async with self._connect() as conn:
-            async with conn.execute(
-                "SELECT COUNT(*) AS count FROM jobs WHERE status = ?",
-                (JobStatus.PENDING.value,),
-            ) as cursor:
-                pending_row = await cursor.fetchone()
             async with conn.execute(
                 "SELECT COUNT(*) AS count FROM jobs WHERE status = ?",
                 (JobStatus.RUNNING.value,),
             ) as cursor:
                 running_row = await cursor.fetchone()
+            async with conn.execute(
+                """
+                SELECT j.created_at AS created_at, cb.paused AS paused,
+                       cb.next_attempt_at AS next_attempt_at
+                FROM jobs j
+                LEFT JOIN user_circuit_breakers cb ON cb.user_id = j.user_id
+                WHERE j.status = ?
+                """,
+                (JobStatus.PENDING.value,),
+            ) as cursor:
+                pending_rows = await cursor.fetchall()
 
-        pending_count = int(pending_row["count"]) if pending_row is not None else 0
         persisted_running_count = int(running_row["count"]) if running_row is not None else 0
+
+        pending_count = len(pending_rows)
+        oldest_pending_age_s: float | None = None
+        oldest_dispatchable_pending_age_s: float | None = None
+        blocked_pending_count = 0
+        for row in pending_rows:
+            created = _deserialize_datetime(row["created_at"]) or now
+            age = max(0.0, (now - created).total_seconds())
+            if oldest_pending_age_s is None or age > oldest_pending_age_s:
+                oldest_pending_age_s = age
+            # Mirror _fill_queue_from_db's dispatch-skip logic exactly.
+            next_attempt_at = _deserialize_datetime(row["next_attempt_at"])
+            blocked = bool(row["paused"]) or (
+                next_attempt_at is not None and next_attempt_at > now
+            )
+            if blocked:
+                blocked_pending_count += 1
+                continue
+            if (
+                oldest_dispatchable_pending_age_s is None
+                or age > oldest_dispatchable_pending_age_s
+            ):
+                oldest_dispatchable_pending_age_s = age
+
         async with self._state_lock:
             queued_job_ids = sorted(self._queued_job_ids)
             running_job_ids = sorted(self._running_job_ids)
@@ -493,6 +533,9 @@ class JobQueue:
             "queue_depth": pending_count,
             "in_memory_queue_depth": self._queue.qsize(),
             "persisted_running_jobs": persisted_running_count,
+            "blocked_pending_jobs": blocked_pending_count,
+            "oldest_pending_age_s": oldest_pending_age_s,
+            "oldest_dispatchable_pending_age_s": oldest_dispatchable_pending_age_s,
             "worker_status": {
                 "active_workers": active_workers,
                 "max_workers": max_workers,
