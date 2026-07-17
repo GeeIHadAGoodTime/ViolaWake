@@ -202,3 +202,10 @@ gates:
       - console/tests/test_training_queue_wedge.py::test_health_paused_blocked_only_is_ok
       - console/tests/test_training_queue_wedge.py::test_health_genuine_dispatch_wedge_is_error
       - console/tests/test_training_queue_wedge.py::test_health_normal_backlog_all_slots_busy_is_ok
+
+  - gate_id: compose-db-host-unambiguous-on-shared-net
+    contract: In any compose file that attaches the backend to the shared novviola_viola-local network (where Viola's own postgres-aliased container lives), VIOLAWAKE_DB_URL must address Postgres by its unambiguous container name (wakeword-postgres-1), never the bare 'postgres' alias. Docker's embedded DNS resolves the bare alias ambiguously across the two networks, order-dependent on attach timing, so an unlucky recreate connects asyncpg to Viola's postgres (no violawake role) and fails InvalidPasswordError. This latent landmine took the backend down twice in two days (2026-07-15 ~08:09 UTC GlitchTip issues 35/36/37, and the 2026-07-16 17:16-27 UTC redeploy ~11min 502); durable fix is 541590e. A standalone compose that does not join the shared network may still use 'postgres'.
+    detector: tests/unit/test_compose_db_host_pin.py
+    own_tests:
+      - tests/unit/test_compose_db_host_pin.py::test_detector_fails_on_the_pre_fix_shape
+      - tests/unit/test_compose_db_host_pin.py::test_detector_passes_on_the_fixed_and_benign_shapes
