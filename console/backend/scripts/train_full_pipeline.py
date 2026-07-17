@@ -29,15 +29,27 @@ import numpy as np
 
 
 # -- TTS positive generation using edge-tts directly --------------------------
-
+#
+# NOTE (#1768): this list used to duplicate violawake_sdk.tools.train's
+# EDGE_TTS_VOICES verbatim, including 7 voices Microsoft has since retired
+# from the Edge Read-Aloud service server-side (en-US-DavisNeural,
+# AmberNeural, BrandonNeural, CoraNeural, ElizabethNeural, JacobNeural,
+# MonicaNeural -- confirmed dead live via edge_tts.list_voices() while
+# root-causing GlitchTip violawake issues 25/34/38). train.py's copy was
+# fixed in PR #15; this script's independent copy was found and fixed
+# separately during that investigation's hunt-for-misses pass because this
+# is a standalone reimplementation (its own `_synthesize_one`, no retry, no
+# Kokoro fallback), not an import of train.py's resilient version. Keeping
+# two independently-maintained voice lists is itself the bug class this
+# comment exists to flag: if you're touching this list again, check whether
+# `violawake_sdk.tools.train.EDGE_TTS_VOICES` still matches it.
 EDGE_VOICES = [
     "en-US-GuyNeural", "en-US-JennyNeural", "en-US-AriaNeural",
-    "en-US-DavisNeural", "en-US-AmberNeural", "en-US-AnaNeural",
-    "en-US-AndrewNeural", "en-US-BrandonNeural", "en-US-ChristopherNeural",
-    "en-US-CoraNeural", "en-US-ElizabethNeural", "en-US-EricNeural",
-    "en-US-JacobNeural", "en-US-MichelleNeural", "en-US-MonicaNeural",
-    "en-US-RogerNeural", "en-US-SteffanNeural", "en-GB-RyanNeural",
-    "en-GB-SoniaNeural", "en-AU-NatashaNeural",
+    "en-US-AnaNeural", "en-US-AndrewNeural", "en-US-ChristopherNeural",
+    "en-US-EricNeural", "en-US-MichelleNeural", "en-US-RogerNeural",
+    "en-US-SteffanNeural", "en-US-AvaNeural", "en-US-EmmaNeural",
+    "en-US-BrianNeural", "en-GB-SoniaNeural", "en-GB-RyanNeural",
+    "en-AU-NatashaNeural",
 ]
 
 
