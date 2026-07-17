@@ -20,7 +20,7 @@ Training pipeline:
   - Post-training quality gate (speech FP check)
 
 Data pipeline (matches production golden path):
-  A. Positives: user-provided + auto-TTS (edge-tts, 20 voices x 3 phrases x 3 conditions)
+  A. Positives: user-provided + auto-TTS (edge-tts, len(EDGE_TTS_VOICES) voices x 3 phrases x 3 conditions)
   B. Confusable negatives round 1: 30 phonetically similar words x 10 voices
   C. Confusable negatives round 2: 16 tighter variants x 10 voices
   D. Speech negatives: common phrases via TTS (100+ phrases x 5 voices)
@@ -90,7 +90,7 @@ class ModelQualityGateError(TrainingError):
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
 _TMP_DIR: str | None = None
 _LAST_EDGE_TTS_ERROR: str | None = None
-_REPORTED_EDGE_TTS_ERRORS: set[str] = set()
+_REPORTED_EDGE_TTS_ERRORS: set[tuple[str, str]] = set()
 _EDGE_TTS_MAX_ATTEMPTS = 3
 _EDGE_TTS_RETRY_BASE_SECONDS = 0.75
 _EDGE_TTS_RETRY_MAX_SECONDS = 4.0
@@ -100,24 +100,36 @@ _EDGE_TTS_RETRY_RNG = Random()
 # Edge-TTS voice pool for diverse positive and negative generation
 # ---------------------------------------------------------------------------
 
+# Verified live against edge_tts.list_voices() on 2026-07-15 (GlitchTip
+# violawake issues 34/38, #1768). Microsoft has retired seven of the twenty
+# voices this list originally shipped with -- DavisNeural, AmberNeural,
+# BrandonNeural, CoraNeural, ElizabethNeural, JacobNeural, MonicaNeural no
+# longer exist server-side. Requesting a retired ShortName still completes
+# the edge-tts WebSocket handshake (101 Switching Protocols) but the server
+# never sends audio frames, so every attempt exhausts all retries with
+# NoAudioReceived -- a permanent, deterministic failure, not throttling or a
+# network/egress issue (other voices in this same list synthesize instantly
+# from the same process). Replaced the seven dead entries with valid
+# same-locale voices (AvaNeural, EmmaNeural, BrianNeural) to keep the pool at
+# reasonable diversity without inflating it with untested multilingual
+# variants. If a future voice silently goes dead again, `_edge_tts_fail`
+# below now reports each (voice, text) failure independently instead of
+# reporting only the first one seen per process lifetime, so it won't take a
+# live investigation to notice.
 EDGE_TTS_VOICES = [
     "en-US-GuyNeural",
     "en-US-JennyNeural",
     "en-US-AriaNeural",
-    "en-US-DavisNeural",
-    "en-US-AmberNeural",
     "en-US-AnaNeural",
     "en-US-AndrewNeural",
-    "en-US-BrandonNeural",
     "en-US-ChristopherNeural",
-    "en-US-CoraNeural",
-    "en-US-ElizabethNeural",
     "en-US-EricNeural",
-    "en-US-JacobNeural",
     "en-US-MichelleNeural",
-    "en-US-MonicaNeural",
     "en-US-RogerNeural",
     "en-US-SteffanNeural",
+    "en-US-AvaNeural",
+    "en-US-EmmaNeural",
+    "en-US-BrianNeural",
     "en-GB-SoniaNeural",
     "en-GB-RyanNeural",
     "en-AU-NatashaNeural",
@@ -314,10 +326,21 @@ def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
     summary = f"{type(detail).__name__}: {detail}" if isinstance(detail, BaseException) else detail
     _LAST_EDGE_TTS_ERROR = summary
 
-    # A missing decoder causes hundreds of identical per-sample failures. Log
-    # the actual exception once, then the generator summary logs the zero count.
-    if summary not in _REPORTED_EDGE_TTS_ERRORS:
-        _REPORTED_EDGE_TTS_ERRORS.add(summary)
+    # Dedup key is (voice, summary), NOT summary alone. A missing decoder or a
+    # broken conversion toolchain causes hundreds of *identical* per-sample
+    # failures for one job -- log the actual exception once per voice, then
+    # the generator summary logs the zero/partial count. Keying on summary
+    # alone (pre-#1768) collapsed unrelated failures too: the exhausted-
+    # retries message never includes voice/text, so a dead voice (e.g.
+    # en-US-DavisNeural, retired by Microsoft -- GlitchTip 34/38) silently
+    # ate the report slot for every *other* voice's failures for the rest of
+    # the process lifetime. Reproduced live: two different (voice, text)
+    # pairs failing in the same process produced only one log line before
+    # this fix. `reset_edge_tts_reporting()` additionally clears this per
+    # training job so failures are never masked across jobs/customers either.
+    dedup_key = (voice, summary)
+    if dedup_key not in _REPORTED_EDGE_TTS_ERRORS:
+        _REPORTED_EDGE_TTS_ERRORS.add(dedup_key)
         logger.error(
             "edge-tts synthesis failed for voice %s text %.80r: %s",
             voice,
@@ -325,6 +348,22 @@ def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
             summary,
         )
     return False
+
+
+def reset_edge_tts_reporting() -> None:
+    """Clear per-run edge-tts failure state at a training job boundary.
+
+    ``_REPORTED_EDGE_TTS_ERRORS`` and ``_LAST_EDGE_TTS_ERROR`` are process-
+    lifetime globals so within-job log spam stays deduped even though the
+    training worker process runs for days across many jobs. Without this
+    reset, a (voice, summary) pair reported once for job N stays silently
+    suppressed for every later job that hits the exact same failure --
+    hiding a permanently-broken voice from every customer after the first
+    one. Call this once at the start of each training job.
+    """
+    global _LAST_EDGE_TTS_ERROR
+    _REPORTED_EDGE_TTS_ERRORS.clear()
+    _LAST_EDGE_TTS_ERROR = None
 
 
 def _edge_tts_synthesize(
@@ -532,6 +571,54 @@ def _kokoro_tts_synthesize(
         return False
 
 
+class _KokoroFallback:
+    """Lazily-initialized, per-sample Kokoro TTS fallback for edge-tts callers.
+
+    Shared by every ``EDGE_TTS_VOICES`` generator (#1768) so a single dead or
+    transiently-flaky edge-tts voice only ever loses ITS OWN sample to
+    Kokoro, never the whole run. Readiness (import + engine construction) is
+    checked at most once per generator call and cached either way, so a
+    missing/broken Kokoro install costs one probe, not one probe per sample.
+    """
+
+    def __init__(self) -> None:
+        self._checked = False
+        self._available = False
+        self._engine: Any | None = None
+        self._voices: list[str] = []
+
+    def ready(self) -> bool:
+        if self._checked:
+            return self._available
+        self._checked = True
+        try:
+            from violawake_sdk.tts import AVAILABLE_VOICES, TTS_SAMPLE_RATE, TTSEngine
+        except ImportError:
+            return False
+
+        self._voices = list(AVAILABLE_VOICES)
+        if not self._voices:
+            return False
+        try:
+            self._engine = TTSEngine(voice=self._voices[0], sample_rate=TTS_SAMPLE_RATE)
+        except Exception:
+            self._engine = None
+            return False
+        print("Kokoro TTS fallback ready (used per-sample when edge-tts fails)")
+        self._available = True
+        return True
+
+    def synthesize(self, text: str, output_path: Path, *, rotate_index: int) -> bool:
+        """Synthesize with a Kokoro voice picked deterministically from `rotate_index`.
+
+        Caller must have already confirmed ``ready()`` returned True.
+        """
+        if not self._voices:
+            return False
+        voice = self._voices[rotate_index % len(self._voices)]
+        return _kokoro_tts_synthesize(text, voice, output_path, engine=self._engine)
+
+
 def _generate_tts_positives(
     wake_word: str,
     output_dir: Path,
@@ -541,7 +628,7 @@ def _generate_tts_positives(
 ) -> list[Path]:
     """Generate diverse TTS positive samples using Edge TTS with Kokoro fallback.
 
-    Produces: 20 voices x 3 phrases (WORD, hey WORD, ok WORD) = 60 clean files.
+    Produces: len(EDGE_TTS_VOICES) voices x 3 phrases (WORD, hey WORD, ok WORD) clean files.
     Then augmentation (noisy + reverb) multiplies to ~180 total.
 
     Returns list of generated WAV file paths.
@@ -555,32 +642,18 @@ def _generate_tts_positives(
     output_dir.mkdir(parents=True, exist_ok=True)
     phrases = [wake_word, f"hey {wake_word}", f"ok {wake_word}"]
     generated: list[Path] = []
-    kokoro_fallback = False
-    kokoro_engine: Any | None = None
-    kokoro_voices: list[str] = []
-
-    def _ensure_kokoro_ready() -> bool:
-        nonlocal kokoro_fallback, kokoro_engine, kokoro_voices
-        if kokoro_fallback:
-            return kokoro_engine is not None and len(kokoro_voices) > 0
-        try:
-            from violawake_sdk.tts import AVAILABLE_VOICES, TTS_SAMPLE_RATE, TTSEngine
-        except ImportError:
-            return False
-
-        print("Using Kokoro TTS for sample generation (Edge TTS unavailable)")
-        kokoro_fallback = True
-        kokoro_voices = list(AVAILABLE_VOICES)
-        if not kokoro_voices:
-            return False
-        try:
-            kokoro_engine = TTSEngine(
-                voice=kokoro_voices[0],
-                sample_rate=TTS_SAMPLE_RATE,
-            )
-        except Exception:
-            kokoro_engine = None
-        return kokoro_engine is not None
+    # NOTE (#1768): this used to be a *sticky* switch -- once any single
+    # edge-tts call failed, a `kokoro_fallback = True` flag made every
+    # subsequent (voice, phrase) in this job route straight to Kokoro, even
+    # for the 15+ other edge-tts voices that were perfectly valid. One dead
+    # voice (en-US-DavisNeural, retired by Microsoft) was silently
+    # collapsing ~80% of a job's "diverse edge-tts voices" down to Kokoro's
+    # much smaller voice set for every job that hit it in voice-list order.
+    # `_KokoroFallback` retries edge-tts independently for every (voice,
+    # phrase); Kokoro only ever substitutes for the one sample that actually
+    # failed, so a single bad voice can no longer silently erase the
+    # diversity the other voices provide.
+    kokoro = _KokoroFallback()
 
     if verbose:
         total = len(EDGE_TTS_VOICES) * len(phrases)
@@ -597,29 +670,14 @@ def _generate_tts_positives(
                 generated.append(clean_path)
                 continue
 
-            if kokoro_fallback:
-                kokoro_voice = kokoro_voices[voice_idx % len(kokoro_voices)]
-                ok = _kokoro_tts_synthesize(
-                    phrase,
-                    kokoro_voice,
-                    clean_path,
-                    engine=kokoro_engine,
-                )
-            else:
-                ok = _edge_tts_synthesize(
-                    phrase,
-                    voice,
-                    clean_path,
-                    check_cancelled=check_cancelled,
-                )
-                if not ok and _ensure_kokoro_ready():
-                    kokoro_voice = kokoro_voices[voice_idx % len(kokoro_voices)]
-                    ok = _kokoro_tts_synthesize(
-                        phrase,
-                        kokoro_voice,
-                        clean_path,
-                        engine=kokoro_engine,
-                    )
+            ok = _edge_tts_synthesize(
+                phrase,
+                voice,
+                clean_path,
+                check_cancelled=check_cancelled,
+            )
+            if not ok and kokoro.ready():
+                ok = kokoro.synthesize(phrase, clean_path, rotate_index=voice_idx)
             if ok and clean_path.exists():
                 generated.append(clean_path)
 
@@ -697,6 +755,11 @@ def _generate_confusable_negatives(
     generated: list[Path] = []
     total_samples = len(confusable_words) * len(voices_subset)
     completed_samples = 0
+    # #1768: negatives had NO fallback at all -- a dead/flaky edge-tts voice
+    # just silently dropped that sample, shrinking the negative-sample pool
+    # with no recovery. Give it the same per-sample Kokoro fallback the
+    # positives path uses.
+    kokoro = _KokoroFallback()
 
     for word_idx, word in enumerate(confusable_words):
         _check_cancelled(check_cancelled)
@@ -714,6 +777,8 @@ def _generate_confusable_negatives(
                 out_path,
                 check_cancelled=check_cancelled,
             )
+            if not ok and kokoro.ready():
+                ok = kokoro.synthesize(word, out_path, rotate_index=voice_idx)
             if ok and out_path.exists():
                 generated.append(out_path)
 

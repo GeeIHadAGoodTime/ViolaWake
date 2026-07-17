@@ -185,6 +185,9 @@ class TestTrainHelpers:
     def test_confusable_generation_logs_zero_edge_tts_outputs(
         self, caplog: pytest.LogCaptureFixture, tmp_path: Path
     ) -> None:
+        """When edge-tts AND its Kokoro fallback both fail (#1768 added the
+        fallback; this proves the zero-files error path still fires when
+        even that recovery path is unavailable, e.g. Kokoro not installed)."""
         train._LAST_EDGE_TTS_ERROR = "pydub decode failed: missing ffprobe"
 
         with (
@@ -194,6 +197,7 @@ class TestTrainHelpers:
                 return_value=["violas"],
             ),
             patch("violawake_sdk.tools.train._edge_tts_synthesize", return_value=False),
+            patch.object(train._KokoroFallback, "ready", lambda self: False),
         ):
             generated = train._generate_confusable_negatives(
                 "viola",
@@ -366,6 +370,218 @@ class TestTrainHelpers:
         assert len(embeddings) == 12
         assert source_indices == ([0] * 4) + ([1] * 4) + ([2] * 4)
         assert tags == ["neg"] * 12
+
+    def test_edge_tts_voices_excludes_known_retired_voices(self) -> None:
+        """Regression test for #1768 (GlitchTip 34/38).
+
+        Microsoft retired these ShortNames from the Edge Read-Aloud service
+        (confirmed live via edge_tts.list_voices() on 2026-07-15); requesting
+        one still completes the WebSocket handshake but never returns audio,
+        so it fails deterministically on every attempt, every job, forever.
+        This must never regress back into the pool.
+        """
+        retired = {
+            "en-US-DavisNeural",
+            "en-US-AmberNeural",
+            "en-US-BrandonNeural",
+            "en-US-CoraNeural",
+            "en-US-ElizabethNeural",
+            "en-US-JacobNeural",
+            "en-US-MonicaNeural",
+        }
+        assert not retired & set(train.EDGE_TTS_VOICES)
+        assert len(train.EDGE_TTS_VOICES) == len(set(train.EDGE_TTS_VOICES)), (
+            "EDGE_TTS_VOICES must not contain duplicates"
+        )
+
+    def test_edge_tts_fail_reports_each_distinct_voice_independently(self) -> None:
+        """Regression test for #1768's dedup bug.
+
+        `_edge_tts_fail`'s report-once dedup used to key ONLY on the generic
+        exhausted-retries summary text, which never includes voice or text.
+        So once voice A failed, voice B failing with the *same* generic
+        NoAudioReceived-style message was silently dropped -- no log line,
+        no GlitchTip event -- for the rest of the process's lifetime. This
+        reproduces that exact shape (two different voices, identical
+        `detail` string) and asserts both get logged.
+        """
+        train._REPORTED_EDGE_TTS_ERRORS.clear()
+        train._LAST_EDGE_TTS_ERROR = None
+        try:
+            with self._capture_errors() as records:
+                assert train._edge_tts_fail("word one", "en-US-DeadVoiceA", "boom: same message") is False
+                assert train._edge_tts_fail("word two", "en-US-DeadVoiceB", "boom: same message") is False
+        finally:
+            train._REPORTED_EDGE_TTS_ERRORS.clear()
+            train._LAST_EDGE_TTS_ERROR = None
+
+        assert len(records) == 2, "both distinct voices must be reported, not just the first"
+        assert "en-US-DeadVoiceA" in records[0]
+        assert "en-US-DeadVoiceB" in records[1]
+
+    def test_edge_tts_fail_still_dedups_same_voice_repeat(self) -> None:
+        """The SAME voice repeating the SAME failure stays deduped (avoids
+        the "hundreds of identical per-sample failures" log spam the
+        original dedup was built to prevent)."""
+        train._REPORTED_EDGE_TTS_ERRORS.clear()
+        train._LAST_EDGE_TTS_ERROR = None
+        try:
+            with self._capture_errors() as records:
+                assert train._edge_tts_fail("word one", "en-US-DeadVoiceA", "boom: same message") is False
+                assert train._edge_tts_fail("word two", "en-US-DeadVoiceA", "boom: same message") is False
+        finally:
+            train._REPORTED_EDGE_TTS_ERRORS.clear()
+            train._LAST_EDGE_TTS_ERROR = None
+
+        assert len(records) == 1
+
+    def test_reset_edge_tts_reporting_clears_cross_job_dedup_state(self) -> None:
+        """Regression test for #1768: without a per-job reset, a voice that
+        failed in job N stays silently suppressed in job N+1 forever (the
+        worker process runs for days across many jobs)."""
+        train._REPORTED_EDGE_TTS_ERRORS.clear()
+        train._LAST_EDGE_TTS_ERROR = None
+        try:
+            with self._capture_errors() as job_n_records:
+                assert train._edge_tts_fail("hey satven", "en-US-DavisNeural", "boom") is False
+            assert len(job_n_records) == 1
+
+            train.reset_edge_tts_reporting()
+
+            with self._capture_errors() as job_n_plus_1_records:
+                assert train._edge_tts_fail("hey satven", "en-US-DavisNeural", "boom") is False
+            assert len(job_n_plus_1_records) == 1, (
+                "the next job must get its own report, not silence from the prior job's dedup"
+            )
+        finally:
+            train._REPORTED_EDGE_TTS_ERRORS.clear()
+            train._LAST_EDGE_TTS_ERROR = None
+
+    @staticmethod
+    def _capture_errors():
+        import contextlib
+        import logging
+
+        class _ListHandler(logging.Handler):
+            def __init__(self) -> None:
+                super().__init__()
+                self.records: list[str] = []
+
+            def emit(self, record: logging.LogRecord) -> None:
+                self.records.append(record.getMessage())
+
+        handler = _ListHandler()
+
+        @contextlib.contextmanager
+        def _ctx():
+            train.logger.addHandler(handler)
+            train.logger.setLevel(logging.ERROR)
+            try:
+                yield handler.records
+            finally:
+                train.logger.removeHandler(handler)
+
+        return _ctx()
+
+    def test_generate_tts_positives_falls_back_per_voice_not_sticky(self, tmp_path: Path) -> None:
+        """Regression test for #1768's sticky-fallback bug.
+
+        The old code flipped a persistent `kokoro_fallback = True` switch the
+        first time ANY voice failed, so every subsequent voice in the run --
+        even perfectly healthy ones -- was routed to Kokoro without ever
+        trying edge-tts again. One dead voice silently erased the diversity
+        of every other voice in the pool for that job. This proves edge-tts
+        is retried independently for every voice: only the failing voice's
+        samples use Kokoro; the healthy voices after it still go through
+        edge-tts.
+        """
+        dead_voice = train.EDGE_TTS_VOICES[1]
+        edge_tts_calls: list[str] = []
+
+        def _fake_edge_tts_synthesize(text, voice, output_path, *, check_cancelled=None):
+            edge_tts_calls.append(voice)
+            if voice == dead_voice:
+                return False
+            output_path.write_bytes(b"wav")
+            return True
+
+        kokoro_calls: list[str] = []
+
+        def _fake_kokoro_ready(self) -> bool:
+            return True
+
+        def _fake_kokoro_synthesize(self, text, output_path, *, rotate_index):
+            kokoro_calls.append(text)
+            output_path.write_bytes(b"kokoro-wav")
+            return True
+
+        with (
+            patch(
+                "violawake_sdk.tools.train._edge_tts_synthesize",
+                side_effect=_fake_edge_tts_synthesize,
+            ),
+            patch.object(train._KokoroFallback, "ready", _fake_kokoro_ready),
+            patch.object(train._KokoroFallback, "synthesize", _fake_kokoro_synthesize),
+            patch(
+                "violawake_sdk.training.augment.rir_augment",
+                side_effect=lambda audio, rng: audio,
+            ),
+            patch(
+                "violawake_sdk.audio.load_audio",
+                side_effect=lambda _p: None,  # skip augmentation branch
+            ),
+        ):
+            train._generate_tts_positives("viola", tmp_path, verbose=False)
+
+        # Every voice after the dead one must still have been tried via
+        # edge-tts -- proving the fallback is NOT sticky.
+        voices_after_dead = train.EDGE_TTS_VOICES[
+            train.EDGE_TTS_VOICES.index(dead_voice) + 1 :
+        ]
+        for voice in voices_after_dead:
+            assert edge_tts_calls.count(voice) == 3, (
+                f"{voice} should have been attempted via edge-tts for all 3 phrases, "
+                f"not silently routed to Kokoro because an earlier voice failed"
+            )
+        # Only the dead voice's 3 phrases should have used Kokoro.
+        assert len(kokoro_calls) == 3
+
+    def test_generate_confusable_negatives_falls_back_to_kokoro(self, tmp_path: Path) -> None:
+        """#1768: negatives previously had NO fallback -- a failed edge-tts
+        sample was just dropped, shrinking the negative pool. Now it gets
+        the same per-sample Kokoro fallback as positives."""
+
+        def _fake_edge_tts_synthesize(text, voice, output_path, *, check_cancelled=None):
+            return False  # every edge-tts call fails
+
+        def _fake_kokoro_ready(self) -> bool:
+            return True
+
+        def _fake_kokoro_synthesize(self, text, output_path, *, rotate_index):
+            output_path.write_bytes(b"kokoro-wav")
+            return True
+
+        with (
+            patch(
+                "violawake_sdk.tools.confusables.generate_confusables",
+                return_value=["violas"],
+            ),
+            patch(
+                "violawake_sdk.tools.train._edge_tts_synthesize",
+                side_effect=_fake_edge_tts_synthesize,
+            ),
+            patch.object(train._KokoroFallback, "ready", _fake_kokoro_ready),
+            patch.object(train._KokoroFallback, "synthesize", _fake_kokoro_synthesize),
+        ):
+            generated = train._generate_confusable_negatives(
+                "viola",
+                tmp_path,
+                n_confusables=1,
+                voices_per_word=2,
+                verbose=False,
+            )
+
+        assert len(generated) == 2, "edge-tts failures must recover via Kokoro, not vanish"
 
     def test_extract_temporal_embeddings_rejects_wrong_sample_rate_before_embedding(
         self, tmp_path: Path

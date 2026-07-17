@@ -59,6 +59,19 @@ def run_training_job_sync(
     neg_temp_dir: Path | None = None
     storage = get_storage()
 
+    # Reset edge-tts's per-process failure-dedup state at each job boundary
+    # (#1768). That state is a process-lifetime global inside violawake_sdk
+    # (the worker process runs for days across many jobs), so without this
+    # reset a (voice, summary) failure reported once for an earlier job stays
+    # silently suppressed for every later job that hits the identical
+    # failure -- including a different customer's job hitting a permanently
+    # broken voice. Safe at the current max_concurrent_jobs=1; if concurrency
+    # is ever raised, a reset mid-flight of a sibling job only risks one
+    # duplicate log line for that job, never a suppressed one.
+    from violawake_sdk.tools.train import reset_edge_tts_reporting
+
+    reset_edge_tts_reporting()
+
     def _ensure_not_cancelled() -> None:
         if is_cancelled():
             raise TrainingCancelledError("Training cancelled by user")
