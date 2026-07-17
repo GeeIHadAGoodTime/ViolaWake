@@ -123,15 +123,21 @@ class TestSpecAugment:
         assert result.shape == small_spectrogram.shape
 
     def test_default_params(self, mel_spectrogram: np.ndarray) -> None:
-        """Default parameters (freq=27, time=100) should work."""
-        result = spec_augment(mel_spectrogram)
+        """Default parameters (freq=27, time=100) should work.
+
+        Seeded (matching every other masking-count test in this file): an
+        unseeded call fell through to the global unseeded np.random.randint
+        and could rarely draw mask width 0 on both axes (~0.038%/run),
+        causing exactly this test to red ViolaWake master's Windows/py3.12
+        CI leg during #2000's landing (run 29505395936, 2026-07-16). Fixed
+        per #2296.
+        """
+        rng = np.random.default_rng(42)
+        result = spec_augment(mel_spectrogram, rng=rng)
         assert result.shape == mel_spectrogram.shape
         # With default params, significant masking should occur
         # (freq_mask_param=27 on 40 bins is aggressive)
         n_zeros = np.sum(result == 0.0)
-        # At least one element should have been masked (probabilistically)
-        # This can fail with very low probability if mask width = 0
-        # for all masks, but that's astronomically unlikely with param=27
         assert n_zeros > 0
 
     def test_reproducible_with_rng(self, mel_spectrogram: np.ndarray) -> None:
