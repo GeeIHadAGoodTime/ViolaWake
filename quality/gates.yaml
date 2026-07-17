@@ -202,3 +202,13 @@ gates:
       - console/tests/test_training_queue_wedge.py::test_health_paused_blocked_only_is_ok
       - console/tests/test_training_queue_wedge.py::test_health_genuine_dispatch_wedge_is_error
       - console/tests/test_training_queue_wedge.py::test_health_normal_backlog_all_slots_busy_is_ok
+  - gate_id: edge-tts-synthesis-resilience
+    contract: "EDGE_TTS_VOICES must never carry a voice Microsoft has retired server-side (GlitchTip 34/38, ticket 1768 -- en-US-DavisNeural + 6 others silently failed every attempt, forever); a distinct (voice, text) edge-tts failure must be reported on its own instead of being deduped away by an earlier, unrelated failure sharing the same generic exception text; that dedup state must reset per training job so one job's failure never silently suppresses a different job's identical failure; and the Kokoro TTS fallback must apply per-sample, never sticking to Kokoro-only for an entire run's remaining (and otherwise-healthy) voices just because one earlier voice failed."
+    detector: tests/unit/test_train.py
+    own_tests:
+      - tests/unit/test_train.py::TestTrainHelpers::test_edge_tts_voices_excludes_known_retired_voices
+      - tests/unit/test_train.py::TestTrainHelpers::test_edge_tts_fail_reports_each_distinct_voice_independently
+      - tests/unit/test_train.py::TestTrainHelpers::test_edge_tts_fail_still_dedups_same_voice_repeat
+      - tests/unit/test_train.py::TestTrainHelpers::test_reset_edge_tts_reporting_clears_cross_job_dedup_state
+      - tests/unit/test_train.py::TestTrainHelpers::test_generate_tts_positives_falls_back_per_voice_not_sticky
+      - tests/unit/test_train.py::TestTrainHelpers::test_generate_confusable_negatives_falls_back_to_kokoro
