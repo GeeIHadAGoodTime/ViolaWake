@@ -212,3 +212,5 @@ gates:
       - tests/unit/test_train.py::TestTrainHelpers::test_reset_edge_tts_reporting_clears_cross_job_dedup_state
       - tests/unit/test_train.py::TestTrainHelpers::test_generate_tts_positives_falls_back_per_voice_not_sticky
       - tests/unit/test_train.py::TestTrainHelpers::test_generate_confusable_negatives_falls_back_to_kokoro
+      - console/backend/tests/test_train_full_pipeline_voices.py::TestTrainFullPipelineVoices::test_edge_voices_excludes_known_retired_voices
+      - console/backend/tests/test_train_full_pipeline_voices.py::TestTrainFullPipelineVoices::test_edge_voices_has_no_duplicates
