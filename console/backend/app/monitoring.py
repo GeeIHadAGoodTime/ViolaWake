@@ -37,6 +37,15 @@ class ErrorClassification:
     kind: str
     reason: str
     log_level: int
+    # True when this classification must still produce a durable GlitchTip/Sentry
+    # dashboard signal even though log_level is deliberately kept below the
+    # Sentry LoggingIntegration's default event_level=ERROR (so it does NOT page
+    # ops via automatic log capture). Without this, a WARNING-or-below
+    # classification is invisible in GlitchTip: the LoggingIntegration only
+    # auto-captures an *event* (dashboard-visible issue) at/above event_level; a
+    # WARNING becomes a breadcrumb only, attached to nothing (#1482). See
+    # _emit_dashboard_signal.
+    dashboard_signal: bool = False
 
 
 class ErrorTracker:
@@ -132,7 +141,9 @@ def classify_exception(exc: Exception) -> ErrorClassification:
     # 28, 2026-07-12). WARNING is below the Sentry LoggingIntegration ERROR
     # event_level, so it becomes a breadcrumb, not a captured event.
     if any(base.__name__ == "ModelQualityGateError" for base in type(exc).__mro__):
-        return ErrorClassification(EXPECTED_ERROR, "model_quality", logging.WARNING)
+        return ErrorClassification(
+            EXPECTED_ERROR, "model_quality", logging.WARNING, dashboard_signal=True
+        )
 
     if isinstance(exc, ValueError):
         return ErrorClassification(UNEXPECTED_ERROR, "data", logging.WARNING)
@@ -141,6 +152,61 @@ def classify_exception(exc: Exception) -> ErrorClassification:
         return ErrorClassification(UNEXPECTED_ERROR, "config", logging.ERROR)
 
     return ErrorClassification(UNEXPECTED_ERROR, "bug", logging.ERROR)
+
+
+def _emit_dashboard_signal(
+    classification: ErrorClassification,
+    *,
+    source: str,
+    error_type: str,
+    error_message: str,
+    extra: dict[str, Any] | None,
+) -> None:
+    """Explicitly capture a Sentry/GlitchTip event for a classification that is
+    intentionally logged below the Sentry LoggingIntegration's default
+    event_level (ERROR) so it does not page ops (see classify_exception's
+    model_quality branch, GlitchTip violawake issue 28).
+
+    ``sentry_sdk.capture_message`` is a direct, explicit API call -- unlike the
+    LoggingIntegration's automatic capture from stdlib ``logging`` calls (which
+    is filtered by ``event_level``), an explicit capture ALWAYS creates a
+    dashboard-visible event when Sentry is initialized, regardless of the
+    ``level=`` passed. That keeps a durable GlitchTip signal (an issue whose
+    event count keeps moving) for outcomes we deliberately keep at WARNING so
+    they don't page -- the signal PR#5 silently removed (#1482). A stable
+    fingerprint groups every occurrence into one long-lived issue so its event
+    count is the at-a-glance block-rate indicator (mirrors the old issue 28
+    role), instead of minting a fresh issue per message.
+
+    Never raises: a broken/unconfigured Sentry must not break the caller's
+    exception-handling path.
+    """
+    try:
+        import sentry_sdk
+    except ImportError:
+        return
+
+    try:
+        if not sentry_sdk.is_initialized():
+            return
+
+        with sentry_sdk.push_scope() as scope:
+            scope.set_tag("source", source)
+            scope.set_tag("error_reason", classification.reason)
+            scope.set_tag("error_type", error_type)
+            scope.fingerprint = ["dashboard-signal", classification.reason, error_type]
+            if extra:
+                for key, value in extra.items():
+                    scope.set_extra(key, value)
+            sentry_sdk.capture_message(
+                f"[{classification.reason}] {source}: {error_message}",
+                level=logging.getLevelName(classification.log_level).lower(),
+            )
+    except Exception:  # noqa: BLE001 - a dashboard-signal failure must not break the caller
+        logging.getLogger("violawake.console").exception(
+            "Sentry dashboard-signal capture raised",
+            extra={"event_data": {"source": "sentry", "error_reason": classification.reason}},
+        )
 
 
 def log_exception(
@@ -182,6 +248,16 @@ def log_exception(
         extra={"event_data": event_data},
         exc_info=(type(exc), exc, exc.__traceback__) if should_include_traceback else False,
     )
+
+    if classification.dashboard_signal:
+        _emit_dashboard_signal(
+            classification,
+            source=source,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            extra=extra,
+        )
+
     return classification
 
 

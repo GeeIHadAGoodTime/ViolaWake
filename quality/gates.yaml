@@ -214,3 +214,10 @@ gates:
       - tests/unit/test_train.py::TestTrainHelpers::test_generate_confusable_negatives_falls_back_to_kokoro
       - console/backend/tests/test_train_full_pipeline_voices.py::TestTrainFullPipelineVoices::test_edge_voices_excludes_known_retired_voices
       - console/backend/tests/test_train_full_pipeline_voices.py::TestTrainFullPipelineVoices::test_edge_voices_has_no_duplicates
+
+  - gate_id: quality-gate-block-dashboard-signal
+    contract: Any error classification intentionally logged below the Sentry LoggingIntegration's default event_level=ERROR (so it does not page ops, e.g. classify_exception's model_quality/grade-F branch) must still emit an explicit sentry_sdk.capture_message dashboard signal, so its GlitchTip issue event count keeps growing and stays the at-a-glance observability signal for its rate (#1482 -- PR#5 silently zeroed out issue 28's growth once the classification dropped to WARNING, with no error and no red test).
+    detector: console/backend/tests/test_monitoring_dashboard_signal.py
+    own_tests:
+      - console/backend/tests/test_monitoring_dashboard_signal.py::test_grade_f_block_emits_a_sentry_capture_despite_warning_log_level
+      - console/backend/tests/test_monitoring_dashboard_signal.py::test_an_unexpected_bug_does_not_get_a_duplicate_dashboard_capture

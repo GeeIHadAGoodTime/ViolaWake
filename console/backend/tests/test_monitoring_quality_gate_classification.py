@@ -49,6 +49,25 @@ def test_bare_runtimeerror_grade_f_message_is_still_the_old_bug_shape() -> None:
     assert classification.log_level == logging.ERROR
 
 
+def test_quality_gate_error_carries_a_dashboard_signal() -> None:
+    # #1482: below-ERROR classification alone means invisible in GlitchTip once
+    # the LoggingIntegration's default event_level=ERROR filters it to a
+    # breadcrumb. The classification itself must flag that a durable dashboard
+    # signal is still owed (see app.monitoring._emit_dashboard_signal), or the
+    # grade-F block-rate silently stops being observable (#1465's before/after
+    # verification has nothing to read).
+    classification = classify_exception(ModelQualityGateError(GRADE_F_MESSAGE))
+    assert classification.dashboard_signal is True
+
+
+def test_bare_runtimeerror_does_not_carry_a_dashboard_signal() -> None:
+    # An ordinary bug (ERROR level) is already auto-captured by the Sentry
+    # LoggingIntegration -- it must NOT also get an explicit dashboard-signal
+    # capture, which would double the event for the same failure.
+    classification = classify_exception(RuntimeError(GRADE_F_MESSAGE))
+    assert classification.dashboard_signal is False
+
+
 def test_quality_gate_error_subclass_is_also_expected() -> None:
     # MRO-name matching keeps subclasses classified as expected too.
     class StricterQualityGateError(ModelQualityGateError):
