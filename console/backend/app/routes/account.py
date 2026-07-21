@@ -17,7 +17,7 @@ from app.auth import get_current_user
 from app.config import settings
 from app.database import get_db
 from app.job_queue import get_job_queue
-from app.models import Recording, TrainedModel, TrainingJob, User
+from app.models import Recording, TrainedModel, User
 from app.routes import auth as auth_routes
 from app.schemas import DeleteAccountRequest, MessageResponse
 from app.storage import get_storage
@@ -104,9 +104,6 @@ async def export_account(
     model_rows = (
         await db.execute(select(TrainedModel).where(TrainedModel.user_id == current_user.id))
     ).scalars().all()
-    training_job_rows = (
-        await db.execute(select(TrainingJob).where(TrainingJob.user_id == current_user.id))
-    ).scalars().all()
 
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         _write_json(
@@ -180,22 +177,10 @@ async def export_account(
             zf,
             "jobs.json",
             {
-                "training_jobs": [
-                    {
-                        "id": job.id,
-                        "wake_word": job.wake_word,
-                        "status": job.status,
-                        "progress": job.progress,
-                        "epochs": job.epochs,
-                        "d_prime": job.d_prime,
-                        "model_id": job.model_id,
-                        "error": job.error,
-                        "created_at": job.created_at,
-                        "completed_at": job.completed_at,
-                        "deleted_at": job.deleted_at,
-                    }
-                    for job in training_job_rows
-                ],
+                # Training-job history is persisted only in the async job queue's
+                # SQLite store; ``queue_jobs`` is the complete, authoritative export
+                # (see issue #1438 — the Postgres ``training_jobs`` table was never
+                # written at runtime and has been retired).
                 "queue_jobs": await _queue_jobs_for_user(current_user.id),
             },
         )

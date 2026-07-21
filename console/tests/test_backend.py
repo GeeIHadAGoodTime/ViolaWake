@@ -265,24 +265,9 @@ def _seed_account_artifacts(user_id: int) -> dict[str, str]:
                 datetime.now(timezone.utc).isoformat(),
             ),
         )
-        conn.execute(
-            """
-            INSERT INTO training_jobs (user_id, wake_word, status, progress, epochs, d_prime, model_id, error, created_at, completed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                "delete-account",
-                "queued",
-                0.0,
-                5,
-                None,
-                None,
-                None,
-                datetime.now(timezone.utc).isoformat(),
-                None,
-            ),
-        )
+        # Training-job state is persisted only by the async job queue's SQLite
+        # store (table ``jobs``), never in a Postgres ``training_jobs`` table —
+        # that table was never written at runtime and has been retired (#1438).
         conn.execute(
             """
             INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id, tier, status, current_period_end, created_at, updated_at)
@@ -333,8 +318,6 @@ def _account_state(user_id: int) -> dict[str, int]:
             "deleted_recordings": int(conn.execute("SELECT COUNT(*) FROM recordings WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
             "models": int(conn.execute("SELECT COUNT(*) FROM trained_models WHERE user_id = ?", (user_id,)).fetchone()[0]),
             "deleted_models": int(conn.execute("SELECT COUNT(*) FROM trained_models WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
-            "training_jobs": int(conn.execute("SELECT COUNT(*) FROM training_jobs WHERE user_id = ?", (user_id,)).fetchone()[0]),
-            "deleted_training_jobs": int(conn.execute("SELECT COUNT(*) FROM training_jobs WHERE user_id = ? AND deleted_at IS NOT NULL", (user_id,)).fetchone()[0]),
             "subscriptions": int(conn.execute("SELECT COUNT(*) FROM subscriptions WHERE user_id = ?", (user_id,)).fetchone()[0]),
             "usage_records": int(conn.execute("SELECT COUNT(*) FROM usage_records WHERE user_id = ?", (user_id,)).fetchone()[0]),
         }
@@ -540,8 +523,6 @@ class TestAuth:
             "deleted_recordings": 1,
             "models": 1,
             "deleted_models": 1,
-            "training_jobs": 1,
-            "deleted_training_jobs": 1,
             "subscriptions": 1,
             "usage_records": 1,
         }
