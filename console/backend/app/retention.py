@@ -10,7 +10,7 @@ from sqlalchemy import delete, select
 
 from app.config import settings
 from app.database import async_session_factory
-from app.models import Recording, Subscription, TrainedModel, TrainingJob, UsageRecord, User
+from app.models import Recording, Subscription, TrainedModel, UsageRecord, User
 from app.storage import build_companion_config_identifier, get_storage
 
 logger = logging.getLogger("violawake.retention")
@@ -320,7 +320,9 @@ async def cleanup_hard_deleted_accounts() -> int:
 
             await session.execute(delete(UsageRecord).where(UsageRecord.user_id == user.id))
             await session.execute(delete(Subscription).where(Subscription.user_id == user.id))
-            await session.execute(delete(TrainingJob).where(TrainingJob.user_id == user.id))
+            # Training jobs live only in the async job queue's SQLite store and were
+            # already cancelled + purged at soft-delete time (issue #1438 — the
+            # Postgres ``training_jobs`` table was never written and is retired).
             await session.execute(delete(TrainedModel).where(TrainedModel.user_id == user.id))
             await session.execute(delete(Recording).where(Recording.user_id == user.id))
             await session.delete(user)

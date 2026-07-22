@@ -27,7 +27,7 @@ from app.config import settings
 from app.database import get_db
 from app.email_service import get_email_service
 from app.job_queue import init_job_queue
-from app.models import Recording, Subscription, TrainedModel, TrainingJob, User
+from app.models import Recording, Subscription, TrainedModel, User
 from app.rate_limit import (
     CHANGE_PASSWORD_LIMIT,
     FORGOT_PASSWORD_LIMIT,
@@ -503,11 +503,9 @@ async def delete_account(
         .where(TrainedModel.user_id == current_user.id, TrainedModel.deleted_at.is_(None))
         .values(deleted_at=now)
     )
-    await db.execute(
-        update(TrainingJob)
-        .where(TrainingJob.user_id == current_user.id, TrainingJob.deleted_at.is_(None))
-        .values(deleted_at=now)
-    )
+    # Training jobs live only in the async job queue's SQLite store; they are
+    # cancelled and hard-deleted above via ``queue.delete_jobs_for_user`` (issue
+    # #1438 — the Postgres ``training_jobs`` table was never written and is retired).
 
     current_user.email = f"deleted-user-{current_user.id}@deleted.violawake.local"
     current_user.name = "Deleted user"

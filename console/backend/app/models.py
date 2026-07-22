@@ -40,7 +40,6 @@ class User(Base):
     scheduled_hard_delete_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     recordings: Mapped[list[Recording]] = relationship(back_populates="user", cascade="all, delete-orphan")
-    training_jobs: Mapped[list[TrainingJob]] = relationship(back_populates="user", cascade="all, delete-orphan")
     trained_models: Mapped[list[TrainedModel]] = relationship(back_populates="user", cascade="all, delete-orphan")
     owned_teams: Mapped[list[Team]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     team_memberships: Mapped[list[TeamMember]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -100,24 +99,15 @@ class Recording(Base):
     user: Mapped[User] = relationship(back_populates="recordings")
 
 
-class TrainingJob(Base):
-    __tablename__ = "training_jobs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    wake_word: Mapped[str] = mapped_column(String(100), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
-    progress: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    epochs: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
-    d_prime: Mapped[float | None] = mapped_column(Float, nullable=True)
-    model_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("trained_models.id"), nullable=True)
-    error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
-
-    user: Mapped[User] = relationship(back_populates="training_jobs")
-    model: Mapped[TrainedModel | None] = relationship()
+# NOTE: There is intentionally no ``TrainingJob`` ORM model here. Training-job
+# state is persisted by the async job queue in its own SQLite store
+# (``app.job_queue.JobQueue`` -> ``settings.data_dir / "job_queue.db"``, table
+# ``jobs``), which is the sole source of truth for job create/list/get/cancel,
+# user-facing history, GDPR export (``queue_jobs``), and account-deletion purge
+# (``JobQueue.delete_jobs_for_user``). A Postgres ``training_jobs`` table existed
+# but was never written at runtime (n_tup_ins=0) — it was aspirational and is
+# retired by migration ``20260721_0001_a7b8c9d0e1f2`` (see issue #1438). Do not
+# reintroduce an ORM model for it without also wiring the queue to write through.
 
 
 class TrainedModel(Base):

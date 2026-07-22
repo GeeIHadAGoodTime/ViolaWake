@@ -79,10 +79,8 @@ def _ensure_schema_updates(connection: Connection) -> None:
         if "deleted_at" not in model_columns:
             connection.execute(text("ALTER TABLE trained_models ADD COLUMN deleted_at TIMESTAMP"))
 
-    if "training_jobs" in table_names:
-        training_job_columns = {col["name"] for col in inspector.get_columns("training_jobs")}
-        if "deleted_at" not in training_job_columns:
-            connection.execute(text("ALTER TABLE training_jobs ADD COLUMN deleted_at TIMESTAMP"))
+    # (The Postgres ``training_jobs`` table was never written at runtime and is
+    # retired by migration 20260721_0001 — issue #1438. No reconcile needed.)
 
     # Soft-delete support: recordings are marked deleted_at after training completes
     if "recordings" in table_names:
