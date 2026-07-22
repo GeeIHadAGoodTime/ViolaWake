@@ -221,3 +221,14 @@ gates:
     own_tests:
       - console/backend/tests/test_monitoring_dashboard_signal.py::test_grade_f_block_emits_a_sentry_capture_despite_warning_log_level
       - console/backend/tests/test_monitoring_dashboard_signal.py::test_an_unexpected_bug_does_not_get_a_duplicate_dashboard_capture
+
+  - gate_id: wakeword-backend-alias-baked-in-base
+    contract: docker-compose.production.yml must, by itself (no docker-compose.viola-bridge.yml overlay merged in), declare `wakeword-backend` as a network alias for the backend service on novviola_viola-local, so a base-only deploy following docs/DEPLOYMENT.md's documented `docker compose -f docker-compose.production.yml up -d backend` never silently drops viola-api's ability to resolve wakeword-backend (#2305; the same base-only-deploy-drops-out-of-band-wiring class as #1722's Postgres-host outage).
+    detector: scripts/check_wakeword_alias_baked.py
+    own_tests:
+      - tests/unit/test_check_wakeword_alias_baked.py::test_real_base_compose_file_passes
+      - tests/unit/test_check_wakeword_alias_baked.py::test_bare_list_networks_shape_fails
+      - tests/unit/test_check_wakeword_alias_baked.py::test_network_missing_entirely_fails
+      - tests/unit/test_check_wakeword_alias_baked.py::test_mapping_without_alias_key_fails
+      - tests/unit/test_check_wakeword_alias_baked.py::test_alias_present_but_wrong_name_fails
+      - tests/unit/test_check_wakeword_alias_baked.py::test_fixed_shape_passes

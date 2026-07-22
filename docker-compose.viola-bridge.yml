@@ -8,7 +8,23 @@
 # This file is INTENTIONALLY separate from docker-compose.production.yml so
 # the Wakeword product can still ship standalone (no Viola dependency).
 #
-# Why pin VIOLAWAKE_DB_URL to wakeword-postgres-1:
+# STATUS as of #2305 (2026-07-22): both things this override used to supply
+# uniquely -- the `wakeword-backend` network alias and the pinned
+# VIOLAWAKE_DB_URL -- are now baked directly into docker-compose.production.yml
+# (see that file's backend-service `networks:` block and its
+# `VIOLAWAKE_DB_URL` environment line). That was the fix for a recurring
+# base-only-deploy-drops-out-of-band-wiring bug class (#1722's Postgres-host
+# outage, then #2305's dropped wakeword-backend alias): a routine deploy
+# running ONLY the documented `docker compose -f docker-compose.production.yml
+# up -d backend` (docs/DEPLOYMENT.md) used to silently drop whatever only this
+# overlay supplied. This file is now a REDUNDANT no-op overlay -- its alias
+# and env value duplicate what the base file already sets -- kept so
+# `-f docker-compose.viola-bridge.yml` stays a harmless, backward-compatible
+# no-op in any deploy command that still passes it, not because it is still
+# load-bearing. Add a NEW override here only for a genuinely Viola-only
+# concern that shouldn't ship in the standalone base file.
+#
+# Why pin VIOLAWAKE_DB_URL to wakeword-postgres-1 (now also in base):
 #   When `backend` joins both `default` (wakeword's network) and
 #   `novviola_viola-local` (Viola's network), Docker's embedded DNS resolves
 #   the unqualified hostname `postgres` against ALL attached networks. Viola

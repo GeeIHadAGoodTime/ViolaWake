@@ -68,18 +68,36 @@ services:
       decoder:
         condition: service_healthy
     networks:
-      - default
-      - decoder-net
+      default: {}
+      decoder-net: {}
       # Reach the shared self-hosted GlitchTip instance (VIOLAWAKE_SENTRY_DSN
-      # points at http://glitchtip-web:8080, a NOVVIOLA-stack container).
-      # Incident (2026-07-14): this was previously attached by an undocumented
-      # one-off `docker network connect`, which does NOT survive a normal
-      # `docker compose up -d backend` recreate (the documented deploy step in
-      # docs/DEPLOYMENT.md) -- so a routine backend deploy silently dropped
-      # GlitchTip connectivity, and error reporting failed closed with no
-      # visible symptom (the container stayed healthy; only Sentry sends
-      # failed, buried in logs as urllib3 NameResolutionError retries).
-      - novviola_viola-local
+      # points at http://glitchtip-web:8080, a NOVVIOLA-stack container) AND
+      # answer as `wakeword-backend` for viola-api's
+      # VIOLA_WAKEWORD_API_URL=http://wakeword-backend:8000.
+      # Incident (2026-07-14, GlitchTip leg): the network attach was
+      # previously an undocumented one-off `docker network connect`, which
+      # does NOT survive a normal `docker compose up -d backend` recreate
+      # (the documented deploy step in docs/DEPLOYMENT.md) -- so a routine
+      # backend deploy silently dropped GlitchTip connectivity, and error
+      # reporting failed closed with no visible symptom (container stayed
+      # healthy; only Sentry sends failed, buried in logs as urllib3
+      # NameResolutionError retries).
+      #
+      # Incident (2026-07-17, wakeword-backend alias leg, #2305): the same
+      # base-only-deploy-drops-out-of-band-wiring class recurred for the
+      # `wakeword-backend` alias itself. It used to live ONLY in the
+      # separate docker-compose.viola-bridge.yml overlay (see that file's
+      # header) -- so any deploy following docs/DEPLOYMENT.md's documented
+      # `docker compose -f docker-compose.production.yml up -d backend`
+      # (base file only, no bridge overlay) silently dropped it, leaving
+      # viola-api unable to resolve wakeword-backend while /health stayed
+      # green (the same shape as #1722's Postgres-host outage -- twice-
+      # recurred). Baking the alias into THIS base file, where the network
+      # is already attached for GlitchTip, makes a base-only deploy safe by
+      # construction instead of depending on remembering the second -f flag.
+      novviola_viola-local:
+        aliases:
+          - wakeword-backend
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 10s
