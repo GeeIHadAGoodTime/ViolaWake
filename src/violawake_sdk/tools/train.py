@@ -1191,6 +1191,14 @@ def _extract_temporal_embeddings(
     This is critical for pipeline equivalence: streaming push_audio() produces
     subtly different embeddings due to internal state accumulation.
 
+    Used for the speech/confusable quality-gate subgrades and for training-set
+    embedding extraction generally. NOT used for the silence subgrade anymore
+    (see ``_extract_streaming_temporal_windows`` / #1487) — the batch-crop
+    approximation this function makes (a single 1.5s center-crop through
+    embed_clips) does not predict the runtime streaming score on near-silence
+    audio, so the silence subgrade scores the real streaming path directly
+    instead of this one.
+
     Files are processed one at a time so long corpus negatives do not force the
     trainer to hold hours of decoded raw audio in memory before the 1.5s crop.
     Each file is loaded, center-cropped to CLIP_SAMPLES, embedded, converted to
@@ -2012,6 +2020,105 @@ def _aggregate_silence_probe_scores(per_clip_max_scores: list[float]) -> float:
     return float(np.median(np.asarray(per_clip_max_scores, dtype=np.float64)))
 
 
+# ---------------------------------------------------------------------------
+# Streaming-parity silence scoring (#1487)
+# ---------------------------------------------------------------------------
+#
+# Root cause: the silence subgrade scored audio through _extract_temporal_embeddings
+# -- one batch preprocessor.embed_clips() call on a SINGLE 1.5s center-crop
+# (_prepare_audio_for_oww -> center_crop(audio, CLIP_SAMPLES)) -- while the
+# runtime (WakeDetector.process -> OpenWakeWordBackbone.push_audio, called once
+# per 20ms frame) streams the FULL continuous input through persistent ring/mel
+# buffers that accumulate state across calls (oww_backbone.py: OWW_CHUNK_SAMPLES
+# batching, a running melspectrogram buffer seeded from OpenWakeWordBackbone.reset()).
+# _extract_temporal_embeddings' own docstring already warned "streaming push_audio()
+# produces subtly different embeddings due to internal state accumulation" -- the
+# silence subgrade was the one place that warning was never actually heeded, so it
+# scored a single short one-shot excerpt with a different embedding pipeline instead
+# of the many-hundred-window continuous stream the runtime actually evaluates.
+# Measured (#1487 investigation): one deployed model (citadel/model8, gate
+# silence_max 0.256) streamed a MEDIAN of 0.945 on the same near-silence audio.
+#
+# The fix: score the near-silence probes through the REAL runtime streaming path
+# -- the same OpenWakeWordBackbone.push_audio() call WakeDetector.process() makes,
+# fed the FULL uncropped probe audio in the same 20ms-frame granularity
+# (wake_detector.FRAME_SAMPLES) -- instead of the batch center-crop path. This
+# makes the silence subgrade an oracle for the number production will actually see,
+# not a differently-shaped approximation of it.
+def _extract_streaming_temporal_windows(
+    audio_files: list[Path],
+    tag: str,
+    seq_len: int,
+) -> tuple[list[np.ndarray], list[int]]:
+    """Extract temporal embedding windows via the real runtime streaming path.
+
+    Unlike ``_extract_temporal_embeddings`` (one batch ``embed_clips`` call on a
+    center-cropped 1.5s excerpt), this feeds each FULL, uncropped clip through
+    ``OpenWakeWordBackbone.push_audio`` -- the exact call ``WakeDetector.process``
+    makes at runtime -- one 20ms frame (``wake_detector.FRAME_SAMPLES``) at a
+    time, and windows the resulting embedding sequence with the same sliding-
+    window helper (``_temporal_windows_from_frame_embeddings``) used everywhere
+    else in this module. A fresh backbone is used and reset per clip so probes
+    do not leak streaming state into one another.
+
+    Returns the same ``(windows, source_indices)`` shape ``_score_files``'s
+    caller expects from ``_extract_temporal_embeddings`` (tags omitted -- unused
+    by every caller).
+    """
+    import numpy as np
+
+    from violawake_sdk.backends.onnx_backend import OnnxBackend
+    from violawake_sdk.oww_backbone import OpenWakeWordBackbone
+    from violawake_sdk.wake_detector import FRAME_SAMPLES
+
+    backbone = OpenWakeWordBackbone(OnnxBackend())
+
+    all_windows: list[np.ndarray] = []
+    all_source_idx: list[int] = []
+    for file_idx, wav_path in enumerate(audio_files):
+        audio = _load_training_audio(wav_path)
+        audio_f32 = np.asarray(audio, dtype=np.float32).reshape(-1)
+        if audio_f32.size == 0:
+            continue
+        audio_i16 = (np.clip(audio_f32, -1.0, 1.0) * 32767).astype(np.int16)
+
+        backbone.reset()
+        frame_embeddings: list[np.ndarray] = []
+        n_usable = len(audio_i16) - (len(audio_i16) % FRAME_SAMPLES)
+        for i in range(0, n_usable, FRAME_SAMPLES):
+            produced, embedding = backbone.push_audio(audio_i16[i : i + FRAME_SAMPLES])
+            if produced and embedding is not None:
+                frame_embeddings.append(embedding.astype(np.float32))
+        if not frame_embeddings:
+            continue
+
+        windows, source_idx, _tags = _temporal_windows_from_frame_embeddings(
+            np.stack(frame_embeddings), source_id=file_idx, tag=tag, seq_len=seq_len
+        )
+        all_windows.extend(windows)
+        all_source_idx.extend(source_idx)
+
+    return all_windows, all_source_idx
+
+
+def _reduce_window_scores_to_per_clip_max(
+    window_scores: np.ndarray, source_indices: list[int]
+) -> np.ndarray:
+    """Reduce per-window model scores to one worst (max) score per source clip.
+
+    Shared by the batch (``_score_files``) and streaming (``_score_files_streaming``)
+    scoring paths so both reduce windows -> per-clip score identically; only how
+    the windows are extracted differs between them.
+    """
+    import numpy as np
+
+    clip_scores: dict[int, float] = {}
+    for idx, source_idx in enumerate(source_indices):
+        score = float(window_scores[idx])
+        clip_scores[source_idx] = max(score, clip_scores.get(source_idx, float("-inf")))
+    return np.array([clip_scores[i] for i in sorted(clip_scores)], dtype=np.float32)
+
+
 def _grade_quality(
     speech_fp_rate: float,
     confusable_fp_rate: float,
@@ -2076,15 +2183,30 @@ def _run_quality_gate(
         with torch.no_grad():
             window_scores = model(X_qc).cpu().numpy().flatten()
 
-        clip_scores: dict[int, float] = {}
-        for idx, source_idx in enumerate(source_indices):
-            score = float(window_scores[idx])
-            clip_scores[source_idx] = max(score, clip_scores.get(source_idx, float("-inf")))
+        return _reduce_window_scores_to_per_clip_max(window_scores, source_indices)
 
-        return np.array(
-            [clip_scores[i] for i in sorted(clip_scores)],
-            dtype=np.float32,
-        )
+    def _score_files_streaming(audio_files: list[Path], tag: str) -> np.ndarray:
+        """Score files via the real runtime streaming path (#1487).
+
+        Same per-clip max reduction as ``_score_files``, but the embeddings come
+        from ``_extract_streaming_temporal_windows`` (full-clip, real
+        ``OpenWakeWordBackbone.push_audio`` streaming) instead of
+        ``_extract_temporal_embeddings`` (batch, 1.5s center-crop). Used for the
+        silence subgrade so it measures what the runtime actually scores on this
+        audio, not a differently-shaped batch approximation of it.
+        """
+        if not audio_files:
+            return np.array([], dtype=np.float32)
+
+        embs, source_indices = _extract_streaming_temporal_windows(audio_files, tag, seq_len)
+        if not embs:
+            return np.array([], dtype=np.float32)
+
+        X_qc = torch.tensor(np.array(embs), dtype=torch.float32).to(torch_device)
+        with torch.no_grad():
+            window_scores = model(X_qc).cpu().numpy().flatten()
+
+        return _reduce_window_scores_to_per_clip_max(window_scores, source_indices)
 
     def _fp_rate(scores: np.ndarray) -> float:
         if len(scores) == 0:
@@ -2168,9 +2290,14 @@ def _run_quality_gate(
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_scores = _score_files([silence_path], "qc_silence")
-        # One max-window score per independent probe (_score_files already
-        # reduces each source clip to its own worst window).
-        near_silence_scores = _score_files(near_silence_paths, "qc_near_silence")
+        # Near-silence is scored via the REAL runtime streaming path, not the
+        # batch center-crop path speech/confusable still use (#1487: the batch
+        # 1.5s-crop score did not predict the runtime streaming score -- one
+        # deployed model streamed 0.945 while gate-scoring 0.256). One
+        # max-window score per independent probe, streamed in full
+        # (_score_files_streaming already reduces each source clip to its own
+        # worst window over the whole clip, not just a 1.5s excerpt of it).
+        near_silence_scores = _score_files_streaming(near_silence_paths, "qc_near_silence")
         positive_scores = (
             _score_files(list(positive_files), "qc_positive")
             if positive_files
@@ -2240,6 +2367,18 @@ def _run_quality_gate(
         "silence_max_score": silence_max_score,
         "silence_window_count": silence_window_count,
         "silence_source": silence_source,
+        # "runtime_streaming" when silence_source == "near_silence" (#1487: scored
+        # via the real WakeDetector.process streaming path, full-clip, not the
+        # batch 1.5s-crop); "batch_crop" for the pure-silence ("silence") source,
+        # which still uses the batch path (unaffected -- true zero-energy audio is
+        # rejected by _prepare_audio_for_oww before either path would matter, and
+        # is separately caught at runtime by the Gate 1 RMS floor); "n/a" if no
+        # silence-class input scored at all.
+        "silence_scoring_path": (
+            "runtime_streaming"
+            if silence_source == "near_silence"
+            else ("batch_crop" if silence_source == "silence" else "n/a")
+        ),
         "d_prime": (round(float(d_prime), 4) if d_prime is not None else None),
         "positive_scores": [round(float(s), 6) for s in positive_scores.tolist()],
         "negative_scores": [round(float(s), 6) for s in negative_scores_pool.tolist()],
@@ -2256,7 +2395,10 @@ def _run_quality_gate(
         f"  Confusable FP rate: {confusable_fp_rate * 100:4.1f}% "
         f"({len(confusable_scores)} words, threshold={deployment_threshold:.2f})"
     )
-    print(f"  Silence max score:  {silence_max_score:.2f}")
+    print(
+        f"  Silence max score:  {silence_max_score:.2f} "
+        f"(source={silence_source}, path={metrics['silence_scoring_path']})"
+    )
     if d_prime is not None:
         print(
             f"  d-prime:            {d_prime:.2f} "

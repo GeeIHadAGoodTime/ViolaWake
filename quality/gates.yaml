@@ -211,6 +211,15 @@ gates:
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_aggregate_is_the_median_not_the_max_or_mean
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_empty_probe_list_keeps_the_conservative_safety_floor
 
+  - gate_id: sdk-silence-subgrade-streaming-parity
+    contract: The training quality gate's NEAR-SILENCE subgrade MUST be scored through the real runtime streaming path -- _extract_streaming_temporal_windows driving OpenWakeWordBackbone.push_audio, the same call WakeDetector.process makes, over the FULL uncropped probe at wake_detector.FRAME_SAMPLES granularity -- never the batch 1.5s center-crop path (_extract_temporal_embeddings -> preprocessor.embed_clips -> center_crop(audio, CLIP_SAMPLES)). Viola issue #1487: the batch score did not predict the runtime score at all. On 3 real deployed models the two numbers were uncorrelated (gate 0.096->stream 0.28, 0.256->0.945, 0.495->0.64) -- one DEPLOYED model gate-scored silence_max 0.256 while streaming a median of 0.945 on the same quiet input, so the gate graded near-silence behaviour far more favourably than the deployed model actually behaves. Reds if _run_quality_gate scores the qc_near_silence tag through the batch path again, if the streaming score stops matching a real WakeDetector.process() loop over the identical audio (bit-identical, abs < 1e-6), or if the streaming extractor stops seeing the whole clip and collapses back to a single crop window.
+    detector: tests/unit/test_silence_subgrade_streaming_parity.py
+    own_tests:
+      - tests/unit/test_silence_subgrade_streaming_parity.py::TestStreamingExtractionUsesTheFullClip::test_streaming_path_produces_far_more_windows_than_the_batch_1_5s_crop
+      - tests/unit/test_silence_subgrade_streaming_parity.py::TestSilenceSubgradeMatchesRuntimeStreamingScore::test_streaming_gate_score_is_bit_identical_to_real_wakedetector_process
+      - tests/unit/test_silence_subgrade_streaming_parity.py::TestSilenceSubgradeMatchesRuntimeStreamingScore::test_old_batch_crop_path_materially_diverges_from_the_runtime_score
+      - tests/unit/test_silence_subgrade_streaming_parity.py::TestQualityGateWiring::test_run_quality_gate_uses_streaming_extraction_for_near_silence
+
   - gate_id: training-queue-wedge-detection
     contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.
     detector: console/tests/test_training_queue_wedge.py
