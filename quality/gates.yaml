@@ -200,6 +200,17 @@ gates:
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_cliff_is_the_deployment_threshold_not_hardcoded_050
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_bar_tracks_the_deployment_threshold
 
+  - gate_id: sdk-silence-subgrade-multi-probe-median
+    contract: The training quality gate's silence subgrade MUST be measured from _NEAR_SILENCE_PROBE_COUNT (>=3, odd) independent near-silence realizations, aggregated by MEDIAN via _aggregate_silence_probe_scores, never the max window score of a single fixed clip. #1465 fixed the cliff's BAR; a single-clip max left the STATISTIC one-shot -- an idiosyncratic peak response to one specific noise realization forced grade F identically to a model systematically prone to firing on quiet backgrounds (Viola issue #1775, the ~19%-of-all-jobs chronic quality-gate failure; historical grade-F reads, CL-20260714-4c23 n=20, already showed the same wake word passing on one retrain and failing the next from exactly this kind of single-sample variance). Reds if the probe count collapses back to 1, or the aggregate becomes max()/mean() instead of the median, or a single outlier probe alone can push the aggregate at/above threshold.
+    detector: tests/unit/test_quality_gate_silence_probe_robustness.py
+    own_tests:
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_probe_count_is_more_than_one
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_seed_42_is_still_the_first_probe
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_single_idiosyncratic_spike_does_not_force_the_aggregate_above_threshold
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_systematically_risky_model_still_fails
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_aggregate_is_the_median_not_the_max_or_mean
+      - tests/unit/test_quality_gate_silence_probe_robustness.py::test_empty_probe_list_keeps_the_conservative_safety_floor
+
   - gate_id: training-queue-wedge-detection
     contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.
     detector: console/tests/test_training_queue_wedge.py

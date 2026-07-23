@@ -1966,6 +1966,51 @@ _SILENCE_A_THRESHOLD_FRACTION = 0.25  # A: silence < 0.25  * threshold
 _SILENCE_B_THRESHOLD_FRACTION = 0.375  # B: silence < 0.375 * threshold
 # C: silence < 1.0 * threshold (the false-fire line); at/above => grade F.
 
+# Silence subgrade probe count (#1775 residual, post-#1465). Before this fix the
+# silence subgrade was measured from exactly ONE fixed near-silence realization
+# (a single 10s white-noise clip, numpy seed=42), and the subgrade score was that
+# one clip's worst (max) window. That makes the gate a one-shot test: a model with
+# an idiosyncratic peak response to that ONE specific noise pattern -- not a
+# generalizable real-world false-fire risk -- was graded identically to a model
+# that is systematically prone to firing on quiet backgrounds. Historical grade-F
+# jobs read in full (CL-20260714-4c23, n=20) already showed the same wake word
+# passing on one retrain and failing on the next purely from this kind of
+# training-run-to-run variance landing on either side of a single-sample test.
+# #1465 fixed the miscalibrated BAR (0.50 -> derived from deployment_threshold);
+# this fixes the STATISTIC measured against that bar, by scoring
+# _NEAR_SILENCE_PROBE_COUNT independent realizations and taking their MEDIAN
+# worst-window score (see _aggregate_silence_probe_scores) instead of a single
+# clip's max. Median is deliberately NOT a relaxation: a model that is genuinely
+# risky keeps failing because most/all independent probes trigger it (the
+# true-positive catch rate for systematic risk is unchanged); only a spike
+# confined to a minority of the probes -- exactly the one-shot-idiosyncrasy
+# failure mode -- stops being sufficient on its own to force grade F. Seed 42 is
+# kept as the first probe so historical single-probe scores stay comparable.
+_NEAR_SILENCE_PROBE_COUNT = 5
+_NEAR_SILENCE_PROBE_SEED_BASE = 42
+
+
+def _aggregate_silence_probe_scores(per_clip_max_scores: list[float]) -> float:
+    """Aggregate independent near-silence probes into one silence subgrade score.
+
+    ``per_clip_max_scores`` holds one worst-window score per independent
+    near-silence realization (see ``_NEAR_SILENCE_PROBE_COUNT``). The MEDIAN is
+    used rather than the max-of-maxes: it requires a genuine majority of
+    independent probes to spike before the silence subgrade reflects that
+    spike, filtering out a single realization's idiosyncratic peak while still
+    reporting a high score for a model that is consistently risky across probes.
+
+    Returns 1.0 (the conservative safety floor used elsewhere in this gate)
+    when no probe produced any score, matching the pre-existing "no silence-
+    class input could be scored" fallback.
+    """
+    if not per_clip_max_scores:
+        return 1.0
+
+    import numpy as np
+
+    return float(np.median(np.asarray(per_clip_max_scores, dtype=np.float64)))
+
 
 def _grade_quality(
     speech_fp_rate: float,
@@ -2107,15 +2152,25 @@ def _run_quality_gate(
         # zero. Near-silence (RMS ≈ 1e-4, ~80 dB below speech) is non-zero
         # so OWW produces embeddings and we still verify the model does not
         # fire on pseudo-silent input.
-        np_rng = np.random.default_rng(seed=42)
-        near_silence_audio = np_rng.standard_normal(16000 * 10).astype(np.float32) * 1e-4
-        near_silence_path = quality_dir / "qc_near_silence.wav"
-        _save_wav(near_silence_audio, near_silence_path)
+        #
+        # _NEAR_SILENCE_PROBE_COUNT independent realizations (not one) so the
+        # silence subgrade is a median over several probes rather than a
+        # single one-shot clip (#1775 residual, post-#1465 -- see the module
+        # comment above _NEAR_SILENCE_PROBE_COUNT). Seed 42 is always probe 0.
+        near_silence_paths: list[Path] = []
+        for probe_idx in range(_NEAR_SILENCE_PROBE_COUNT):
+            np_rng = np.random.default_rng(seed=_NEAR_SILENCE_PROBE_SEED_BASE + probe_idx)
+            near_silence_audio = np_rng.standard_normal(16000 * 10).astype(np.float32) * 1e-4
+            near_silence_path = quality_dir / f"qc_near_silence_{probe_idx:02d}.wav"
+            _save_wav(near_silence_audio, near_silence_path)
+            near_silence_paths.append(near_silence_path)
 
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_scores = _score_files([silence_path], "qc_silence")
-        near_silence_scores = _score_files([near_silence_path], "qc_near_silence")
+        # One max-window score per independent probe (_score_files already
+        # reduces each source clip to its own worst window).
+        near_silence_scores = _score_files(near_silence_paths, "qc_near_silence")
         positive_scores = (
             _score_files(list(positive_files), "qc_positive")
             if positive_files
@@ -2135,7 +2190,9 @@ def _run_quality_gate(
         silence_source = "silence"
         silence_window_count = int(len(silence_scores))
     elif len(near_silence_scores) > 0:
-        silence_max_score = float(near_silence_scores.max())
+        # Median across _NEAR_SILENCE_PROBE_COUNT independent probes, not the
+        # max of a single realization -- see _aggregate_silence_probe_scores.
+        silence_max_score = _aggregate_silence_probe_scores(near_silence_scores.tolist())
         silence_source = "near_silence"
         silence_window_count = int(len(near_silence_scores))
     else:
