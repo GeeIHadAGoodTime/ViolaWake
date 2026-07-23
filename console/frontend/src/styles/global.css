@@ -1088,6 +1088,33 @@ a:hover {
   border-radius: var(--radius);
 }
 
+.training-tips {
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.training-tips-title {
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.training-tips ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.training-tips a {
+  color: var(--accent);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

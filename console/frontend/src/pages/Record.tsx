@@ -313,6 +313,33 @@ export default function RecordPage() {
               Continue
             </button>
           </div>
+
+          <details className="tips-card">
+            <summary className="tips-card-summary">
+              Tips for a good wake-word recording
+            </summary>
+            <ul className="tips-card-content">
+              <li>
+                Pick a wake word with 2 to 4 syllables, like &quot;hey buddy&quot; or a
+                short first-and-last-name combo. Avoid words you say often in normal
+                conversation.
+              </li>
+              <li>
+                Speak at a normal indoor volume. Say the whole phrase in about a second
+                and a half, right after you start recording.
+              </li>
+              <li>Avoid recording next to a fan, TV, or music playing in the background.</li>
+              <li>
+                Record all {TARGET_RECORDINGS} samples with a little variation in pace and
+                distance from the microphone. The same delivery every time trains a
+                narrower model.
+              </li>
+              <li>
+                If training fails after a couple of tries, the quickest fix is usually to
+                train again with the same recordings, not to re-record from scratch.
+              </li>
+            </ul>
+          </details>
         </div>
       )}
 

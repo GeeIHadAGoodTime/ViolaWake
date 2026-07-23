@@ -148,6 +148,36 @@ export default function TrainingProgress({
           <p className="error-message">{state.error}</p>
         </div>
       )}
+
+      {/* Recovery tips: shown on any failed run so the next attempt is more
+          likely to pass, not just a repeat of the same one that just failed.
+          Training has real run-to-run variance (see the quality-gate message
+          above), so "try again" is genuinely the right first move before
+          anyone re-records from scratch. */}
+      {state.status === "failed" && (
+        <div className="training-tips">
+          <p className="training-tips-title">Training failed. Here is what to try next</p>
+          <ul>
+            <li>
+              Training results vary a little from run to run. Try training again with the
+              same recordings before you record anything new.
+            </li>
+            <li>
+              If it keeps failing for the same wake word, record a few more samples with a
+              little variation in pace and distance from the microphone, rather than
+              repeating the exact same delivery each time.
+            </li>
+            <li>
+              Speak at a normal indoor volume, away from a fan, TV, or music, and say the
+              whole wake word in one go right after you start recording.
+            </li>
+            <li>
+              Still stuck after a few tries? <a href="/contact">Contact support</a> and we
+              will look into it.
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
