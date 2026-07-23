@@ -51,6 +51,23 @@ export default function DashboardPage() {
   const usage = subscription?.usage;
   const showUpgrade = tier === "free";
 
+  // usage.models_used and `models` come from two different sources that can
+  // legitimately disagree. usage.models_used counts training jobs SUBMITTED
+  // this billing period (backend: routes/billing.py record_usage(), fired
+  // from routes/jobs.py submit_training_job() at submit time — every
+  // submission burns real training compute regardless of outcome). `models`
+  // only lists jobs that finished successfully (routes/models.py
+  // list_models() reads the TrainedModel table, populated only on a
+  // completed, quality-gate-passing run). So a user whose attempts failed
+  // the quality gate (or are still training) can have used their whole
+  // period's quota while the model grid is genuinely empty — that's not a
+  // data bug, but showing both facts with no connective copy reads as a
+  // flat contradiction ("3 of 3 used" next to "No models yet", #3267/#3470).
+  // Surface the same two numbers honestly instead of implying they're the
+  // same count.
+  const attemptsUsedWithNoModels =
+    !loading && models.length === 0 && (usage?.models_used ?? 0) > 0;
+
   const handleModelDeleted = useCallback((modelId: number) => {
     setModels((prev) => prev.filter((m) => m.id !== modelId));
   }, []);
@@ -63,7 +80,9 @@ export default function DashboardPage() {
           <p className="page-subtitle">
             {models.length > 0
               ? `${models.length} model${models.length !== 1 ? "s" : ""} trained`
-              : "Train your first custom wake word"}
+              : attemptsUsedWithNoModels
+                ? `${usage!.models_used} training attempt${usage!.models_used !== 1 ? "s" : ""} this period, none completed yet`
+                : "Train your first custom wake word"}
           </p>
         </div>
         <button
@@ -77,12 +96,14 @@ export default function DashboardPage() {
       {showUpgrade && (
         <div className="dashboard-upgrade-banner" role="status">
           <div>
-            <strong>You&apos;re on the Free plan.</strong> 3 models per
-            month
+            <strong>You&apos;re on the Free plan.</strong> 3 training
+            attempts per month
             {usage
               ? ` — ${usage.models_used} / ${usage.models_limit ?? "∞"} used this period.`
               : "."}{" "}
-            Upgrade for 20+ models, priority training, and team features.
+            Every submitted training run counts toward this, whether or
+            not it finishes successfully. Upgrade for 20+ attempts,
+            priority training, and team features.
           </div>
           <div className="dashboard-upgrade-actions">
             <Link to="/pricing" className="btn btn-primary">
@@ -115,15 +136,29 @@ export default function DashboardPage() {
         <div className="dashboard-empty">
           <div className="empty-icon">🎤</div>
           <h2>No models yet</h2>
-          <p>
-            Record your first wake word and train a custom model.
-            It only takes a few minutes.
-          </p>
+          {attemptsUsedWithNoModels ? (
+            <p className="dashboard-empty-note">
+              You&apos;ve used {usage!.models_used} of{" "}
+              {usage!.models_limit ?? "∞"} training attempts this period,
+              but none finished with a working model yet — usually because
+              a run is still training or didn&apos;t pass the quality
+              check. Open a training run&apos;s progress page to see what
+              happened, or try again with a few extra recordings if a
+              recent run failed.
+            </p>
+          ) : (
+            <p>
+              Record your first wake word and train a custom model.
+              It only takes a few minutes.
+            </p>
+          )}
           <button
             className="btn btn-primary"
             onClick={() => navigate("/record")}
           >
-            Record Your First Wake Word
+            {attemptsUsedWithNoModels
+              ? "Record More Samples"
+              : "Record Your First Wake Word"}
           </button>
         </div>
       )}

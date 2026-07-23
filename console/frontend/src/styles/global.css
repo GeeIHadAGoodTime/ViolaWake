@@ -411,6 +411,10 @@ a:hover {
   margin-bottom: 0.5rem;
 }
 
+.dashboard-empty-note {
+  max-width: 480px;
+}
+
 .dashboard-empty p {
   color: var(--text-secondary);
   margin-bottom: 1.5rem;
