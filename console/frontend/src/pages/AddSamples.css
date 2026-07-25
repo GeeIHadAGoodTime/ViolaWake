@@ -295,6 +295,39 @@
   font-weight: 600;
 }
 
+.tips-card {
+  margin-top: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.tips-card-summary {
+  padding: 0.85rem 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.tips-card-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tips-card[open] .tips-card-summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.tips-card-content {
+  margin: 0;
+  padding: 1rem 1.1rem 1.1rem 2.1rem;
+  display: grid;
+  gap: 0.6rem;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 760px) {
   .add-samples-header,
   .add-samples-submit {
