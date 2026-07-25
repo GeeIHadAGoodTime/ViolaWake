@@ -1,12 +1,36 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { resendVerification } from "../api";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
+type ResendState = "idle" | "sending" | "sent" | "error";
+
 export default function Layout({ children }: LayoutProps) {
   const { isAuthenticated, logout, user } = useAuth();
+  const [resendState, setResendState] = useState<ResendState>("idle");
+
+  // The first verification email is a one-shot send (see backend
+  // EmailService._send_email) that can be lost to spam filtering, a
+  // delayed/greylisted delivery, or a mistyped address, with no automatic
+  // retry -- see GH #520 / GlitchTip glitchtip:22 (a customer had no way to
+  // get a second one and had to file a support ticket after a week). This
+  // gives every unverified user a visible, self-service retry instead.
+  async function handleResendVerification() {
+    if (!user?.email || resendState === "sending") {
+      return;
+    }
+    setResendState("sending");
+    try {
+      await resendVerification(user.email);
+      setResendState("sent");
+    } catch {
+      setResendState("error");
+    }
+  }
 
   return (
     <div className="layout">
@@ -72,8 +96,29 @@ export default function Layout({ children }: LayoutProps) {
 
       {isAuthenticated && user && !user.email_verified && (
         <div className="verification-banner" role="status">
-          Verify your email to upload recordings, start training, and manage billing.
-          Check your inbox for the verification link.
+          <span>
+            Verify your email to upload recordings, start training, and manage billing.
+            Check your inbox for the verification link.
+          </span>
+          {resendState === "sent" ? (
+            <span className="verification-banner-status">
+              Verification email sent -- check your inbox (and spam folder).
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="verification-banner-action"
+              onClick={() => void handleResendVerification()}
+              disabled={resendState === "sending"}
+            >
+              {resendState === "sending" ? "Sending..." : "Resend verification email"}
+            </button>
+          )}
+          {resendState === "error" && (
+            <span className="verification-banner-status verification-banner-status-error">
+              Could not send right now. Try again in a moment.
+            </span>
+          )}
         </div>
       )}
 

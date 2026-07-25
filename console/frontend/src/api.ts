@@ -241,6 +241,15 @@ export async function forgotPassword(
   });
 }
 
+export async function resendVerification(
+  email: string,
+): Promise<MessageResponse> {
+  return request<MessageResponse>("/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
 export async function changePassword(
   currentPassword: string,
   newPassword: string,

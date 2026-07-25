@@ -163,6 +163,12 @@ gates:
       - console/tests/test_auth_email_routes.py::test_resend_verification_sends_new_link_for_unverified_account
       - console/tests/test_auth_email_routes.py::test_resend_verification_is_silent_for_verified_and_unknown_emails
 
+  - gate_id: resend-verification-frontend-button
+    contract: The console's unverified-email banner must expose a working "Resend verification email" control that calls the resend-verification-endpoint backend, not static text. Closes GH #2153, where the backend endpoint shipped in PR #3 with no frontend caller, leaving users with lost verification emails no self-service recovery.
+    detector: scripts/check_resend_verification_frontend_button.py
+    own_tests:
+      - scripts/check_resend_verification_frontend_button.py
+
   - gate_id: spa-deep-link-rewrite-target
     contract: SPA-fallback rewrite targets in the Pages _redirects must be canonical directory paths; a ".html" target gets 308-canonicalized by Cloudflare Pages, stripping the deep-link path (the 2026-05-08 verify-email/reset-password breakage class).
     detector: tests/unit/test_spa_rewrite_target.py

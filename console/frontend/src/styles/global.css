@@ -138,6 +138,40 @@ a:hover {
   border-radius: var(--radius);
   color: var(--warning);
   font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.verification-banner-action {
+  border: 1px solid rgba(253, 203, 110, 0.55);
+  background: transparent;
+  color: var(--warning);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.verification-banner-action:hover:not(:disabled) {
+  background: rgba(253, 203, 110, 0.18);
+}
+
+.verification-banner-action:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.verification-banner-status {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.verification-banner-status-error {
+  color: var(--error);
 }
 
 /* ===== Typography ===== */
