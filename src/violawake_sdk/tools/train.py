@@ -1072,6 +1072,141 @@ def _prepare_audio_for_oww(
     return audio_i16
 
 
+# ---------------------------------------------------------------------------
+# Streaming-parity scoring for the silence subgrade (#1487 / #2611)
+# ---------------------------------------------------------------------------
+#
+# The silence subgrade used to score audio through _extract_temporal_embeddings:
+# ONE batch preprocessor.embed_clips() call on a SINGLE 1.5s center-crop
+# (_prepare_audio_for_oww -> center_crop(audio, CLIP_SAMPLES)). The runtime
+# (WakeDetector.process -> OpenWakeWordBackbone.push_audio, once per 20ms frame)
+# instead streams the FULL continuous input through persistent ring/mel buffers
+# that accumulate state across calls. _extract_temporal_embeddings' own docstring
+# warns "streaming push_audio() produces subtly different embeddings due to
+# internal state accumulation" -- the silence subgrade was the one place that
+# warning was never heeded.
+#
+# Measured on six real deployed models (#2611, 2026-07-24, wakeword-backend-1):
+# batch-vs-streaming divergence up to 0.368 on the same near-silence audio, i.e.
+# the batch number did not predict the runtime number it claimed to protect.
+def _extract_streaming_temporal_windows(
+    audio_clips: list[np.ndarray],
+    seq_len: int,
+) -> tuple[list[np.ndarray], list[int]]:
+    """Extract temporal embedding windows via the real runtime streaming path.
+
+    Unlike ``_extract_temporal_embeddings`` (one batch ``embed_clips`` call on a
+    center-cropped 1.5s excerpt), this feeds each FULL, uncropped clip through
+    ``OpenWakeWordBackbone.push_audio`` -- the exact call ``WakeDetector.process``
+    makes at runtime -- one 20ms frame (``wake_detector.FRAME_SAMPLES``) at a
+    time, and windows the resulting embedding sequence with the same sliding-
+    window helper used everywhere else in this module. A fresh backbone is reset
+    per clip so probes do not leak streaming state into one another.
+
+    Returns ``(windows, source_indices)``.
+    """
+    import numpy as np
+
+    from violawake_sdk.backends.onnx_backend import OnnxBackend
+    from violawake_sdk.oww_backbone import OpenWakeWordBackbone
+    from violawake_sdk.wake_detector import FRAME_SAMPLES
+
+    backbone = OpenWakeWordBackbone(OnnxBackend())
+
+    all_windows: list[np.ndarray] = []
+    all_source_idx: list[int] = []
+    for clip_idx, clip in enumerate(audio_clips):
+        audio_f32 = np.asarray(clip, dtype=np.float32).reshape(-1)
+        if audio_f32.size == 0:
+            continue
+        audio_i16 = (np.clip(audio_f32, -1.0, 1.0) * 32767).astype(np.int16)
+
+        backbone.reset()
+        frame_embeddings: list[np.ndarray] = []
+        n_usable = len(audio_i16) - (len(audio_i16) % FRAME_SAMPLES)
+        for i in range(0, n_usable, FRAME_SAMPLES):
+            produced, embedding = backbone.push_audio(audio_i16[i : i + FRAME_SAMPLES])
+            if produced and embedding is not None:
+                frame_embeddings.append(embedding.astype(np.float32))
+        if not frame_embeddings:
+            continue
+
+        windows, source_idx, _tags = _temporal_windows_from_frame_embeddings(
+            np.stack(frame_embeddings), source_id=clip_idx, tag="stream", seq_len=seq_len
+        )
+        all_windows.extend(windows)
+        all_source_idx.extend(source_idx)
+
+    return all_windows, all_source_idx
+
+
+# Room-tone probe extraction (#2611).
+#
+# The gate's old silence probe was synthetic white noise at float RMS 1e-4 --
+# int16 RMS 3.29. Measured against real recorded audio (LibriSpeech quiet
+# windows, and real user recordings on the box): real room tone sits at int16
+# RMS 224-3782. The synthetic probe was therefore ~100-1000x quieter than the
+# quietest sound any microphone actually produces, in a regime the model never
+# saw in training, where its output is arbitrary. The runtime's own RMS floor
+# comment (wake_detector.py: "speech ~= 500-5000") agrees on the scale.
+#
+# The user's own recordings always contain the real room tone of the real
+# microphone that will run this model -- the most predictive no-wake probe
+# available. These constants select those segments.
+_ROOM_TONE_WINDOW = 4800  # 300ms energy window
+# Quiet := window RMS below this fraction of the clip's OWN loudest window (i.e. of
+# the spoken wake word in that same recording). Referencing the clip's peak rather
+# than its mean keeps the split stable no matter how much of the clip is speech.
+_ROOM_TONE_MAX_FRACTION = 0.25
+_ROOM_TONE_MIN_SAMPLES = 16000  # need >=1s of room tone from a clip to use it
+_RUNTIME_RMS_FLOOR = 1.0  # wake_detector.py Gate 1 -- below this the runtime never scores
+
+
+def _int16_rms(audio: np.ndarray) -> float:
+    """RMS on the int16 scale the runtime's RMS floor is calibrated against."""
+    import numpy as np
+
+    a = np.asarray(audio, dtype=np.float32)
+    if a.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean((a * 32767.0) ** 2)))
+
+
+def _extract_room_tone(audio: np.ndarray) -> np.ndarray | None:
+    """Pull the real room-tone (non-speech) segments out of one recording.
+
+    Keeps 300ms windows whose energy is far below the clip's own average (so the
+    spoken wake word itself is excluded) but still above the runtime RMS floor
+    (so it is audio the runtime would actually score). Returns None when the clip
+    yields too little room tone to be a useful probe.
+    """
+    import numpy as np
+
+    a = np.asarray(audio, dtype=np.float32).reshape(-1)
+    if a.size < _ROOM_TONE_WINDOW * 2:
+        return None
+
+    windows = [
+        a[start : start + _ROOM_TONE_WINDOW]
+        for start in range(0, len(a) - _ROOM_TONE_WINDOW, _ROOM_TONE_WINDOW)
+    ]
+    window_rms = [_int16_rms(w) for w in windows]
+    speech_level = max(window_rms, default=0.0)
+    if speech_level <= 0.0:
+        return None
+    quiet_bar = _ROOM_TONE_MAX_FRACTION * speech_level
+
+    keep = [
+        w
+        for w, rms in zip(windows, window_rms)
+        if _RUNTIME_RMS_FLOOR < rms < quiet_bar
+    ]
+    if not keep:
+        return None
+    room_tone = np.concatenate(keep)
+    return room_tone if len(room_tone) >= _ROOM_TONE_MIN_SAMPLES else None
+
+
 def _temporal_windows_from_frame_embeddings(
     frame_embeddings: np.ndarray,
     *,
@@ -1816,7 +1951,7 @@ def _train_temporal_cnn(
             "\n" + "!" * 72 + "\nQUALITY GATE FAILED: model is not ready for deployment.\n"
             f"  Speech FP rate:     {quality_gate['speech_fp_rate'] * 100:.1f}%\n"
             f"  Confusable FP rate: {quality_gate['confusable_fp_rate'] * 100:.1f}%\n"
-            f"  Silence max score:  {quality_gate['silence_max_score']:.2f}\n"
+            f"  Silence FP rate:    {_format_silence_fp(quality_gate)}\n"
             "Recommended fixes:\n"
             "  - Add more diverse speech negatives via --negatives or keep --auto-corpus enabled.\n"
             f"  - Expand confusable negatives for '{wake_word}' and retrain.\n"
@@ -1962,33 +2097,55 @@ def _train_temporal_cnn(
 # wake_detector.py Gate 1). The A/B tiers preserve their historical margins
 # (0.20 / 0.30 at threshold 0.80) but are now derived, so if the deployment
 # threshold ever moves the entire ladder moves with it.
-_SILENCE_A_THRESHOLD_FRACTION = 0.25  # A: silence < 0.25  * threshold
-_SILENCE_B_THRESHOLD_FRACTION = 0.375  # B: silence < 0.375 * threshold
-# C: silence < 1.0 * threshold (the false-fire line); at/above => grade F.
+# The silence subgrade is a false-fire RATE, on the same tiers as the speech
+# subgrade (#2611). It used to be a single max draw against the deployment
+# threshold, which was invalid three ways at once -- see the measurement note in
+# _run_quality_gate. A rate over many runtime windows is the same shape as the
+# speech/confusable subgrades this function already grades, so all three
+# subgrades now answer one consistent question: on no-wake audio, how often would
+# this model fire at the deployment threshold?
+_SILENCE_A_RATE = 0.02  # A: <2% of no-wake windows would fire
+_SILENCE_B_RATE = 0.05  # B: <5%
+_SILENCE_C_RATE = 0.10  # C: <10%; at/above => grade F
+
+
+def _format_silence_fp(quality_gate: dict[str, Any]) -> str:
+    """Render the silence subgrade for operator output ('n/a' when unmeasurable)."""
+    rate = quality_gate.get("silence_fp_rate")
+    if rate is None:
+        return "n/a (no room tone available to measure)"
+    return f"{rate * 100:.1f}% ({quality_gate.get('silence_window_count', 0)} room-tone windows)"
 
 
 def _grade_quality(
     speech_fp_rate: float,
     confusable_fp_rate: float,
-    silence_max_score: float,
+    silence_fp_rate: float | None,
     deployment_threshold: float,
 ) -> str:
     """Grade a model A/B/C/F from its no-wake false-fire measurements.
 
-    All three subgrades are measured against the SAME deployment threshold: speech
-    and confusable via their false-positive rate at the threshold, and silence via
-    whether its worst near-silence window would fire at the threshold. The silence
-    C->F cliff is the deployment threshold; the A/B silence tiers are fractions of
-    it (see the module constants above). No silence bar is hardcoded.
+    All three subgrades are false-positive RATES measured at the SAME deployment
+    threshold: how often the model would fire on everyday speech, on
+    similar-sounding words, and on real no-wake room tone.
+
+    ``silence_fp_rate`` is ``None`` when no real quiet audio could be measured for
+    this model (e.g. the user's recordings yielded no room tone). In that case the
+    model is graded on the speech and confusable axes alone rather than being
+    failed for our missing measurement -- both remaining axes are measured against
+    the same threshold, and the runtime keeps an independent RMS floor
+    (wake_detector.py Gate 1) for genuinely quiet input.
+
+    ``deployment_threshold`` is retained because every rate above is computed at
+    that threshold by the caller; the tiers themselves are rate bars, so no score
+    bar is hardcoded here.
     """
-    silence_a_bar = _SILENCE_A_THRESHOLD_FRACTION * deployment_threshold
-    silence_b_bar = _SILENCE_B_THRESHOLD_FRACTION * deployment_threshold
-    silence_f_bar = deployment_threshold  # at/above the deployment threshold => would false-fire
-    if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence_max_score < silence_a_bar:
+    silence = 0.0 if silence_fp_rate is None else silence_fp_rate
+    if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence < _SILENCE_A_RATE:
         return "A"
-    if speech_fp_rate < 0.05 and confusable_fp_rate < 0.10 and silence_max_score < silence_b_bar:
+    if speech_fp_rate < 0.05 and confusable_fp_rate < 0.10 and silence < _SILENCE_B_RATE:
         return "B"
-    if speech_fp_rate < 0.10 and confusable_fp_rate < 0.20 and silence_max_score < silence_f_bar:
+    if speech_fp_rate < 0.10 and confusable_fp_rate < 0.20 and silence < _SILENCE_C_RATE:
         return "C"
     return "F"
 
@@ -2040,6 +2197,24 @@ def _run_quality_gate(
             [clip_scores[i] for i in sorted(clip_scores)],
             dtype=np.float32,
         )
+
+    def _score_windows_streaming(audio_clips: list[np.ndarray]) -> np.ndarray:
+        """Score raw audio clips via the runtime streaming path (#1487 / #2611).
+
+        Returns EVERY window's score (not one max per clip): the silence subgrade
+        is a false-fire rate, so it needs the full distribution the runtime would
+        see, not an extreme value over an unknown number of samples.
+        """
+        if not audio_clips:
+            return np.array([], dtype=np.float32)
+
+        windows, _source_indices = _extract_streaming_temporal_windows(audio_clips, seq_len)
+        if not windows:
+            return np.array([], dtype=np.float32)
+
+        X_qc = torch.tensor(np.array(windows), dtype=torch.float32).to(torch_device)
+        with torch.no_grad():
+            return model(X_qc).cpu().numpy().flatten()
 
     def _fp_rate(scores: np.ndarray) -> float:
         if len(scores) == 0:
@@ -2097,25 +2272,36 @@ def _run_quality_gate(
             if ok and out_path.exists():
                 confusable_files.append(out_path)
 
-        silence_audio = np.zeros(16000 * 10, dtype=np.float32)
-        silence_path = quality_dir / "qc_silence.wav"
-        _save_wav(silence_audio, silence_path)
-
-        # Fallback near-silence: very-low-amplitude white noise. The OWW
-        # backbone has an energy threshold and rejects pure silence, which
-        # leaves the silence subgrade untested when the input is exactly
-        # zero. Near-silence (RMS ≈ 1e-4, ~80 dB below speech) is non-zero
-        # so OWW produces embeddings and we still verify the model does not
-        # fire on pseudo-silent input.
-        np_rng = np.random.default_rng(seed=42)
-        near_silence_audio = np_rng.standard_normal(16000 * 10).astype(np.float32) * 1e-4
-        near_silence_path = quality_dir / "qc_near_silence.wav"
-        _save_wav(near_silence_audio, near_silence_path)
+        # ------------------------------------------------------------------
+        # Silence subgrade probes (#2611).
+        #
+        # The old probe was ONE fixed-seed (42) white-noise clip at float RMS
+        # 1e-4, center-cropped to 1.5s and scored in batch mode -- reproduced on
+        # the box 2026-07-24, it yielded silence_window_count == 1, i.e. the
+        # "max over windows" was a single forward pass on a single arbitrary
+        # out-of-distribution input. Its run-to-run spread across probe draws was
+        # +-0.2 straddling the 0.80 cliff, so on six real deployed models that had
+        # PASSED the gate, 10-37% of alternative probe seeds would have failed
+        # them. It was also invalid in the other direction: models with an 82-90%
+        # runtime false-fire rate on broadband noise passed it. Every production
+        # training failure in the post-recalibration window (12 of 21 jobs) was
+        # caused by this one number, with speech FP and confusable FP both 0.0%.
+        #
+        # Replaced by REAL no-wake audio -- the room tone of the user's own
+        # microphone, taken from their own recordings -- scored through the real
+        # runtime streaming path over the FULL clip, and graded as a rate.
+        room_tone_clips: list[np.ndarray] = []
+        for pos_path in list(positive_files or []):
+            try:
+                room_tone = _extract_room_tone(_load_training_audio(pos_path))
+            except Exception:
+                continue
+            if room_tone is not None:
+                room_tone_clips.append(room_tone)
 
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
-        silence_scores = _score_files([silence_path], "qc_silence")
-        near_silence_scores = _score_files([near_silence_path], "qc_near_silence")
+        silence_window_scores = _score_windows_streaming(room_tone_clips)
         positive_scores = (
             _score_files(list(positive_files), "qc_positive")
             if positive_files
@@ -2124,37 +2310,34 @@ def _run_quality_gate(
 
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
-    # If pure silence produced no embeddings (OWW backbone rejected zero-energy
-    # audio), fall back to the near-silence score so the silence subgrade is
-    # actually exercised. Pre-v0.2.5 behavior assumed score=0 when silence
-    # was untested, which let overfit models pass Grade A/B without ever
-    # being checked against a low-energy input. If both pure silence AND
-    # near-silence produce zero embeddings, force Grade F as a safety floor.
-    if len(silence_scores) > 0:
-        silence_max_score = float(silence_scores.max())
-        silence_source = "silence"
-        silence_window_count = int(len(silence_scores))
-    elif len(near_silence_scores) > 0:
-        silence_max_score = float(near_silence_scores.max())
-        silence_source = "near_silence"
-        silence_window_count = int(len(near_silence_scores))
+    # Silence subgrade: the false-fire rate on the user's own room tone, scored
+    # through the runtime streaming path. When no room tone could be extracted
+    # (e.g. every recording is wall-to-wall speech, or recordings were purged),
+    # the rate is None and _grade_quality grades on speech/confusable alone --
+    # the old code forced grade F here, which failed the user for OUR missing
+    # measurement. Genuinely quiet input is independently handled at runtime by
+    # the RMS floor (wake_detector.py Gate 1).
+    if len(silence_window_scores) > 0:
+        silence_fp_rate: float | None = float(
+            (silence_window_scores >= deployment_threshold).mean()
+        )
+        silence_max_score = float(silence_window_scores.max())
+        silence_source = "room_tone"
+        silence_window_count = int(len(silence_window_scores))
     else:
-        # No silence-class input could be scored — conservative: force Grade F.
-        silence_max_score = 1.0
-        silence_source = "none"
+        silence_fp_rate = None
+        silence_max_score = 0.0
+        silence_source = "unmeasurable"
         silence_window_count = 0
     grade = _grade_quality(
-        speech_fp_rate, confusable_fp_rate, silence_max_score, deployment_threshold
+        speech_fp_rate, confusable_fp_rate, silence_fp_rate, deployment_threshold
     )
 
     # Pool every non-positive score we collected into the negative distribution
-    # used for d-prime. silence_scores prefers pure silence; near_silence is the
-    # fallback when the OWW backbone rejected zero-energy input.
+    # used for d-prime.
     neg_pool_parts = [speech_scores, confusable_scores]
-    if len(silence_scores) > 0:
-        neg_pool_parts.append(silence_scores)
-    elif len(near_silence_scores) > 0:
-        neg_pool_parts.append(near_silence_scores)
+    if len(silence_window_scores) > 0:
+        neg_pool_parts.append(silence_window_scores)
     negative_scores_pool = (
         np.concatenate(neg_pool_parts)
         if any(len(p) > 0 for p in neg_pool_parts)
@@ -2180,9 +2363,14 @@ def _run_quality_gate(
         "speech_sample_count": int(len(speech_scores)),
         "confusable_fp_rate": confusable_fp_rate,
         "confusable_sample_count": int(len(confusable_scores)),
+        "silence_fp_rate": silence_fp_rate,
         "silence_max_score": silence_max_score,
         "silence_window_count": silence_window_count,
         "silence_source": silence_source,
+        # Which code path produced the silence score. "runtime_streaming" is the
+        # real WakeDetector path; the retired "batch_crop" path scored a 1.5s
+        # center-crop through embed_clips and did not predict it (#1487).
+        "silence_scoring_path": ("runtime_streaming" if silence_window_count else "n/a"),
         "d_prime": (round(float(d_prime), 4) if d_prime is not None else None),
         "positive_scores": [round(float(s), 6) for s in positive_scores.tolist()],
         "negative_scores": [round(float(s), 6) for s in negative_scores_pool.tolist()],
@@ -2199,7 +2387,14 @@ def _run_quality_gate(
         f"  Confusable FP rate: {confusable_fp_rate * 100:4.1f}% "
         f"({len(confusable_scores)} words, threshold={deployment_threshold:.2f})"
     )
-    print(f"  Silence max score:  {silence_max_score:.2f}")
+    if silence_fp_rate is None:
+        print("  Silence FP rate:    n/a (no room tone in the recordings to measure)")
+    else:
+        print(
+            f"  Silence FP rate:    {silence_fp_rate * 100:4.1f}% "
+            f"({silence_window_count} room-tone windows, max={silence_max_score:.2f}, "
+            f"threshold={deployment_threshold:.2f})"
+        )
     if d_prime is not None:
         print(
             f"  d-prime:            {d_prime:.2f} "
@@ -2216,9 +2411,10 @@ def _run_quality_gate(
             f"  WARNING: Only {len(confusable_scores)}/20 confusable words "
             "were scored in the quality gate."
         )
-    if verbose and len(silence_scores) == 0:
+    if verbose and silence_window_count == 0:
         print(
-            "  NOTE: Silence produced no OWW embeddings (zero-energy rejected by backbone). Score: 0.0"
+            "  NOTE: No room tone could be extracted from the recordings, so the "
+            "silence subgrade was not measured; graded on speech/confusable only."
         )
 
     return grade, metrics
