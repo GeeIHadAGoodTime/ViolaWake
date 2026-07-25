@@ -93,12 +93,28 @@ def _run_gate(monkeypatch, *, tts_works: bool):
     )
 
 
-def test_healthy_tts_still_grades_a_never_firing_model_well(monkeypatch) -> None:
-    """Control: with TTS healthy the gate works and does not fail the model."""
-    grade, metrics = _run_gate(monkeypatch, tts_works=True)
-    assert grade != "F"
+def test_healthy_tts_actually_measures_the_false_positive_axes(monkeypatch) -> None:
+    """Control: with TTS healthy the gate has real material and MEASURES it.
+
+    Deliberately asserts on the measurement, not on the letter grade. The probe
+    model here never fires, and this suite must NOT encode "a never-firing model
+    deserves to pass" as a desired property -- the gate currently has no recall
+    term at all (`_grade_quality` reads only the three false-positive axes), so a
+    model that never wakes does grade A today. That is a real defect, tracked
+    separately. If someone later adds the missing recall bar, this probe model
+    SHOULD start failing, and this test must not be the thing that blocks them.
+
+    What this ticket's fix is actually about is narrower and must hold either
+    way: the false-positive axes are computed from real scored samples rather
+    than fabricated from an empty array.
+    """
+    _grade, metrics = _run_gate(monkeypatch, tts_works=True)
+
     assert metrics["speech_sample_count"] > 0
     assert metrics["confusable_sample_count"] > 0
+    # Measured, not the 1.0 that an empty score array fabricates.
+    assert metrics["speech_fp_rate"] == 0.0
+    assert metrics["confusable_fp_rate"] == 0.0
 
 
 def test_tts_outage_raises_instead_of_grading_the_model_f(monkeypatch) -> None:
@@ -212,6 +228,38 @@ def test_coverage_floor_rejects_a_severely_undersized_negative_set() -> None:
         _require_quality_gate_coverage(3, 50, "speech phrases")
 
 
+def test_an_unmeasurable_axis_is_not_silently_scored_as_maximally_bad() -> None:
+    """A wake word with NO possible confusables must not be auto-failed.
+
+    `generate_confusables` is built on `[a-z]+`, so a purely numeric or symbolic
+    wake word yields zero confusable words -- and recordings.py's sanitizer
+    explicitly permits digits, so "1234" and "007" are reachable user input. With
+    nothing requested there is nothing to score, `_fp_rate` returns 1.0 over the
+    empty array, and 1.0 is far above the 0.20 confusable bar: a guaranteed
+    grade F that NO retrain can ever clear, reported to the user as a false-fire
+    risk. Unmeasurable must never silently mean maximally bad.
+    """
+    with pytest.raises(QualityGateUnavailableError) as excinfo:
+        _require_quality_gate_coverage(0, 0, "confusable words")
+
+    message = str(excinfo.value)
+    assert "not a problem with your recordings" in message
+    # Must NOT tell the user to retry: retrying is futile for this cause.
+    assert "retraining will not change it" in message
+
+
+def test_the_two_unmeasurable_causes_give_different_advice() -> None:
+    """A transient outage says try again; an unfixable wake word says it will
+    not help. Reds if the two are collapsed into one message."""
+    with pytest.raises(QualityGateUnavailableError) as transient:
+        _require_quality_gate_coverage(0, 50, "speech phrases")
+    with pytest.raises(QualityGateUnavailableError) as permanent:
+        _require_quality_gate_coverage(0, 0, "confusable words")
+
+    assert "try training again" in str(transient.value)
+    assert "try training again" not in str(permanent.value)
+
+
 def test_coverage_floor_accepts_a_full_or_adequately_covered_set() -> None:
     """The floor must not fire on healthy or mildly-degraded synthesis, or it
     would become a new spurious failure mode of its own."""
@@ -219,8 +267,11 @@ def test_coverage_floor_accepts_a_full_or_adequately_covered_set() -> None:
     _require_quality_gate_coverage(50, 50, "speech phrases")
     _require_quality_gate_coverage(25, 50, "speech phrases")
     _require_quality_gate_coverage(20, 20, "confusable words")
-    # Nothing requested => nothing to enforce.
-    _require_quality_gate_coverage(0, 0, "confusable words")
+    # A short-but-complete confusable list is fine: the floor is a fraction of
+    # what was REQUESTED, so an unusual wake word with few variants is not
+    # penalised for it.
+    _require_quality_gate_coverage(3, 3, "confusable words")
+
 
 
 def test_coverage_floor_is_a_real_fraction_not_just_a_zero_check() -> None:
@@ -263,4 +314,7 @@ def test_quality_gate_uses_the_kokoro_fallback_when_edge_tts_fails(monkeypatch) 
     assert used, "Kokoro fallback was never used when edge-tts failed"
     assert metrics["speech_sample_count"] > 0
     assert metrics["confusable_sample_count"] > 0
-    assert grade != "F"
+    # As above: assert the axes were MEASURED, not that this probe model passed.
+    assert metrics["speech_fp_rate"] == 0.0
+    assert metrics["confusable_fp_rate"] == 0.0
+    del grade

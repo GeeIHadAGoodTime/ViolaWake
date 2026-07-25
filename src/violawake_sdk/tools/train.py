@@ -2046,7 +2046,22 @@ def _require_quality_gate_coverage(scored: int, requested: int, label: str) -> N
     negative set become a grade-F verdict about the user's model.
     """
     if requested <= 0:
-        return
+        # Nothing was even ASKED for on this axis, so the axis is unmeasurable --
+        # and unmeasurable must not silently mean "maximally bad". `_fp_rate`
+        # returns 1.0 for an empty score array, so falling through here is a
+        # guaranteed grade F that no retrain can ever clear. This is reachable
+        # today: generate_confusables() is built on `[a-z]+`, so a purely numeric
+        # or symbolic wake word ("1234", "007", which recordings.py's sanitizer
+        # explicitly permits) yields ZERO confusable words, and every such job is
+        # failed with a message telling the user to re-record. Say the true thing
+        # instead: we cannot check this wake word, and trying again will not help.
+        raise QualityGateUnavailableError(
+            f"The quality check could not be completed: no {label} could be "
+            "generated to test your wake word against, so we could not verify it "
+            "is safe to use. This is not a problem with your recordings, and "
+            "retraining will not change it. Wake words that contain letters "
+            "(rather than only digits or symbols) can be checked properly."
+        )
     if scored >= max(1, int(requested * _MIN_QUALITY_GATE_COVERAGE)):
         return
     raise QualityGateUnavailableError(
