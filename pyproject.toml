@@ -96,6 +96,17 @@ training = [
     "matplotlib>=3.8",
     "pandas>=2.1",
     "edge-tts>=6.1",
+    # Required for the Kokoro TTS fallback the training pipeline depends on
+    # (#1768/#1775). edge-tts is a NETWORK dependency on Microsoft's voice
+    # service, and Microsoft retires voices server-side without notice; the
+    # fallback is what stops one dead voice from emptying a sample set. It was
+    # only in the `tts` extra, while the backend image installs `/sdk[training]`
+    # (console/Dockerfile.backend), so _KokoroFallback.ready() always returned
+    # False in production and BOTH the #1768 fix and the quality gate's fallback
+    # were inert -- the same missing-from-the-extra class as onnxscript and
+    # fast_mp3_augment below. Failure to load stays graceful (ready() returns
+    # False), so adding it can only help.
+    "kokoro-onnx>=0.4",
     "pydub>=0.25",
     "onnx>=1.15",
     # Required for ONNX export of the trained TemporalCNN — torch.onnx.export

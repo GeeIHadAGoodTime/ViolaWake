@@ -164,7 +164,7 @@ gates:
       - console/tests/test_auth_email_routes.py::test_resend_verification_is_silent_for_verified_and_unknown_emails
 
   - gate_id: resend-verification-frontend-button
-    contract: The console's unverified-email banner must expose a working "Resend verification email" control that calls the resend-verification-endpoint backend, not static text. Closes GH #2153, where the backend endpoint shipped in PR #3 with no frontend caller, leaving users with lost verification emails no self-service recovery.
+    contract: "The console's unverified-email banner must expose a working \"Resend verification email\" control that calls the resend-verification-endpoint backend, not static text. Closes GH #2153, where the backend endpoint shipped in PR #3 with no frontend caller, leaving users with lost verification emails no self-service recovery."
     detector: scripts/check_resend_verification_frontend_button.py
     own_tests:
       - scripts/check_resend_verification_frontend_button.py
@@ -194,14 +194,14 @@ gates:
       - console/backend/tests/test_monitoring_quality_gate_classification.py::test_bare_runtimeerror_grade_f_message_is_still_the_old_bug_shape
 
   - gate_id: sdk-silence-subgrade-derived-from-deploy-threshold
-    contract: The training quality gate's silence subgrade C->F cliff MUST be DERIVED from the deployment threshold (DEFAULT_THRESHOLD / _run_quality_gate deployment_threshold), never a hardcoded constant disconnected from it. A near-silence max score below the deployment threshold cannot false-fire at deployment, so it must not force grade F; only silence at/above the deployment threshold fails, and the A/B tiers are fractions of the same threshold. Reds if any silence bar is hardcoded (e.g. the old 0.50) or otherwise does not track the threshold it protects (issue #1465, CL-20260714-4c23 / #1184).
+    contract: "The training quality gate's silence subgrade C->F cliff MUST be DERIVED from the deployment threshold (DEFAULT_THRESHOLD / _run_quality_gate deployment_threshold), never a hardcoded constant disconnected from it. A near-silence max score below the deployment threshold cannot false-fire at deployment, so it must not force grade F; only silence at/above the deployment threshold fails, and the A/B tiers are fractions of the same threshold. Reds if any silence bar is hardcoded (e.g. the old 0.50) or otherwise does not track the threshold it protects (issue #1465, CL-20260714-4c23 / #1184)."
     detector: tests/unit/test_quality_gate_silence_bar.py
     own_tests:
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_cliff_is_the_deployment_threshold_not_hardcoded_050
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_bar_tracks_the_deployment_threshold
 
   - gate_id: sdk-silence-subgrade-multi-probe-median
-    contract: The training quality gate's silence subgrade MUST be measured from _NEAR_SILENCE_PROBE_COUNT (>=3, odd) independent near-silence realizations, aggregated by MEDIAN via _aggregate_silence_probe_scores, never the max window score of a single fixed clip. #1465 fixed the cliff's BAR; a single-clip max left the STATISTIC one-shot -- an idiosyncratic peak response to one specific noise realization forced grade F identically to a model systematically prone to firing on quiet backgrounds (Viola issue #1775, the ~19%-of-all-jobs chronic quality-gate failure; historical grade-F reads, CL-20260714-4c23 n=20, already showed the same wake word passing on one retrain and failing the next from exactly this kind of single-sample variance). Reds if the probe count collapses back to 1, or the aggregate becomes max()/mean() instead of the median, or a single outlier probe alone can push the aggregate at/above threshold.
+    contract: "The training quality gate's silence subgrade MUST be measured from _NEAR_SILENCE_PROBE_COUNT (>=3, odd) independent near-silence realizations, aggregated by MEDIAN via _aggregate_silence_probe_scores, never the max window score of a single fixed clip. #1465 fixed the cliff's BAR; a single-clip max left the STATISTIC one-shot -- an idiosyncratic peak response to one specific noise realization forced grade F identically to a model systematically prone to firing on quiet backgrounds (Viola issue #1775, the ~19%-of-all-jobs chronic quality-gate failure; historical grade-F reads, CL-20260714-4c23 n=20, already showed the same wake word passing on one retrain and failing the next from exactly this kind of single-sample variance). Reds if the probe count collapses back to 1, or the aggregate becomes max()/mean() instead of the median, or a single outlier probe alone can push the aggregate at/above threshold."
     detector: tests/unit/test_quality_gate_silence_probe_robustness.py
     own_tests:
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_probe_count_is_more_than_one
@@ -212,7 +212,7 @@ gates:
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_empty_probe_list_keeps_the_conservative_safety_floor
 
   - gate_id: quality-gate-tts-outage-is-not-a-model-verdict
-    contract: The training quality gate MUST NOT return a grade when it could not synthesize enough of its OWN negative test material. It falls back per-sample to Kokoro when edge-tts fails (the #1768 fix, which the gate's own synthesis sites originally missed), and raises QualityGateUnavailableError -- NOT ModelQualityGateError -- when fewer than _MIN_QUALITY_GATE_COVERAGE of the requested speech phrases or confusable words were produced. Proven pre-fix by executing the real _run_quality_gate (Viola issue #1775) - a model outputting 0.0 on every window, incapable of false-firing at any threshold, graded A with TTS healthy and F with TTS dead, because _fp_rate returns 1.0 over ZERO scored samples, so a Microsoft-side voice retirement (CL-20260717-b117) or any network failure was published to the customer as "your model would trigger on the wrong sound". Reds if the coverage floor is removed or weakened to a bare zero-check, if the gate grades on an empty negative set, if the Kokoro fallback is dropped from the gate's synthesis loops, or if the outage error becomes a subclass of ModelQualityGateError (which is classified EXPECTED and deliberately does not page).
+    contract: "The training quality gate MUST NOT return a grade when it could not synthesize enough of its OWN negative test material. It falls back per-sample to Kokoro when edge-tts fails (the #1768 fix, which the gate's own synthesis sites originally missed), and raises QualityGateUnavailableError -- NOT ModelQualityGateError -- when fewer than _MIN_QUALITY_GATE_COVERAGE of the requested speech phrases or confusable words were produced. Proven pre-fix by executing the real _run_quality_gate (Viola issue #1775) - a model outputting 0.0 on every window, incapable of false-firing at any threshold, graded A with TTS healthy and F with TTS dead, because _fp_rate returns 1.0 over ZERO scored samples, so a Microsoft-side voice retirement (CL-20260717-b117) or any network failure was published to the customer as \"your model would trigger on the wrong sound\". Reds if the coverage floor is removed or weakened to a bare zero-check, if the gate grades on an empty negative set, if the coverage floor is moved back onto synthesized FILES instead of SCORED SAMPLES (the wavs can exist while _extract_temporal_embeddings silently swallows per-file embedding failures and yields nothing, reaching the same 1.0 fp-rate over zero samples), if the Kokoro fallback is dropped from the gate's synthesis loops, or if the outage error becomes a subclass of ModelQualityGateError (which is classified EXPECTED and deliberately does not page)."
     detector: tests/unit/test_quality_gate_tts_outage.py
     own_tests:
       - tests/unit/test_quality_gate_tts_outage.py::test_tts_outage_raises_instead_of_grading_the_model_f
@@ -223,9 +223,10 @@ gates:
       - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_accepts_a_full_or_adequately_covered_set
       - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_is_a_real_fraction_not_just_a_zero_check
       - tests/unit/test_quality_gate_tts_outage.py::test_quality_gate_uses_the_kokoro_fallback_when_edge_tts_fails
+      - tests/unit/test_quality_gate_tts_outage.py::test_unscorable_negatives_also_raise_even_though_the_wavs_exist
 
   - gate_id: quality-gate-failure-is-not-a-circuit-breaker-fault
-    contract: A ModelQualityGateError (grade-F verdict) MUST NOT count toward a user's training circuit breaker. JobQueue._execute_job's blanket except-Exception handler must consult _is_expected_training_outcome before calling _record_failure, matched by class name across the MRO so the backend never imports the heavy violawake_sdk. Pre-fix this was a compounding user-facing trap (Viola issue #1775) - the gate's own message tells the customer "training varies run to run, so the quickest fix is to train again with the same recordings", and FAILURE_THRESHOLD=3 consecutive failures then paused their queue with next_attempt_at=None, stranding every pending job until a manual resume_user (CL-20260717-9bc3), so the product instructed users straight into an account-level lockout. Reds if the guard is removed from the helper OR from the _execute_job call site, if the matcher stops traversing the MRO, if a genuine systemic fault stops tripping the breaker, or if QualityGateUnavailableError (our own TTS outage, which SHOULD trip it) is wrongly classified as expected.
+    contract: "A ModelQualityGateError (grade-F verdict) MUST NOT count toward a user's training circuit breaker. JobQueue._execute_job's blanket except-Exception handler must consult _is_expected_training_outcome before calling _record_failure, matched by class name across the MRO so the backend never imports the heavy violawake_sdk. Pre-fix this was a compounding user-facing trap (Viola issue #1775) - the gate's own message tells the customer \"training varies run to run, so the quickest fix is to train again with the same recordings\", and FAILURE_THRESHOLD=3 consecutive failures then paused their queue with next_attempt_at=None, stranding every pending job until a manual resume_user (CL-20260717-9bc3), so the product instructed users straight into an account-level lockout. Reds if the guard is removed from the helper OR from the _execute_job call site, if the matcher stops traversing the MRO, if a genuine systemic fault stops tripping the breaker, or if QualityGateUnavailableError (our own TTS outage, which SHOULD trip it) is wrongly classified as expected."
     detector: console/tests/test_quality_gate_not_a_breaker_fault.py
     own_tests:
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_quality_gate_failure_does_not_count_as_a_breaker_fault
@@ -234,8 +235,26 @@ gates:
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_guard_is_actually_wired_into_the_job_failure_handler
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_tts_outage_is_not_treated_as_an_expected_outcome
 
+  - gate_id: training-extra-ships-the-tts-fallback
+    contract: "The `training` extra MUST contain every package the training pipeline's TTS fallback needs, because the backend image installs `/sdk[training]` (console/Dockerfile.backend). _KokoroFallback is what stops one edge-tts voice retired server-side by Microsoft (CL-20260717-b117) from emptying a sample set, and for the quality gate an empty negative set is grade F by construction (#1775). kokoro-onnx sat only in the `tts` extra, so ready() returned False in production and the whole fallback -- including the #1768 fix -- was dead code exactly where it mattered, silently, because ready() fails gracefully by design and nothing goes red. Same missing-from-the-extra class as onnxscript and fast_mp3_augment. Reds if kokoro-onnx or edge-tts leaves the training extra, or if the backend image stops installing that extra without this gate being re-pointed."
+    detector: tests/unit/test_training_extra_has_tts_fallback.py
+    own_tests:
+      - tests/unit/test_training_extra_has_tts_fallback.py::test_training_extra_includes_kokoro_so_the_fallback_is_not_inert
+      - tests/unit/test_training_extra_has_tts_fallback.py::test_the_training_pipeline_actually_uses_the_kokoro_fallback
+      - tests/unit/test_training_extra_has_tts_fallback.py::test_training_extra_also_still_includes_edge_tts
+      - tests/unit/test_training_extra_has_tts_fallback.py::test_the_backend_image_installs_the_training_extra
+
+  - gate_id: gate-contracts-are-not-silently-truncated
+    contract: "No gate contract in quality/gates.yaml may be silently truncated. Contracts are written as YAML scalars and routinely cite issues (#1768, #1775); in an UNQUOTED plain scalar a space followed by # starts a comment, so YAML discards the rest at parse time with no error and no warning. This silently destroyed 7 of 34 contracts, losing 25-85% of their text each, including both gates protecting the #1775 silence subgrade. The gates still RAN (own_tests are separate list items) so nothing was red; what was lost is the human-readable statement of what each gate protects -- exactly what an engineer reads before deciding whether they may change a guarded behaviour. Reds if any contract parses shorter than the text actually on its line."
+    detector: tests/unit/test_gates_registry_not_truncated.py
+    own_tests:
+      - tests/unit/test_gates_registry_not_truncated.py::test_no_gate_contract_is_silently_truncated
+      - tests/unit/test_gates_registry_not_truncated.py::test_the_registry_still_parses
+      - tests/unit/test_gates_registry_not_truncated.py::test_a_contract_containing_an_issue_reference_survives_parsing
+      - tests/unit/test_gates_registry_not_truncated.py::test_the_1775_gates_carry_their_full_contract
+
   - gate_id: training-queue-wedge-detection
-    contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.
+    contract: "The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal."
     detector: console/tests/test_training_queue_wedge.py
     own_tests:
       - console/tests/test_training_queue_wedge.py::test_paused_breaker_pending_is_blocked_not_dispatchable
@@ -263,7 +282,7 @@ gates:
       - console/backend/tests/test_monitoring_dashboard_signal.py::test_an_unexpected_bug_does_not_get_a_duplicate_dashboard_capture
 
   - gate_id: wakeword-backend-alias-baked-in-base
-    contract: docker-compose.production.yml must, by itself (no docker-compose.viola-bridge.yml overlay merged in), declare `wakeword-backend` as a network alias for the backend service on novviola_viola-local, so a base-only deploy following docs/DEPLOYMENT.md's documented `docker compose -f docker-compose.production.yml up -d backend` never silently drops viola-api's ability to resolve wakeword-backend (#2305; the same base-only-deploy-drops-out-of-band-wiring class as #1722's Postgres-host outage).
+    contract: "docker-compose.production.yml must, by itself (no docker-compose.viola-bridge.yml overlay merged in), declare `wakeword-backend` as a network alias for the backend service on novviola_viola-local, so a base-only deploy following docs/DEPLOYMENT.md's documented `docker compose -f docker-compose.production.yml up -d backend` never silently drops viola-api's ability to resolve wakeword-backend (#2305; the same base-only-deploy-drops-out-of-band-wiring class as #1722's Postgres-host outage)."
     detector: scripts/check_wakeword_alias_baked.py
     own_tests:
       - tests/unit/test_check_wakeword_alias_baked.py::test_real_base_compose_file_passes
