@@ -1,20 +1,28 @@
 name: Deploy frontend to Cloudflare Pages
 
-# Deploys console/frontend to violawake.com on every push to master.
+# Deploys console/frontend to violawake.com on every push to master, and on
+# demand via workflow_dispatch.
+#
 # Requires repo secret CLOUDFLARE_API_TOKEN with permissions:
 #   - Account: Cloudflare Pages: Edit
 #   - User: User Details: Read
 # (Create at https://dash.cloudflare.com/profile/api-tokens — Custom token)
 #
+# History, so nobody re-disables this by mistake: the secret originally held a
+# DNS-scoped token, so this workflow was cut down to workflow_dispatch-only as a
+# temporary workaround. The secret was replaced with a Pages-capable token on
+# 2026-06-04T12:33:40Z and has worked ever since — run 26952147395 (4m25s after
+# the rotation) uploaded 9 files, and run 30141533322 on 2026-07-25 uploaded 20.
+# The workaround was never reverted, so PRs #21, #22 and #23 merged and sat
+# undeployed for seven weeks. There is no token blocker. If you ever need to
+# disable the push trigger again, delete this paragraph rather than leaving a
+# stale claim behind it.
+#
 # CLOUDFLARE_ACCOUNT_ID is hardcoded below (not secret).
 
 on:
-  # Manual trigger only — until the CLOUDFLARE_API_TOKEN secret has Pages:Edit.
-  # The current FewerJobs token is DNS-scoped (works for DNS/R2 only). To enable
-  # push-triggered deploy, create a new token at
-  # https://dash.cloudflare.com/profile/api-tokens with permission
-  # "Account → Cloudflare Pages → Edit", store as CLOUDFLARE_API_TOKEN repo secret,
-  # then re-add "push: branches: [master]" below.
+  push:
+    branches: [master]
   workflow_dispatch:
 
 concurrency:
@@ -67,11 +75,69 @@ jobs:
 
       - name: Smoke test
         run: |
+          # Every check below is a hard failure. It used to emit ::warning:: only,
+          # which meant this job stayed green through a completely broken deploy.
+          # Retries absorb Cloudflare Pages propagation lag, not real breakage.
+          SITE="https://violawake.com"
+          failed=0
+
+          # -L follows Pages' 308 clean-URL canonicalisation (/pricing -> /pricing/)
+          # so we assert the page a visitor actually lands on, not the redirect.
+          http_code() {
+            curl -sSL -o /dev/null -w "%{http_code}" --max-time 20 "$1" 2>/dev/null || echo "000"
+          }
+
+          check_path() {
+            path="$1"
+            for attempt in 1 2 3; do
+              code=$(http_code "$SITE$path")
+              if [ "$code" = "200" ]; then
+                echo "$path: 200"
+                return 0
+              fi
+              echo "$path: $code (attempt $attempt/3)"
+              if [ "$attempt" -lt 3 ]; then sleep 10; fi
+            done
+            echo "::error::$path returned $code after 3 attempts"
+            return 1
+          }
+
           sleep 8
+
           for path in / /pricing /privacy /terms /wasm/demo/ /wasm/dist/violawake.js /wasm/models/temporal_cnn.onnx; do
-            CODE=$(curl -sS -o /dev/null -w "%{http_code}" "https://violawake.com$path")
-            echo "$path: $CODE"
-            if [ "$CODE" != "200" ] && [ "$CODE" != "308" ]; then
-              echo "::warning::$path returned $CODE"
-            fi
+            check_path "$path" || failed=1
           done
+
+          # Console SPA. There is deliberately NO /console route: public/_redirects
+          # ends with "/* /index.html 200", so /console returns 200 serving the
+          # prerendered marketing homepage and proves nothing. /login is an explicit
+          # _redirects entry that serves the SPA app shell, so it is the only honest
+          # place to assert the console bundle shipped.
+          bundle=""
+          for attempt in 1 2 3; do
+            html=$(curl -sSL --max-time 20 "$SITE/login" 2>/dev/null || true)
+            bundle=$(printf '%s' "$html" | grep -o '/assets/index-[A-Za-z0-9_-]*\.js' | head -1 || true)
+            if [ -n "$bundle" ]; then break; fi
+            echo "/login: no console bundle reference yet (attempt $attempt/3)"
+            if [ "$attempt" -lt 3 ]; then sleep 10; fi
+          done
+
+          if [ -z "$bundle" ]; then
+            echo "::error::$SITE/login served no /assets/index-*.js reference — the console SPA shell is missing and the SPA fallback is serving marketing HTML."
+            failed=1
+          else
+            echo "/login console bundle: $bundle"
+            code=$(http_code "$SITE$bundle")
+            if [ "$code" = "200" ]; then
+              echo "$bundle: 200"
+            else
+              echo "::error::console bundle $bundle returned $code — /login references a bundle that is not served."
+              failed=1
+            fi
+          fi
+
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::Smoke test failed. The deploy uploaded but the live site is not serving correctly."
+            exit 1
+          fi
+          echo "Smoke test: all checks passed"
