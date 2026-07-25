@@ -198,7 +198,11 @@ export default function BillingPage() {
             <div className="billing-card-header">
               <div>
                 <h2>Usage</h2>
-                <p>Tracked model training usage for the current billing period.</p>
+                <p>
+                  Training attempts submitted this billing period. Every
+                  submitted run counts, whether or not it finishes
+                  successfully.
+                </p>
               </div>
               <span className="billing-usage-value">{usageLabel}</span>
             </div>
@@ -209,7 +213,7 @@ export default function BillingPage() {
               aria-valuemin={0}
               aria-valuemax={usage?.models_limit ?? usage?.models_used ?? 0}
               aria-valuenow={usage?.models_used ?? 0}
-              aria-label="Models used this billing period"
+              aria-label="Training attempts used this billing period"
             >
               <div
                 className="billing-usage-fill"
