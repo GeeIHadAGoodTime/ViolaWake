@@ -1198,7 +1198,7 @@ def _extract_room_tone(audio: np.ndarray) -> np.ndarray | None:
 
     keep = [
         w
-        for w, rms in zip(windows, window_rms)
+        for w, rms in zip(windows, window_rms, strict=True)
         if _RUNTIME_RMS_FLOOR < rms < quiet_bar
     ]
     if not keep:

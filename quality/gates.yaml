@@ -194,20 +194,7 @@ gates:
       - console/backend/tests/test_monitoring_quality_gate_classification.py::test_bare_runtimeerror_grade_f_message_is_still_the_old_bug_shape
 
   - gate_id: sdk-silence-subgrade-derived-from-deploy-threshold
-    contract: >-
-      The training quality gate's silence subgrade MUST be a false-fire RATE measured on
-      REAL no-wake audio through the RUNTIME streaming path, and no silence bar may be a
-      hardcoded score constant. Concretely: _grade_quality takes silence_fp_rate (never a
-      silence_max_score compared against a score bar) and grades it on the same rate tiers
-      as the speech subgrade; an unmeasurable silence axis grades on the remaining axes
-      instead of forcing grade F; the probe is real recorded room tone at a physically real
-      level with the spoken wake word excluded (never synthetic white noise at int16 RMS ~3,
-      ~100-1000x quieter than any microphone produces); and it is scored via
-      _extract_streaming_temporal_windows over the FULL clip, never the batch 1.5s
-      center-crop that produced exactly one window. Reds on the pre-fix shapes -- the
-      hardcoded 0.50 cliff (#1465, CL-20260714-4c23 / #1184) AND the single-max-draw
-      synthetic-probe subgrade that survived it and still failed 12 of 21 post-fix
-      production jobs on this axis alone (#2611 / #1487 / #2066, box evidence 2026-07-24).
+    contract: The training quality gate's silence subgrade MUST be a false-fire RATE measured on REAL no-wake audio through the RUNTIME streaming path, and no silence bar may be a hardcoded score constant. Concretely: _grade_quality takes silence_fp_rate (never a silence_max_score compared against a score bar) and grades it on the same rate tiers as the speech subgrade; an unmeasurable silence axis grades on the remaining axes instead of forcing grade F; the probe is real recorded room tone at a physically real level with the spoken wake word excluded (never synthetic white noise at int16 RMS ~3, ~100-1000x quieter than any microphone produces); and it is scored via _extract_streaming_temporal_windows over the FULL clip, never the batch 1.5s center-crop that produced exactly one window. Reds on the pre-fix shapes -- the hardcoded 0.50 cliff (#1465, CL-20260714-4c23 / #1184) AND the single-max-draw synthetic-probe subgrade that survived it and still failed 12 of 21 post-fix production jobs on this axis alone (#2611 / #1487 / #2066, box evidence 2026-07-24).
     detector: tests/unit/test_quality_gate_silence_bar.py
     own_tests:
       - tests/unit/test_quality_gate_silence_bar.py::test_silence_subgrade_is_a_rate_not_a_single_max_score
