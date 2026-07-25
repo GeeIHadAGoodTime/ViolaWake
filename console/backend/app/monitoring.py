@@ -145,6 +145,15 @@ def classify_exception(exc: Exception) -> ErrorClassification:
             EXPECTED_ERROR, "model_quality", logging.WARNING, dashboard_signal=True
         )
 
+    # The mirror image of the above (#1775): the quality gate could not build
+    # enough of its OWN negative test material (TTS outage / voice retired
+    # server-side) and refused to grade rather than blaming the user. That is
+    # OUR infrastructure failing, so unlike a grade-F verdict it SHOULD page.
+    if any(base.__name__ == "QualityGateUnavailableError" for base in type(exc).__mro__):
+        return ErrorClassification(
+            UNEXPECTED_ERROR, "tts_unavailable", logging.ERROR, dashboard_signal=True
+        )
+
     if isinstance(exc, ValueError):
         return ErrorClassification(UNEXPECTED_ERROR, "data", logging.WARNING)
 

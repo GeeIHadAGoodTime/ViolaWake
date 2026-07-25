@@ -211,6 +211,29 @@ gates:
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_aggregate_is_the_median_not_the_max_or_mean
       - tests/unit/test_quality_gate_silence_probe_robustness.py::test_empty_probe_list_keeps_the_conservative_safety_floor
 
+  - gate_id: quality-gate-tts-outage-is-not-a-model-verdict
+    contract: The training quality gate MUST NOT return a grade when it could not synthesize enough of its OWN negative test material. It falls back per-sample to Kokoro when edge-tts fails (the #1768 fix, which the gate's own synthesis sites originally missed), and raises QualityGateUnavailableError -- NOT ModelQualityGateError -- when fewer than _MIN_QUALITY_GATE_COVERAGE of the requested speech phrases or confusable words were produced. Proven pre-fix by executing the real _run_quality_gate (Viola issue #1775) - a model outputting 0.0 on every window, incapable of false-firing at any threshold, graded A with TTS healthy and F with TTS dead, because _fp_rate returns 1.0 over ZERO scored samples, so a Microsoft-side voice retirement (CL-20260717-b117) or any network failure was published to the customer as "your model would trigger on the wrong sound". Reds if the coverage floor is removed or weakened to a bare zero-check, if the gate grades on an empty negative set, if the Kokoro fallback is dropped from the gate's synthesis loops, or if the outage error becomes a subclass of ModelQualityGateError (which is classified EXPECTED and deliberately does not page).
+    detector: tests/unit/test_quality_gate_tts_outage.py
+    own_tests:
+      - tests/unit/test_quality_gate_tts_outage.py::test_tts_outage_raises_instead_of_grading_the_model_f
+      - tests/unit/test_quality_gate_tts_outage.py::test_healthy_tts_still_grades_a_never_firing_model_well
+      - tests/unit/test_quality_gate_tts_outage.py::test_the_outage_error_is_not_a_model_quality_verdict
+      - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_rejects_an_empty_negative_set
+      - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_rejects_a_severely_undersized_negative_set
+      - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_accepts_a_full_or_adequately_covered_set
+      - tests/unit/test_quality_gate_tts_outage.py::test_coverage_floor_is_a_real_fraction_not_just_a_zero_check
+      - tests/unit/test_quality_gate_tts_outage.py::test_quality_gate_uses_the_kokoro_fallback_when_edge_tts_fails
+
+  - gate_id: quality-gate-failure-is-not-a-circuit-breaker-fault
+    contract: A ModelQualityGateError (grade-F verdict) MUST NOT count toward a user's training circuit breaker. JobQueue._execute_job's blanket except-Exception handler must consult _is_expected_training_outcome before calling _record_failure, matched by class name across the MRO so the backend never imports the heavy violawake_sdk. Pre-fix this was a compounding user-facing trap (Viola issue #1775) - the gate's own message tells the customer "training varies run to run, so the quickest fix is to train again with the same recordings", and FAILURE_THRESHOLD=3 consecutive failures then paused their queue with next_attempt_at=None, stranding every pending job until a manual resume_user (CL-20260717-9bc3), so the product instructed users straight into an account-level lockout. Reds if the guard is removed from the helper OR from the _execute_job call site, if the matcher stops traversing the MRO, if a genuine systemic fault stops tripping the breaker, or if QualityGateUnavailableError (our own TTS outage, which SHOULD trip it) is wrongly classified as expected.
+    detector: console/tests/test_quality_gate_not_a_breaker_fault.py
+    own_tests:
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_quality_gate_failure_does_not_count_as_a_breaker_fault
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_real_systemic_failure_still_trips_the_breaker
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_matcher_is_by_class_name_across_the_mro
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_guard_is_actually_wired_into_the_job_failure_handler
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_tts_outage_is_not_treated_as_an_expected_outcome
+
   - gate_id: training-queue-wedge-detection
     contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.
     detector: console/tests/test_training_queue_wedge.py

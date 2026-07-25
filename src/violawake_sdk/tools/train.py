@@ -85,6 +85,23 @@ class ModelQualityGateError(TrainingError):
     page ops via Sentry (GlitchTip violawake issue 28)."""
 
 
+class QualityGateUnavailableError(TrainingError):
+    """Raised when the quality gate could not build enough of its OWN test
+    material to judge a model (#1775).
+
+    The gate synthesizes its speech and confusable negatives with TTS. If TTS
+    is degraded -- a voice retired server-side by Microsoft (CL-20260717-b117),
+    a network failure, throttling -- those sets come back empty or nearly so,
+    and `_fp_rate` reports a 100% false-positive rate computed over ZERO scored
+    samples. That silently became grade F, blaming the customer's recordings
+    for an outage of our own measuring instrument.
+
+    This is the OPPOSITE of ModelQualityGateError: it is NOT an expected
+    outcome and NOT the user's fault. It is our infrastructure failing, so it
+    is unexpected, it should page ops, and the user must be told to retry
+    later rather than to re-record."""
+
+
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
@@ -2012,6 +2029,34 @@ def _aggregate_silence_probe_scores(per_clip_max_scores: list[float]) -> float:
     return float(np.median(np.asarray(per_clip_max_scores, dtype=np.float64)))
 
 
+# Minimum fraction of the gate's requested negative test material that must
+# actually be synthesized before a grade means anything (#1775). Below this the
+# false-positive rates are computed over too few samples to be meaningful --
+# and at zero samples _fp_rate returns 1.0, which forces grade F regardless of
+# how good the model is (proven: a model that scores 0.0 on every input grades
+# A with TTS healthy and F with TTS dead). Half of the requested set keeps the
+# fp-rate granularity fine enough for the 0.10/0.20 speech/confusable bars.
+_MIN_QUALITY_GATE_COVERAGE = 0.5
+
+
+def _require_quality_gate_coverage(scored: int, requested: int, label: str) -> None:
+    """Fail loudly if too little of the gate's own negative material exists.
+
+    Raises QualityGateUnavailableError rather than letting an empty/undersized
+    negative set become a grade-F verdict about the user's model.
+    """
+    if requested <= 0:
+        return
+    if scored >= max(1, int(requested * _MIN_QUALITY_GATE_COVERAGE)):
+        return
+    raise QualityGateUnavailableError(
+        f"The quality check could not be completed: only {scored} of {requested} "
+        f"{label} could be generated for testing. This is a problem on our side, "
+        "not with your recordings. Your recordings were not rejected — please try "
+        "training again in a little while."
+    )
+
+
 def _grade_quality(
     speech_fp_rate: float,
     confusable_fp_rate: float,
@@ -2108,12 +2153,21 @@ def _run_quality_gate(
     with tempfile.TemporaryDirectory(prefix="violawake_qc_", dir=_TMP_DIR) as tmp_dir:
         quality_dir = Path(tmp_dir)
 
+        # #1775: the gate's own test material is synthesized, so a TTS outage is
+        # an outage of the MEASURING INSTRUMENT, not a property of the user's
+        # model. Use the same per-sample Kokoro fallback the positives/negatives
+        # generators use (#1768) so one retired or flaky edge-tts voice cannot
+        # empty the negative sets. Coverage is enforced after synthesis below.
+        kokoro = _KokoroFallback()
+
         speech_files: list[Path] = []
         if verbose:
             print(f"  Generating {len(quality_phrases)} speech phrases for quality check...")
         for i, phrase in enumerate(quality_phrases):
             out_path = quality_dir / f"qc_speech_{i:03d}.wav"
             ok = _edge_tts_synthesize(phrase, voice, out_path)
+            if not ok and kokoro.ready():
+                ok = kokoro.synthesize(phrase, out_path, rotate_index=i)
             if ok and out_path.exists():
                 speech_files.append(out_path)
 
@@ -2139,6 +2193,8 @@ def _run_quality_gate(
             safe_word = word.replace(" ", "_")[:30]
             out_path = quality_dir / f"qc_confusable_{i:03d}_{safe_word}.wav"
             ok = _edge_tts_synthesize(word, voice, out_path)
+            if not ok and kokoro.ready():
+                ok = kokoro.synthesize(word, out_path, rotate_index=i)
             if ok and out_path.exists():
                 confusable_files.append(out_path)
 
@@ -2176,6 +2232,24 @@ def _run_quality_gate(
             if positive_files
             else np.array([], dtype=np.float32)
         )
+
+    # Coverage floor (#1775). Enforced on SCORED SAMPLES, not on the WAVs we
+    # managed to write, because there are two independent ways to arrive at an
+    # empty score array and both end in the same wrong verdict:
+    #   (a) TTS could not synthesize the clips (a voice retired server-side, a
+    #       network failure) -- so no files exist to score; and
+    #   (b) the files exist but the OWW backbone produced no embeddings for
+    #       them -- _extract_temporal_embeddings swallows per-file failures into
+    #       a `failures` counter and returns whatever survived, which can be
+    #       nothing at all.
+    # Either way `_fp_rate` returns 1.0 over ZERO samples, which is grade F by
+    # construction, and the user is told their model would false-fire on speech
+    # it was never actually scored against. Checking after scoring covers both
+    # causes; checking synthesized files only would miss (b) entirely.
+    _require_quality_gate_coverage(len(speech_scores), len(quality_phrases), "speech phrases")
+    _require_quality_gate_coverage(
+        len(confusable_scores), len(confusable_words), "confusable words"
+    )
 
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
