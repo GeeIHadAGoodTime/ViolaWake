@@ -36,6 +36,29 @@ FAILURE_THRESHOLD = 3
 FAILURE_BACKOFF_SECONDS = 300
 ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS = 30.0
 
+# Training outcomes that are EXPECTED and are the user's to retry, so they must
+# not count toward the circuit breaker (#1775 / #2066). The breaker exists to
+# stop the queue burning jobs on a systemically broken worker; a model that did
+# not clear the deployment quality gate is not that -- `app.monitoring`'s
+# `classify_exception` already buckets ModelQualityGateError as EXPECTED for
+# exactly this reason, but the breaker never consulted that judgement.
+#
+# Counting it was actively harmful. The gate's own user-facing message says
+# "wake-word training varies run to run, so the quickest fix is to train again
+# with the same recordings", and FAILURE_THRESHOLD consecutive failures then
+# pause the user's queue with next_attempt_at=None -- a state only `resume_user`
+# clears (CL-20260717-9bc3), which has no frontend caller. The product was
+# routing customers into an account-level lockout by following its own advice.
+#
+# Matched by class name across the MRO so the backend stays decoupled from the
+# heavy violawake_sdk import, the same technique `app.monitoring` uses.
+_EXPECTED_TRAINING_OUTCOMES = frozenset({"ModelQualityGateError"})
+
+
+def _is_expected_training_outcome(exc: BaseException) -> bool:
+    """True if `exc` is an expected training verdict rather than a systemic fault."""
+    return any(base.__name__ in _EXPECTED_TRAINING_OUTCOMES for base in type(exc).__mro__)
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -931,7 +954,7 @@ class JobQueue:
                 cancel_requested=False,
             )
             user_id = current_job.user_id if current_job is not None else None
-            if user_id is not None:
+            if user_id is not None and not _is_expected_training_outcome(exc):
                 await self._record_failure(user_id, str(exc))
             await self._publish(
                 job_id,
