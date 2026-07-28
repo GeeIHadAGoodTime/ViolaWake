@@ -82,9 +82,15 @@ def test_single_idiosyncratic_spike_does_not_force_the_aggregate_above_threshold
     # threshold so this model is not wrongly failed on silence grounds.
     assert aggregated != max(per_clip_scores)
     assert aggregated < t
-    assert _grade_quality(
-        speech_fp_rate=0.0, confusable_fp_rate=0.0, silence_max_score=aggregated, deployment_threshold=t
-    ) != "F"
+    assert (
+        _grade_quality(
+            speech_fp_rate=0.0,
+            confusable_fp_rate=0.0,
+            silence_max_score=aggregated,
+            deployment_threshold=t,
+        )
+        != "F"
+    )
 
 
 def test_systematically_risky_model_still_fails() -> None:
@@ -100,9 +106,15 @@ def test_systematically_risky_model_still_fails() -> None:
     aggregated = _aggregate_silence_probe_scores(per_clip_scores)
 
     assert aggregated >= t
-    assert _grade_quality(
-        speech_fp_rate=0.0, confusable_fp_rate=0.0, silence_max_score=aggregated, deployment_threshold=t
-    ) == "F"
+    assert (
+        _grade_quality(
+            speech_fp_rate=0.0,
+            confusable_fp_rate=0.0,
+            silence_max_score=aggregated,
+            deployment_threshold=t,
+        )
+        == "F"
+    )
 
 
 def test_aggregate_is_the_median_not_the_max_or_mean() -> None:
