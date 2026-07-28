@@ -318,7 +318,23 @@ class TestQualityGateWiring:
 
         # A tiny linear "model" standing in for the trained torch classifier --
         # only its call signature (model(X) -> tensor) matters here.
-        import torch
+        #
+        # torch is a [training] extra, not a [dev] one: the CI unit job installs
+        # `pip install -e ".[dev]"` (plus onnxruntime/openwakeword) and therefore
+        # has NO torch, while `_run_quality_gate` -- the function under test --
+        # imports torch itself and builds `torch.tensor(...)` windows. So this
+        # one test genuinely cannot run without the training extra, and skipping
+        # is honest environment gating (same shape as this module's skipif for
+        # the ONNX fixtures), not a weakened assertion: wherever torch IS present
+        # (the training box, a `.[training]`/`.[all]` checkout, the wakeword
+        # backend image) the wiring assertion below runs in full and still reds
+        # if the near-silence tag is scored through the batch path again.
+        # The other tests in this file need no torch and run everywhere.
+        torch = pytest.importorskip(
+            "torch",
+            reason="_run_quality_gate requires the [training] extra (torch); "
+            "the CI unit job installs only [dev].",
+        )
 
         class _ZeroModel(torch.nn.Module):
             def forward(self, x: torch.Tensor) -> torch.Tensor:
