@@ -238,3 +238,14 @@ gates:
       - tests/unit/test_check_wakeword_alias_baked.py::test_mapping_without_alias_key_fails
       - tests/unit/test_check_wakeword_alias_baked.py::test_alias_present_but_wrong_name_fails
       - tests/unit/test_check_wakeword_alias_baked.py::test_fixed_shape_passes
+
+  - gate_id: synthetic-rir-is-a-room-not-a-smear
+    contract: generate_synthetic_rir must produce an impulse response whose direct path is the loudest tap and whose direct-to-reverberant ratio lands in a real room's 0..15 dB range, so a reverb-augmented positive still correlates with the dry clip and keeps its energy inside the spoken burst (#1775 -- the pre-fix code planted rir[0]=1.0 and then peak-normalised the whole IR by the noise tail's peak, driving the direct path to 0.31-0.51 and the measured DRR to -22..-30 dB; one in three auto-generated TTS positives is built this way, so the trainer learned near-silence-like smear as the wake word and the post-training quality gate then graded the resulting model F on its near-silence probe).
+    detector: tests/unit/test_rir_is_a_room_not_a_smear.py
+    own_tests:
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestSyntheticRIRIsARoom::test_direct_path_is_the_loudest_tap
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestSyntheticRIRIsARoom::test_drr_is_physically_plausible
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestSyntheticRIRIsARoom::test_reverb_preserves_the_clip
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestSyntheticRIRIsARoom::test_energy_stays_inside_the_speech_burst
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestRIRRegressionsStillHold::test_peak_is_unit
+      - tests/unit/test_rir_is_a_room_not_a_smear.py::TestRIRRegressionsStillHold::test_very_short_rt60_is_safe
