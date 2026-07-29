@@ -31,6 +31,28 @@ class TrainingCancelledError(RuntimeError):
     """Raised when a running training job is cancelled."""
 
 
+class SharedInfrastructureUnavailableError(RuntimeError):
+    """Raised when a prerequisite WE are supposed to provide is missing.
+
+    Distinct from a training failure and from a quality-gate verdict: nothing about
+    the customer's recordings or their model is wrong, our side simply is not ready.
+    The negatives corpus not being mounted is the archetype.
+
+    The distinction is load-bearing because the circuit breaker is PER USER. A shared
+    outage hits every customer who submits during it, so counting it as their
+    consecutive failure means one operational gap silently spends the strike budget
+    of everybody in the queue -- independently, three at a time, until each account
+    locks with ``next_attempt_at = NULL``, a state only ``resume_user`` clears and
+    which has no frontend caller. That is how user 122 was locked (jobs 68 and 69
+    corpus, job 114 grade-F); 9 of 57 real-customer jobs are this class
+    (GeeIHadAGoodTime/Viola#2611, ledger C-302).
+
+    Raising this type does not disable back-pressure: the queue still backs the user
+    off, so nobody hammers a dependency that is down. It only keeps our outage off
+    their permanent record. See ``job_queue._is_shared_infrastructure_fault``.
+    """
+
+
 @dataclass(slots=True)
 class TrainingArtifact:
     """Artifacts produced by a completed training run."""
@@ -323,9 +345,13 @@ def run_training_job_sync(
             len(files) for tag, files in neg_tag_map.items() if tag in speech_neg_tags
         )
         if total_speech_neg < 5 or total_neg < 5:
-            raise RuntimeError(
-                "No speech negatives available. Mount LibriSpeech + MUSAN corpus at "
-                "/app/corpus or run `violawake download-corpus`."
+            # Our corpus, not their recordings -- so this must not spend the
+            # customer's per-user strike budget. See the class docstring (C-302).
+            raise SharedInfrastructureUnavailableError(
+                "Training is temporarily unavailable on our side: the speech-negatives "
+                "corpus is not mounted. Nothing is wrong with your recordings, and this "
+                "does not count against your account. Operators: mount LibriSpeech + "
+                "MUSAN at /app/corpus or run `violawake download-corpus`."
             )
 
         _publish_running_progress(

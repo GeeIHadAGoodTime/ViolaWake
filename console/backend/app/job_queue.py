@@ -60,6 +60,28 @@ def _is_expected_training_outcome(exc: BaseException) -> bool:
     return any(base.__name__ in _EXPECTED_TRAINING_OUTCOMES for base in type(exc).__mro__)
 
 
+# A SHARED-infrastructure fault is a third category, and the breaker being per-user
+# is what makes it one. It is not a verdict about the customer's model (so unlike a
+# grade-F it is a real fault worth backing off on), and it is not that customer's
+# fault either (so unlike a broken worker it must not accumulate against their
+# account). The corpus not being mounted is the archetype: it hits every customer who
+# submits during the outage, and under a single per-user counter one operational gap
+# spends everybody's strike budget three at a time until each account locks with
+# next_attempt_at=NULL -- a state only resume_user clears, and resume_user has no
+# frontend caller, so there is no way out from inside the product. 9 of 57
+# real-customer jobs were this class, and it is half of how user 122 got locked
+# (GeeIHadAGoodTime/Viola#2611, ledger C-302).
+#
+# Back-pressure is preserved and the strike is not charged: see
+# JobQueue._record_transient_fault.
+_SHARED_INFRASTRUCTURE_FAULTS = frozenset({"SharedInfrastructureUnavailableError"})
+
+
+def _is_shared_infrastructure_fault(exc: BaseException) -> bool:
+    """True if `exc` is our own missing prerequisite rather than this user's failure."""
+    return any(base.__name__ in _SHARED_INFRASTRUCTURE_FAULTS for base in type(exc).__mro__)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -955,7 +977,11 @@ class JobQueue:
             )
             user_id = current_job.user_id if current_job is not None else None
             if user_id is not None and not _is_expected_training_outcome(exc):
-                await self._record_failure(user_id, str(exc))
+                if _is_shared_infrastructure_fault(exc):
+                    # Our missing prerequisite: pace the queue, charge no strike.
+                    await self._record_transient_fault(user_id, str(exc))
+                else:
+                    await self._record_failure(user_id, str(exc))
             await self._publish(
                 job_id,
                 {
@@ -1251,6 +1277,59 @@ class JobQueue:
             )
             return
 
+        self._schedule_retry_fill(user_id, FAILURE_BACKOFF_SECONDS)
+
+    async def _record_transient_fault(self, user_id: int, error: str) -> None:
+        """Back the user off WITHOUT spending a strike (shared-infrastructure fault).
+
+        Everything `_record_failure` does about pacing, and nothing it does about
+        blame: `next_attempt_at` moves out by the same backoff so the queue does not
+        hammer a dependency that is down, and the same retry fill is scheduled so the
+        job resumes by itself once it recovers -- but `consecutive_failures` is left
+        exactly where it was, so our outage can never walk a customer to the
+        FAILURE_THRESHOLD lockout that only `resume_user` clears.
+
+        Deliberately never sets `paused`. A shared outage affects everyone, so the
+        instrument for it is an operator alarm (the fault is still logged and still
+        classified by `app.monitoring`), not N per-customer account locks.
+        """
+        breaker = await self.get_circuit_breaker(user_id)
+        next_attempt_at = _utcnow() + timedelta(seconds=FAILURE_BACKOFF_SECONDS)
+
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                INSERT INTO user_circuit_breakers (
+                    user_id,
+                    consecutive_failures,
+                    paused,
+                    next_attempt_at,
+                    last_failure_at,
+                    pause_reason
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    next_attempt_at = excluded.next_attempt_at,
+                    last_failure_at = excluded.last_failure_at
+                """,
+                (
+                    user_id,
+                    breaker.consecutive_failures,
+                    1 if breaker.paused else 0,
+                    _serialize_datetime(next_attempt_at),
+                    _serialize_datetime(_utcnow()),
+                    breaker.pause_reason,
+                ),
+            )
+            await conn.commit()
+
+        logger.warning(
+            "Backed off user %s for %ss on a shared-infrastructure fault "
+            "(strike NOT charged, consecutive_failures stays %s): %s",
+            user_id,
+            FAILURE_BACKOFF_SECONDS,
+            breaker.consecutive_failures,
+            error,
+        )
         self._schedule_retry_fill(user_id, FAILURE_BACKOFF_SECONDS)
 
     def _schedule_retry_fill(self, user_id: int, delay_seconds: float) -> None:

@@ -248,3 +248,15 @@ gates:
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_real_systemic_failure_still_trips_the_breaker
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_quality_gate_outage_is_not_an_expected_outcome
       - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_matcher_is_by_class_name_across_the_mro
+
+  - gate_id: shared-outage-is-not-a-customer-strike
+    contract: A SHARED-infrastructure fault -- a prerequisite ViolaWake itself owes, the speech-negatives corpus not being mounted being the archetype -- MUST NOT consume a customer's per-user circuit-breaker strikes. Concretely: training_service raises SharedInfrastructureUnavailableError (never a bare RuntimeError) for the missing-corpus case; JobQueue._execute_job routes it to _record_transient_fault, which moves next_attempt_at out by FAILURE_BACKOFF_SECONDS and schedules the retry fill but leaves consecutive_failures unchanged and never sets paused; and the job is still marked FAILED with the real reason so the customer is told and operators still see the fault. Reds on the pre-fix shapes -- the bare RuntimeError at the raise site (which makes the guard dead code) AND the missing breaker-side guard, either of which walks every customer who submits during one shared outage to consecutive_failures=3, paused=1, next_attempt_at=NULL, a state only resume_user clears and POST /api/jobs/resume has no frontend caller. Real incident: 9 of 57 real-customer jobs (users 117/119/120/121/122/124, jobs 62-70, 2026-07-04 to 07-10) failed this way and it is half of how user 122 was locked (GeeIHadAGoodTime/Viola#2611 ledger C-302, #2066). Must NOT widen into a blanket RuntimeError amnesty: a genuine per-user fault still trips the breaker, and a shared fault must not un-pause an existing lockout.
+    detector: console/tests/test_shared_outage_is_not_a_customer_strike.py
+    own_tests:
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_a_shared_outage_never_locks_a_customer_out
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_the_job_still_fails_and_still_says_why
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_back_pressure_is_still_applied
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_a_genuine_per_user_fault_still_trips_the_breaker
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_an_existing_lockout_is_not_silently_cleared
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_the_matcher_is_by_class_name_across_the_mro
+      - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_the_real_corpus_check_raises_the_shared_fault_type
