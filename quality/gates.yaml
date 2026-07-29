@@ -238,3 +238,13 @@ gates:
       - tests/unit/test_check_wakeword_alias_baked.py::test_mapping_without_alias_key_fails
       - tests/unit/test_check_wakeword_alias_baked.py::test_alias_present_but_wrong_name_fails
       - tests/unit/test_check_wakeword_alias_baked.py::test_fixed_shape_passes
+
+  - gate_id: quality-gate-failure-is-not-a-circuit-breaker-fault
+    contract: A grade-F training verdict (ModelQualityGateError) is an EXPECTED outcome and must never be fed to the per-user circuit breaker, so following the gate's own "train again with the same recordings" advice can never pause a customer's training queue with next_attempt_at=NULL; a genuine systemic fault, and a quality gate that could not run at all, must still trip it.
+    detector: console/tests/test_quality_gate_not_a_breaker_fault.py
+    own_tests:
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_grade_f_verdict_does_not_pause_the_users_queue
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_next_job_is_still_dispatchable_after_three_grade_f_verdicts
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_real_systemic_failure_still_trips_the_breaker
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_quality_gate_outage_is_not_an_expected_outcome
+      - console/tests/test_quality_gate_not_a_breaker_fault.py::test_the_matcher_is_by_class_name_across_the_mro
