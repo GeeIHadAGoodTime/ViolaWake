@@ -80,18 +80,28 @@ def test_silence_rate_tiers_match_the_speech_subgrade() -> None:
         ) == expected
 
 
-def test_unmeasurable_silence_does_not_fail_the_model() -> None:
-    """When no room tone could be extracted, the model is graded on the axes we DID
-    measure, not failed for our own missing measurement.
+def test_an_unmeasured_silence_axis_fails_closed() -> None:
+    """An axis nobody measured is not an axis that passed.
 
-    The pre-fix code set silence_max_score = 1.0 and forced grade F in this case
-    ("conservative: force Grade F"), which charged the user for our gap. Genuinely
-    quiet input is independently rejected at runtime by the RMS floor
-    (wake_detector.py Gate 1), and the speech/confusable axes still gate below.
+    REDs on the shape this ratchet's own first draft shipped, which mapped
+    ``silence_fp_rate=None`` to a 0.0 rate and therefore graded such a model "A" --
+    the best grade available, on the strength of a measurement that did not happen.
+    A model that fires on every quiet moment would have shipped as EXCELLENT purely
+    because its owner's recordings held no extractable room tone.
+
+    Failing closed here is only fair because the caller guarantees ``None`` means a
+    genuine scoring failure and not an unlucky recording: ``_run_quality_gate``
+    falls back to a synthetic probe at a real room-tone level first (proven in
+    tests/unit/test_silence_subgrade_measurement_integrity.py). So this branch
+    charges nothing to the customer -- it refuses to clear a model on an axis the
+    system failed to score.
     """
     t = DEFAULT_THRESHOLD
-    assert _grade_quality(silence_fp_rate=None, deployment_threshold=t, **CLEAN) == "A"
-    # ...but an unmeasurable silence axis does NOT excuse the other axes.
+    assert _grade_quality(silence_fp_rate=None, deployment_threshold=t, **CLEAN) == "F"
+    # Clean on every axis INCLUDING a real silence measurement still grades A, so
+    # this is a fail-closed rule on missing data, not a blanket downgrade.
+    assert _grade_quality(silence_fp_rate=0.0, deployment_threshold=t, **CLEAN) == "A"
+    # And an unmeasured silence axis does not excuse the other axes either.
     assert _grade_quality(
         speech_fp_rate=0.5, confusable_fp_rate=0.0, silence_fp_rate=None,
         deployment_threshold=t,
