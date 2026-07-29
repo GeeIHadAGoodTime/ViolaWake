@@ -1,17 +1,36 @@
-"""Ratchet: the training quality gate's silence subgrade must derive its bar from
-the deployment threshold, never a hardcoded constant.
+"""Ratchet: the training quality gate's silence subgrade must be a false-fire RATE
+measured on real no-wake audio through the runtime path -- never a single max draw
+against a score bar.
 
-Guards the #1465 fix (CL-20260714-4c23 / #1184): the silence C->F cliff was a
-hardcoded 0.50, disconnected from the 0.80 deployment threshold, which blocked ~75%
-of real models whose near-silence score sat below the threshold (unable to fire at
-deployment) for run-to-run training variance rather than real false-fire risk.
+Supersedes the #1465 shape (silence cliff derived from the deployment threshold).
+That fix was correct as far as it went -- it removed a hardcoded 0.50 bar -- but the
+subgrade underneath it was still invalid, and production kept failing real users:
+12 of the 21 training jobs run after the #1465 fix deployed still failed, every one
+of them on this subgrade alone, with speech FP and confusable FP both 0.0%
+(wakeword-backend-1 job_queue.db + container eval logs, read 2026-07-24, #2611).
 
-These tests are written to RED on the pre-fix shape (silence cliff hardcoded at
-0.50, or any bar that does not move with the deployment threshold) and GREEN on the
-derived-from-threshold implementation.
+Root cause the tests below lock down (reproduced on the box against six real
+deployed models, src/violawake_sdk/tools/train.py):
+
+  1. n=1. The probe was ONE fixed-seed (42) clip, center-cropped from 10s to 1.5s
+     by _prepare_audio_for_oww, yielding silence_window_count == 1 -- the
+     advertised "max over windows" was a single forward pass. Across alternative
+     probe draws, models that had PASSED scored F on 10-37% of them.
+  2. Unphysical input. The probe was white noise at float RMS 1e-4 => int16 RMS
+     3.29. Real recorded room tone measures int16 RMS 224-3782, and the runtime's
+     own RMS floor comment puts speech at 500-5000. The gate was scoring a regime
+     ~100-1000x quieter than any microphone produces, where model output is
+     arbitrary.
+  3. Wrong path. It scored in batch mode while the runtime streams; measured
+     divergence up to 0.368 on the same audio (#1487).
+
+These tests RED on that shape (a grader keyed on a single silence max score) and
+GREEN on the rate-based grader.
 """
 
 from __future__ import annotations
+
+import inspect
 
 import pytest
 
@@ -20,69 +39,95 @@ from violawake_sdk.tools.train import _grade_quality
 
 CLEAN = dict(speech_fp_rate=0.0, confusable_fp_rate=0.0)  # noqa: C408
 
-# The 15 grade-F failing silence_max_scores observed on the box (2026-07-12..14,
-# jobs 71-90), from the gate's own eval logs. Post-fix, only those at/above the
-# 0.80 deployment threshold should still fail; the rest are real models that cannot
-# fire at deployment and should pass (grade C).
-OBSERVED_FAIL_SILENCE = [
-    0.53, 0.54, 0.55, 0.56, 0.63, 0.63, 0.66, 0.68,
-    0.76, 0.78, 0.81, 0.81, 0.90, 0.92, 0.95,
-]
 
+def test_silence_subgrade_is_a_rate_not_a_single_max_score() -> None:
+    """The silence axis is graded on a false-fire RATE.
 
-def test_silence_cliff_is_the_deployment_threshold_not_hardcoded_050() -> None:
-    """The C->F silence cliff is the deployment threshold (0.80), not 0.50.
-
-    RED on the old hardcoded-0.50 grader (which returned F for silence 0.60);
-    GREEN on the derived bar.
+    REDs on the pre-fix grader, whose silence parameter was a max score compared
+    against the deployment threshold: under that shape a rate of 0.0 (a perfectly
+    clean model) and a rate of 0.9 (a model that fires on nine of ten room-tone
+    windows) both sit below 0.80 and both graded "A".
     """
-    t = DEFAULT_THRESHOLD  # 0.80
-    # A near-silence score below the deployment threshold cannot false-fire at
-    # deployment, so it must NOT force grade F. The pre-fix grader returned "F"
-    # here (0.60 >= 0.50); the fixed grader returns "C".
-    assert _grade_quality(silence_max_score=0.60, deployment_threshold=t, **CLEAN) == "C"
-    assert _grade_quality(silence_max_score=0.79, deployment_threshold=t, **CLEAN) == "C"
-    # At/above the deployment threshold it WOULD false-fire => grade F.
-    assert _grade_quality(silence_max_score=t, deployment_threshold=t, **CLEAN) == "F"
-    assert _grade_quality(silence_max_score=0.81, deployment_threshold=t, **CLEAN) == "F"
+    sig = inspect.signature(_grade_quality)
+    assert "silence_fp_rate" in sig.parameters, (
+        "the silence subgrade must be expressed as a false-fire rate; a "
+        "silence_max_score parameter is the pre-fix single-draw shape"
+    )
+    assert "silence_max_score" not in sig.parameters
 
-    # Founder projection on the real observed failures: only silence >= 0.80 stays F.
-    graded = [_grade_quality(silence_max_score=s, deployment_threshold=t, **CLEAN)
-              for s in OBSERVED_FAIL_SILENCE]
-    still_f = [s for s, g in zip(OBSERVED_FAIL_SILENCE, graded) if g == "F"]
-    assert still_f == [0.81, 0.81, 0.90, 0.92, 0.95]
-    assert all(g == "C" for s, g in zip(OBSERVED_FAIL_SILENCE, graded) if s < t)
+    t = DEFAULT_THRESHOLD
+    # A model that fires on 90% of real room-tone windows is broken and must fail.
+    # The pre-fix grader read 0.90 as a score below... nothing, and graded it "A".
+    assert _grade_quality(silence_fp_rate=0.90, deployment_threshold=t, **CLEAN) == "F"
+    assert _grade_quality(silence_fp_rate=0.10, deployment_threshold=t, **CLEAN) == "F"
+    # A clean model passes at the top tier.
+    assert _grade_quality(silence_fp_rate=0.0, deployment_threshold=t, **CLEAN) == "A"
 
 
-def test_silence_bar_tracks_the_deployment_threshold() -> None:
-    """Every silence bar (A/B/C-cliff) moves with the deployment threshold.
+def test_silence_rate_tiers_match_the_speech_subgrade() -> None:
+    """Silence uses the same rate tiers as speech, so all three axes answer one
+    question: how often would this model fire on no-wake audio?"""
+    t = DEFAULT_THRESHOLD
+    for rate, expected in [(0.019, "A"), (0.02, "B"), (0.049, "B"), (0.05, "C"),
+                           (0.099, "C"), (0.10, "F")]:
+        assert _grade_quality(silence_fp_rate=rate, deployment_threshold=t, **CLEAN) == expected, (
+            f"silence rate {rate} should grade {expected}"
+        )
+        # The speech axis, held at the same rate with silence clean, agrees.
+        assert _grade_quality(
+            speech_fp_rate=rate, confusable_fp_rate=0.0, silence_fp_rate=0.0,
+            deployment_threshold=t,
+        ) == expected
 
-    This reds on ANY hardcoded silence bar (the old 0.50, or a naive replacement
-    that hardcodes 0.80): the outcome must flip when the threshold changes.
+
+def test_an_unmeasured_silence_axis_fails_closed() -> None:
+    """An axis nobody measured is not an axis that passed.
+
+    REDs on the shape this ratchet's own first draft shipped, which mapped
+    ``silence_fp_rate=None`` to a 0.0 rate and therefore graded such a model "A" --
+    the best grade available, on the strength of a measurement that did not happen.
+    A model that fires on every quiet moment would have shipped as EXCELLENT purely
+    because its owner's recordings held no extractable room tone.
+
+    Failing closed here is only fair because the caller guarantees ``None`` means a
+    genuine scoring failure and not an unlucky recording: ``_run_quality_gate``
+    falls back to a synthetic probe at a real room-tone level first (proven in
+    tests/unit/test_silence_subgrade_measurement_integrity.py). So this branch
+    charges nothing to the customer -- it refuses to clear a model on an axis the
+    system failed to score.
     """
-    # C->F cliff tracks the threshold in BOTH directions.
-    assert _grade_quality(silence_max_score=0.70, deployment_threshold=0.60, **CLEAN) == "F"
-    assert _grade_quality(silence_max_score=0.55, deployment_threshold=0.60, **CLEAN) == "C"
-    # 0.55 fails at threshold 0.50 but passes at 0.80 -> proves the bar is derived,
-    # not any fixed constant.
-    assert _grade_quality(silence_max_score=0.55, deployment_threshold=0.50, **CLEAN) == "F"
-    assert _grade_quality(silence_max_score=0.55, deployment_threshold=0.80, **CLEAN) == "C"
+    t = DEFAULT_THRESHOLD
+    assert _grade_quality(silence_fp_rate=None, deployment_threshold=t, **CLEAN) == "F"
+    # Clean on every axis INCLUDING a real silence measurement still grades A, so
+    # this is a fail-closed rule on missing data, not a blanket downgrade.
+    assert _grade_quality(silence_fp_rate=0.0, deployment_threshold=t, **CLEAN) == "A"
+    # And an unmeasured silence axis does not excuse the other axes either.
+    assert _grade_quality(
+        speech_fp_rate=0.5, confusable_fp_rate=0.0, silence_fp_rate=None,
+        deployment_threshold=t,
+    ) == "F"
 
-    # A/B safety-margin tiers are derived too (0.25 / 0.375 of the threshold).
-    # At threshold 0.80: A<0.20, B<0.30.
-    assert _grade_quality(silence_max_score=0.19, deployment_threshold=0.80, **CLEAN) == "A"
-    assert _grade_quality(silence_max_score=0.25, deployment_threshold=0.80, **CLEAN) == "B"
-    # At threshold 0.40 the same absolute scores drop a tier (A<0.10, B<0.15, C<0.40).
-    assert _grade_quality(silence_max_score=0.19, deployment_threshold=0.40, **CLEAN) == "C"
-    assert _grade_quality(silence_max_score=0.08, deployment_threshold=0.40, **CLEAN) == "A"
+
+def test_no_silence_score_bar_is_hardcoded() -> None:
+    """Carried forward from the #1465 ratchet: no silence bar may be a hardcoded
+    score constant (the old 0.50, or a naive replacement hardcoding 0.80).
+
+    The rate tiers are thresholds on a RATE, and every rate is computed AT the
+    deployment threshold by the caller, so changing the deployment threshold
+    changes which windows count as firing -- the bar still tracks the threshold it
+    protects, without any score constant living in the grader.
+    """
+    src = inspect.getsource(_grade_quality)
+    for banned in ("0.50", "0.5 *", "0.80 *", "0.375 *", "0.25 *"):
+        assert banned not in src, f"hardcoded silence score bar {banned!r} in _grade_quality"
 
 
 @pytest.mark.parametrize("bad_axis", ["speech", "confusable"])
 def test_speech_and_confusable_axes_still_gate(bad_axis: str) -> None:
-    """The non-silence axes are unchanged: a clean-silence model that false-fires
-    on speech/confusables still fails, so relaxing the silence bar did not open a
-    hole on the real false-fire axes."""
-    kw = dict(silence_max_score=0.0, deployment_threshold=DEFAULT_THRESHOLD,  # noqa: C408
+    """The non-silence axes are unchanged: a clean-silence model that false-fires on
+    speech/confusables still fails, so reworking the silence subgrade did not open a
+    hole on the other false-fire axes."""
+    kw = dict(silence_fp_rate=0.0, deployment_threshold=DEFAULT_THRESHOLD,  # noqa: C408
               speech_fp_rate=0.0, confusable_fp_rate=0.0)
     kw[f"{bad_axis}_fp_rate"] = 0.5  # 50% false-positive rate on that axis
     assert _grade_quality(**kw) == "F"
