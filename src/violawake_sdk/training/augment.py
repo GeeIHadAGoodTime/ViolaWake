@@ -331,25 +331,37 @@ def spec_augment(
 # ---------------------------------------------------------------------------
 
 
+# Direct-to-reverberant ratio bounds for synthetic RIRs, in dB. A real room
+# measured at a normal talker distance (roughly 1-3 m) sits around 0 to +15 dB:
+# the direct path carries at least as much energy as the whole reverberant tail.
+# An RIR outside this range is not a room, it is a smear.
+_SYNTHETIC_RIR_DRR_DB_MIN = 0.0
+_SYNTHETIC_RIR_DRR_DB_MAX = 15.0
+
+
 def generate_synthetic_rir(
     sample_rate: int = 16000,
     rt60: float | None = None,
     rng: np.random.Generator | None = None,
+    drr_db: float | None = None,
 ) -> np.ndarray:
     """Generate a synthetic Room Impulse Response using exponential decay.
 
     Produces a simple but effective synthetic RIR by generating white noise
     shaped with an exponential decay envelope. The decay rate is controlled
-    by the RT60 parameter (time for the impulse to decay by 60 dB).
+    by the RT60 parameter (time for the impulse to decay by 60 dB), and the
+    balance between the direct path and the tail by the DRR parameter.
 
     Args:
         sample_rate: Audio sample rate (default 16000 Hz).
         rt60: Reverberation time in seconds. If None, randomly sampled
             from [0.1, 0.8]s covering small offices to medium rooms.
         rng: Optional numpy random Generator for reproducibility.
+        drr_db: Direct-to-reverberant ratio in dB. If None, randomly sampled
+            from [0, 15] dB, the range a real room spans at 1-3 m.
 
     Returns:
-        Float32 impulse response array, normalized to unit peak amplitude.
+        Float32 impulse response array with the direct path at unit amplitude.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -367,11 +379,31 @@ def generate_synthetic_rir(
     decay = np.exp(-np.arange(n_samples, dtype=np.float32) * np.log(1000.0) / n_samples)
 
     rir = noise * decay
-    rir[0] = 1.0
 
-    peak = np.abs(rir).max()
-    if peak > 1e-10:
-        rir = rir / peak
+    # Scale the reverberant TAIL to a realistic direct-to-reverberant ratio, and
+    # only then plant the direct impulse at unit amplitude.
+    #
+    # This order is load-bearing (#1775). Previously `rir[0] = 1.0` was planted
+    # first and the whole IR was then divided by `abs(rir).max()` -- which is the
+    # *tail's* peak (~2-3x unit), not the direct path. The direct impulse came
+    # out at 0.31-0.51 and the measured DRR was -22 to -30 dB, i.e. the tail
+    # carried ~500x the energy of the direct sound. Convolving with that does not
+    # reverberate a clip, it dissolves it into noise: correlation with the dry
+    # signal drops to ~0.22 and a fifth of the energy leaks outside the speech
+    # burst. One in three auto-generated TTS positives is built this way
+    # (tools/train.py `_generate_tts_positives`), so the trainer was being taught
+    # that near-silence-like audio IS the wake word -- which is exactly the
+    # near-silence region the post-training quality gate then probes.
+    if drr_db is None:
+        drr_db = float(rng.uniform(_SYNTHETIC_RIR_DRR_DB_MIN, _SYNTHETIC_RIR_DRR_DB_MAX))
+
+    rir[0] = 0.0
+    tail_energy = float(np.sum(rir.astype(np.float64) ** 2))
+    if tail_energy > 1e-20:
+        # Direct-path energy is 1.0 by construction, so the tail must carry
+        # 10 ** (-drr_db / 10) to land at the requested ratio.
+        rir *= float(np.sqrt((10.0 ** (-drr_db / 10.0)) / tail_energy))
+    rir[0] = 1.0
 
     return rir.astype(np.float32)
 
