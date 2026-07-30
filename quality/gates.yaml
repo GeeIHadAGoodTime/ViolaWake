@@ -215,6 +215,8 @@ gates:
       - tests/unit/test_silence_subgrade_measurement_integrity.py::test_decimation_does_not_re_calibrate_the_grade_bars
       - tests/unit/test_silence_subgrade_measurement_integrity.py::test_the_gate_rates_the_decimated_scores_not_the_raw_stream
       - tests/unit/test_silence_subgrade_measurement_integrity.py::test_an_underpowered_sample_is_not_reported_as_a_rate
+      - tests/unit/test_silence_subgrade_measurement_integrity.py::test_decimation_cannot_preserve_a_max_only_a_rate
+      - tests/unit/test_silence_subgrade_measurement_integrity.py::test_the_reported_silence_max_is_the_worst_streamed_window
 
   - gate_id: training-queue-wedge-detection
     contract: The /api/health training_queue check reports ERROR (pageable) only on a genuine dispatcher wedge -- a dead/overloaded worker, or a dispatchable pending job aged past training_queue_wedge_threshold_seconds while a worker slot is free -- and stays OK on ordinary backlog and on pending jobs blocked only by a paused/backoff circuit breaker. Catches the 2026-07-14 issue #1481 class where any queue_depth>0 marked the backend degraded/503, so one paused-breaker job (job 85) pinned it unhealthy for hours while a real wedge produced the same indistinct signal.

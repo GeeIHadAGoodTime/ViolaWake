@@ -28,6 +28,7 @@ from __future__ import annotations
 import inspect
 
 import numpy as np
+import pytest
 
 from violawake_sdk.tools.train import (
     _ROOM_TONE_MIN_SAMPLES,
@@ -239,3 +240,59 @@ def test_an_underpowered_sample_is_not_reported_as_a_rate() -> None:
     )
     src = inspect.getsource(_run_quality_gate)
     assert "len(silence_window_scores) >= _SILENCE_MIN_INDEPENDENT_WINDOWS" in src
+
+
+def test_decimation_cannot_preserve_a_max_only_a_rate() -> None:
+    """The mechanism behind the reported-max defect, on the real decimator.
+
+    Decimation is a sampling step. It shrinks numerator and denominator together,
+    so it preserves a RATE in expectation -- which is exactly why the rate is
+    taken over it. A MAX has no such property: dropping 8 of every 9 windows can
+    only ever discard the worst one, so a max read off the decimated subset is
+    biased low by construction and never high.
+    """
+    seq_len = 9
+    n = 367  # the real window count from a 30s synthetic room-tone probe
+    raw = np.full(n, 0.05, dtype=np.float32)
+    # Put the worst window at an index decimation drops (kept indices are 0 % 9).
+    worst_index = 4
+    assert worst_index % seq_len != 0
+    raw[worst_index] = 0.79  # just under the 0.80 deployment threshold
+
+    kept = _decimate_to_independent_windows(raw, [0] * n, seq_len)
+
+    assert float(raw.max()) == pytest.approx(0.79, abs=1e-6)
+    assert float(kept.max()) == pytest.approx(0.05, abs=1e-6), (
+        "the decimated subset dropped the model's worst no-wake window"
+    )
+    assert float(kept.max()) < float(raw.max())
+
+
+def test_the_reported_silence_max_is_the_worst_streamed_window() -> None:
+    """The operator-facing max must come from the full stream, not the subset.
+
+    ``_run_quality_gate`` prints this number directly beside
+    ``threshold=0.80``, so it reads as "the model's worst score on no-wake
+    audio versus the bar it must stay under". Measured on the released
+    temporal_cnn against this gate's own synthetic room-tone probe (#2611,
+    2026-07-30): raw streaming max 0.29-0.50 vs decimated max 0.09-0.16 over
+    the same audio -- a 2-4x understatement of the model's real worst case.
+
+    REDs on the pre-fix shape ``silence_max_score = float(silence_window_scores.max())``,
+    which read the max off the decimated subset that
+    ``test_decimation_cannot_preserve_a_max_only_a_rate`` proves is biased low.
+    """
+    src = inspect.getsource(_run_quality_gate)
+
+    assert "silence_max_score = float(silence_window_scores.max())" not in src, (
+        "the reported max is being read off the decimated subset again"
+    )
+    # The streaming scorer hands back the full-stream max alongside the
+    # independent subset, and that is what gets reported.
+    assert "silence_window_scores, silence_stream_max = _score_windows_streaming(" in src
+    assert "silence_stream_max" in src
+    assert "return independent, float(raw.max())" in src
+
+    # The rate is still taken over the independent subset -- this fix moves the
+    # max only, it must not quietly re-rate the raw self-overlapping stream.
+    assert "(silence_window_scores >= deployment_threshold).mean()" in src
