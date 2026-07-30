@@ -276,3 +276,21 @@ gates:
       - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_an_existing_lockout_is_not_silently_cleared
       - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_the_matcher_is_by_class_name_across_the_mro
       - console/tests/test_shared_outage_is_not_a_customer_strike.py::test_the_real_corpus_check_raises_the_shared_fault_type
+  - gate_id: quality-gate-tts-outage-is-not-a-customer-f
+    contract: "The post-training quality gate's speech and confusable probes must fall back to Kokoro TTS per-sample (mirroring _generate_tts_positives, #1768) when the single edge-tts voice they use fails, and must raise QualityGateUnavailableError -- a sibling of ModelQualityGateError, never a subclass, so it pages ops and still trips the circuit breaker -- instead of grading a customer's model F on an empty probe set (pre-fix, _fp_rate([]) == 1.0 was reported to the customer as a measured 'Speech FP rate: 100.0%' when it actually meant our TTS synthesis produced nothing; Microsoft has already retired 7 edge-tts voices server-side on this exact system, CL-20260717-b117)."
+    detector: tests/unit/test_quality_gate_tts_outage.py
+    own_tests:
+      - tests/unit/test_quality_gate_tts_outage.py::test_outage_error_is_a_training_error_but_not_a_quality_gate_error
+      - tests/unit/test_quality_gate_tts_outage.py::test_synthesize_gate_probe_falls_back_to_kokoro_when_edge_tts_fails
+      - tests/unit/test_quality_gate_tts_outage.py::test_synthesize_gate_probe_does_not_touch_kokoro_when_edge_tts_succeeds
+      - tests/unit/test_quality_gate_tts_outage.py::test_synthesize_gate_probe_reports_failure_when_both_providers_are_down
+      - tests/unit/test_quality_gate_tts_outage.py::test_require_gate_probes_measurable_passes_when_both_axes_have_material
+      - tests/unit/test_quality_gate_tts_outage.py::test_require_gate_probes_measurable_raises_outage_not_a_quality_verdict_when_speech_is_empty
+      - tests/unit/test_quality_gate_tts_outage.py::test_require_gate_probes_measurable_raises_outage_when_confusables_is_empty
+      - tests/unit/test_quality_gate_tts_outage.py::test_require_gate_probes_measurable_names_both_axes_when_both_are_empty
+      - tests/unit/test_quality_gate_tts_outage.py::test_require_gate_probes_measurable_does_not_care_how_many_files_just_that_there_are_some
+      - tests/unit/test_quality_gate_tts_outage.py::test_run_quality_gate_uses_the_fallback_for_both_speech_and_confusable_axes
+      - tests/unit/test_quality_gate_tts_outage.py::test_run_quality_gate_guards_before_scoring_not_after
+      - tests/unit/test_quality_gate_tts_outage.py::test_the_bare_pre_fix_call_shape_is_gone
+      - tests/unit/test_quality_gate_tts_outage.py::test_fp_rate_logic_itself_is_untouched_and_still_fails_closed_on_empty
+      - tests/unit/test_quality_gate_tts_outage.py::test_outage_guard_only_fires_on_total_failure_not_on_a_bad_model
