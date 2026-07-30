@@ -85,6 +85,35 @@ class ModelQualityGateError(TrainingError):
     page ops via Sentry (GlitchTip violawake issue 28)."""
 
 
+class QualityGateUnavailableError(TrainingError):
+    """Raised when the post-training quality gate cannot build its own test
+    material and so cannot produce a verdict about the model at all.
+
+    Deliberately a sibling of ``ModelQualityGateError``, NOT a subclass of it:
+    both ``app.monitoring.classify_exception`` and
+    ``app.job_queue._is_expected_training_outcome`` match by class name across
+    the exception's MRO, and both special-case only the literal name
+    "ModelQualityGateError" (#2611 / #2066). If this class inherited from
+    ModelQualityGateError it would be silently swallowed by that matcher —
+    treated as an EXPECTED grade-F verdict, downgraded to a WARNING that does
+    not page ops, and exempted from the user's circuit breaker exactly like a
+    real grade-F. None of that is true here: this means OUR infrastructure
+    failed to build the audio the gate grades against (e.g. every edge-tts
+    voice attempted is unreachable/retired, CL-20260717-b117, and the Kokoro
+    fallback in ``_KokoroFallback`` is also unavailable) — it is not a
+    judgment about the customer's model, and it must be loud: it should page
+    ops as a normal ERROR, and it should still count toward the user's circuit
+    breaker (burning the user's remaining retries against our broken TTS
+    dependency, rather than against their own model, is exactly the failure
+    the breaker exists to catch — see
+    console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_quality_gate_outage_is_not_an_expected_outcome).
+
+    Before this class existed, an unmeasurable probe set silently fell through
+    to ``_fp_rate([]) == 1.0`` and was reported to the customer as a real,
+    measured "Speech FP rate: 100.0%" — a number that actually meant "we
+    measured nothing." See ``_run_quality_gate`` (C-303)."""
+
+
 # Module-level temp directory override. When set, all tempfile operations use
 # this instead of the OS default (which may be on a small system drive).
 # Set by _train_temporal_cnn() via its tmp_dir parameter.
@@ -2251,6 +2280,68 @@ def _grade_quality(
     return "F"
 
 
+def _synthesize_gate_probe(
+    text: str,
+    voice: str,
+    output_path: Path,
+    kokoro: _KokoroFallback,
+    *,
+    rotate_index: int,
+) -> bool:
+    """Synthesize one quality-gate probe sample, falling back to Kokoro TTS if
+    the primary edge-tts voice fails (#2611 C-303).
+
+    Mirrors the per-sample fallback ``_generate_tts_positives`` already uses
+    (#1768): a single dead or retired edge-tts voice (Microsoft retired seven
+    of them server-side on this exact system, CL-20260717-b117) loses only ITS
+    OWN sample to Kokoro, never the whole probe set. Before this helper
+    existed, the gate's speech/confusable probes called ``_edge_tts_synthesize``
+    directly with no fallback at all, so one dead voice zeroed out the entire
+    probe axis.
+    """
+    ok = _edge_tts_synthesize(text, voice, output_path)
+    if not ok and kokoro.ready():
+        ok = kokoro.synthesize(text, output_path, rotate_index=rotate_index)
+    return ok
+
+
+def _require_gate_probes_measurable(
+    speech_files: list[Path], confusable_files: list[Path], voice: str
+) -> None:
+    """Refuse to grade an axis the gate never actually measured (#2611 C-303).
+
+    Before this guard, an empty probe list (every edge-tts attempt failed and
+    the Kokoro fallback was also unavailable) flowed silently into
+    ``_fp_rate([]) == 1.0`` and the customer was shown a confident-looking
+    "Speech FP rate: 100.0%" -- a number that meant "we measured nothing," not
+    "your model false-fires on everything." This raises
+    ``QualityGateUnavailableError`` instead: our infrastructure failing to
+    build test material is not a verdict on the customer's model, and unlike a
+    real grade-F it must page ops and still count toward the user's circuit
+    breaker (see ``QualityGateUnavailableError``'s docstring).
+
+    Only triggers when an axis is COMPLETELY unmeasurable -- the Kokoro
+    fallback in ``_synthesize_gate_probe`` already recovers any single dead
+    voice. A model that genuinely scores high false-fire rates on real
+    synthesized audio still grades normally through ``_fp_rate``, untouched by
+    this guard.
+    """
+    missing = [
+        label
+        for label, files in (("speech", speech_files), ("confusable", confusable_files))
+        if not files
+    ]
+    if not missing:
+        return
+    axes = " and ".join(missing)
+    raise QualityGateUnavailableError(
+        f"Quality gate could not synthesize any {axes} probe audio -- every "
+        f"edge-tts attempt with voice {voice!r} failed and the Kokoro "
+        "fallback also failed or is unavailable. This is an infrastructure "
+        "outage, not a measurement of the trained model."
+    )
+
+
 def _run_quality_gate(
     model: Any,
     torch_device: str,
@@ -2338,6 +2429,10 @@ def _run_quality_gate(
 
     quality_phrases = SPEECH_NEGATIVE_PHRASES[:50]
     voice = EDGE_TTS_VOICES[0]  # Single voice keeps the gate fast and deterministic.
+    # Per-sample Kokoro fallback (#2611 C-303): a single dead/retired edge-tts
+    # voice must lose only its own sample, never the whole probe -- see
+    # _synthesize_gate_probe and _require_gate_probes_measurable below.
+    kokoro = _KokoroFallback()
 
     with tempfile.TemporaryDirectory(prefix="violawake_qc_", dir=_TMP_DIR) as tmp_dir:
         quality_dir = Path(tmp_dir)
@@ -2347,7 +2442,7 @@ def _run_quality_gate(
             print(f"  Generating {len(quality_phrases)} speech phrases for quality check...")
         for i, phrase in enumerate(quality_phrases):
             out_path = quality_dir / f"qc_speech_{i:03d}.wav"
-            ok = _edge_tts_synthesize(phrase, voice, out_path)
+            ok = _synthesize_gate_probe(phrase, voice, out_path, kokoro, rotate_index=i)
             if ok and out_path.exists():
                 speech_files.append(out_path)
 
@@ -2372,9 +2467,16 @@ def _run_quality_gate(
         for i, word in enumerate(confusable_words):
             safe_word = word.replace(" ", "_")[:30]
             out_path = quality_dir / f"qc_confusable_{i:03d}_{safe_word}.wav"
-            ok = _edge_tts_synthesize(word, voice, out_path)
+            ok = _synthesize_gate_probe(word, voice, out_path, kokoro, rotate_index=i)
             if ok and out_path.exists():
                 confusable_files.append(out_path)
+
+        # An axis the gate could not synthesize ANY audio for (both edge-tts
+        # and the Kokoro fallback failed) is our infrastructure outage, not a
+        # verdict on the model -- see _require_gate_probes_measurable (#2611
+        # C-303). Checked here, before any scoring, so an unmeasurable axis
+        # never reaches _fp_rate([]) == 1.0.
+        _require_gate_probes_measurable(speech_files, confusable_files, voice)
 
         # ------------------------------------------------------------------
         # Silence subgrade probes (#2611).
