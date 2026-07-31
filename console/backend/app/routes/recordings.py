@@ -43,6 +43,7 @@ from app.auth import (
     get_service_or_verified_user,
     get_verified_user,
     is_service_user,
+    resolve_queue_partition,
 )
 from app.config import settings
 from app.database import get_db
@@ -186,10 +187,13 @@ async def _service_or_verified_user_with_rate_key(
 ) -> User:
     """Accept either a privileged service key or a verified JWT user.
 
-    Used by the bulk-upload endpoint that Viola's privileged backend integration
-    calls. Per-user rate-limiting still tracks the (synthetic) service user.
+    Used by the bulk-upload endpoint that Viola's privileged backend
+    integration calls. The rate-limit key is the caller's PARTITION, not the
+    account: keyed on the account, ``RECORDING_UPLOAD_LIMIT`` is one shared
+    upload budget for the service caller's whole install base, so one user's
+    sample uploads exhaust the next user's.
     """
-    set_rate_limit_user(request, current_user.id)
+    set_rate_limit_user(request, resolve_queue_partition(request, current_user))
     return current_user
 
 

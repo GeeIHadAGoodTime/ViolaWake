@@ -80,8 +80,11 @@ class Settings(BaseSettings):
     # When set, an HTTP request with `Authorization: Bearer <service_key>` is
     # authenticated as the synthetic service user identified by
     # `service_user_email`. All recordings + training jobs created via the
-    # service path land under that account; per-tenant isolation must be
-    # enforced upstream (Viola scopes by user_id on its side).
+    # service path land under that ONE account, so the caller must also name
+    # which of its own users each request is for: the queue's per-user
+    # controls (circuit breaker, pending-job cap, failure backoff, job
+    # ownership) key on that tenant, and a service request that names none is
+    # refused rather than sharing them. See `app.tenancy`.
     service_key: str = ""
     service_user_email: str = "viola-service@viola.internal"
     service_user_name: str = "Viola Service"

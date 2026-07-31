@@ -1,4 +1,13 @@
-"""Persistent async training job queue with circuit breaker protection."""
+"""Persistent async training job queue with circuit breaker protection.
+
+Every protective control here -- the failure circuit breaker, the pending-job
+cap, the failure backoff timer -- is scoped to a :class:`QueuePartition`, not
+to a bare account id. For an ordinary account the two are the same thing. They
+are NOT the same thing for the privileged service-key path, where one account
+submits work for a whole upstream user base; see ``app.tenancy`` for why
+keying these controls on the account alone makes every one of them global over
+that caller's users.
+"""
 
 from __future__ import annotations
 
@@ -26,6 +35,7 @@ from app.models import Recording, TrainedModel, User
 from app.monitoring import log_exception
 from app.services.training_service import TrainingCancelledError, run_training_job_sync
 from app.storage import build_companion_config_identifier, build_model_key, get_storage
+from app.tenancy import ACCOUNT_TENANT, QueuePartition
 
 logger = logging.getLogger("violawake.jobs")
 
@@ -136,11 +146,22 @@ class Job:
     model_id: int | None = None
     d_prime: float | None = None
     priority: int = PRIORITY_FREE
+    tenant_key: str = ACCOUNT_TENANT
+
+    @property
+    def partition(self) -> QueuePartition:
+        """The scope this job's protective controls apply to.
+
+        Carried on the row itself so the dispatcher, the resume-on-boot pass
+        and the failure handler all read the SAME answer -- there is no second
+        place that could disagree about whose breaker a job trips.
+        """
+        return QueuePartition(user_id=self.user_id, tenant_key=self.tenant_key)
 
 
 @dataclass(slots=True)
 class CircuitBreakerState:
-    """Per-user failure tracking."""
+    """Failure tracking for one queue partition."""
 
     user_id: int
     consecutive_failures: int = 0
@@ -148,6 +169,7 @@ class CircuitBreakerState:
     next_attempt_at: datetime | None = None
     last_failure_at: datetime | None = None
     pause_reason: str | None = None
+    tenant_key: str = ACCOUNT_TENANT
 
 
 _TIER_PRIORITY: dict[str, int] = {
@@ -202,7 +224,10 @@ class JobQueue:
         self._running_job_ids: set[int] = set()
         self._cancel_events: dict[int, threading.Event] = {}
         self._inflight_tasks: set[asyncio.Task[None]] = set()
-        self._retry_tasks: dict[int, asyncio.Task[None]] = {}
+        # Keyed by partition, not by account: a backoff timer keyed on the
+        # account would let one upstream tenant's failure suppress the refill
+        # every other tenant of that account is waiting on.
+        self._retry_tasks: dict[QueuePartition, asyncio.Task[None]] = {}
         self._submission_lock = asyncio.Lock()
         self._state_lock = asyncio.Lock()
         self._refill_lock = asyncio.Lock()
@@ -247,7 +272,7 @@ class JobQueue:
     async def submit_job(
         self,
         *,
-        user_id: int,
+        partition: QueuePartition,
         wake_word: str,
         recording_ids: list[int],
         epochs: int,
@@ -255,12 +280,20 @@ class JobQueue:
     ) -> int:
         """Persist a new training job and enqueue it when capacity allows.
 
+        Takes a :class:`QueuePartition` rather than a bare account id, and
+        offers no bare-id form: the pending-job cap below is counted over
+        whatever this argument says, so a caller that could pass an account id
+        for service-path work would be re-creating the shared cap. Submission
+        is the one place a job's partition is chosen, and it is recorded on the
+        row so every later control decision reads it back instead of guessing.
+
         When *priority* is not supplied it is resolved automatically from the
-        user's subscription tier (free=0, developer=5, business=10).
+        account's subscription tier (free=0, developer=5, business=10).
         """
         if await self._pending_count() >= self._queue.maxsize:
             raise QueueFullError("Training queue is full. Please try again later.")
 
+        user_id = partition.user_id
         if priority is None:
             priority = await _resolve_user_priority(user_id)
 
@@ -273,10 +306,11 @@ class JobQueue:
                     """
                     SELECT COUNT(*) AS count
                     FROM jobs
-                    WHERE user_id = ? AND status IN (?, ?)
+                    WHERE user_id = ? AND tenant_key = ? AND status IN (?, ?)
                     """,
                     (
                         user_id,
+                        partition.tenant_key,
                         JobStatus.PENDING.value,
                         JobStatus.RUNNING.value,
                     ),
@@ -303,8 +337,9 @@ class JobQueue:
                         epochs,
                         model_id,
                         d_prime,
-                        priority
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        priority,
+                        tenant_key
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
@@ -320,15 +355,16 @@ class JobQueue:
                         None,
                         None,
                         priority,
+                        partition.tenant_key,
                     ),
                 )
                 await conn.commit()
                 job_id = int(cursor.lastrowid)
 
         logger.info(
-            "Queued training job %s for user %s (priority=%s)",
+            "Queued training job %s for %s (priority=%s)",
             job_id,
-            user_id,
+            partition,
             priority,
         )
         await self._fill_queue_from_db()
@@ -408,11 +444,21 @@ class JobQueue:
             return None
         return self._row_to_job(row)
 
-    async def list_jobs(self, user_id: int) -> list[Job]:
-        """List persisted jobs for a user, newest first."""
+    async def list_jobs(self, partition: QueuePartition | int) -> list[Job]:
+        """List persisted jobs for one partition, newest first.
+
+        Scoped to the partition, not the account: on the service path an
+        account-wide listing would hand every upstream tenant the whole
+        install base's job history.
+        """
+        scope = QueuePartition.coerce(partition)
         async with self._connect() as conn, conn.execute(
-            "SELECT * FROM jobs WHERE user_id = ? ORDER BY created_at DESC, id DESC",
-            (user_id,),
+            """
+            SELECT * FROM jobs
+            WHERE user_id = ? AND tenant_key = ?
+            ORDER BY created_at DESC, id DESC
+            """,
+            (scope.user_id, scope.tenant_key),
         ) as cursor:
             rows = await cursor.fetchall()
         return [self._row_to_job(row) for row in rows]
@@ -476,40 +522,48 @@ class JobQueue:
         await self._fill_queue_from_db()
         return len(job_ids)
 
-    async def resume_user(self, user_id: int) -> None:
-        """Clear the circuit breaker pause for a user and resume queued work."""
+    async def resume_user(self, partition: QueuePartition | int) -> None:
+        """Clear one partition's breaker pause and resume its queued work.
+
+        Clearing is partition-scoped in both directions: it releases exactly
+        the tenant that asked, and it cannot release (or be blocked by) any
+        other tenant sharing the same account.
+        """
+        scope = QueuePartition.coerce(partition)
         async with self._connect() as conn:
             await conn.execute(
                 """
                 INSERT INTO user_circuit_breakers (
                     user_id,
+                    tenant_key,
                     consecutive_failures,
                     paused,
                     next_attempt_at,
                     last_failure_at,
                     pause_reason
-                ) VALUES (?, 0, 0, NULL, NULL, NULL)
-                ON CONFLICT(user_id) DO UPDATE SET
+                ) VALUES (?, ?, 0, 0, NULL, NULL, NULL)
+                ON CONFLICT(user_id, tenant_key) DO UPDATE SET
                     consecutive_failures = 0,
                     paused = 0,
                     next_attempt_at = NULL,
                     last_failure_at = NULL,
                     pause_reason = NULL
                 """,
-                (user_id,),
+                (scope.user_id, scope.tenant_key),
             )
             await conn.commit()
 
-        retry_task = self._retry_tasks.pop(user_id, None)
+        retry_task = self._retry_tasks.pop(scope, None)
         if retry_task is not None:
             retry_task.cancel()
-        logger.info("Resumed job queue for user %s", user_id)
+        logger.info("Resumed job queue for %s", scope)
         await self._fill_queue_from_db()
 
-    async def get_circuit_breaker(self, user_id: int) -> CircuitBreakerState:
-        """Return the circuit breaker state for a user."""
+    async def get_circuit_breaker(self, partition: QueuePartition | int) -> CircuitBreakerState:
+        """Return the circuit breaker state for one partition."""
+        scope = QueuePartition.coerce(partition)
         async with self._connect() as conn:
-            return await self._get_circuit_breaker_with_conn(conn, user_id)
+            return await self._get_circuit_breaker_with_conn(conn, scope)
 
     async def runtime_snapshot(self) -> dict[str, Any]:
         """Return queue depth and worker state for health checks.
@@ -633,19 +687,22 @@ class JobQueue:
                     epochs INTEGER NOT NULL DEFAULT 80,
                     model_id INTEGER,
                     d_prime REAL,
-                    priority INTEGER NOT NULL DEFAULT 0
+                    priority INTEGER NOT NULL DEFAULT 0,
+                    tenant_key TEXT NOT NULL DEFAULT ''
                 )
                 """
             )
             await conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_circuit_breakers (
-                    user_id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    tenant_key TEXT NOT NULL DEFAULT '',
                     consecutive_failures INTEGER NOT NULL DEFAULT 0,
                     paused INTEGER NOT NULL DEFAULT 0,
                     next_attempt_at TEXT,
                     last_failure_at TEXT,
-                    pause_reason TEXT
+                    pause_reason TEXT,
+                    PRIMARY KEY (user_id, tenant_key)
                 )
                 """
             )
@@ -670,27 +727,103 @@ class JobQueue:
                     "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
                 )
                 logger.info("Migrated jobs table: added cancel_requested column")
+            if "tenant_key" not in columns:
+                # Existing rows belong to their own account's partition, which
+                # is exactly what the empty key means -- no row changes owner.
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN tenant_key TEXT NOT NULL DEFAULT ''"
+                )
+                logger.info("Migrated jobs table: added tenant_key column")
 
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_priority_created ON jobs(status, priority DESC, created_at ASC)"
             )
+            # Backs the pending-job cap, which counts over the full partition.
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jobs_partition_status "
+                "ON jobs(user_id, tenant_key, status)"
+            )
+
+            await self._migrate_breakers_to_partitions(conn)
 
             await conn.commit()
 
+    async def _migrate_breakers_to_partitions(self, conn: aiosqlite.Connection) -> None:
+        """Widen an existing breaker table's key from account to partition.
+
+        SQLite cannot alter a PRIMARY KEY in place, so a pre-tenant database
+        needs a table rebuild. Every carried row keeps its state verbatim
+        under the empty tenant key, so an ordinary account's breaker -- paused
+        or not -- is exactly where it was; this migration widens what CAN be
+        distinguished, it does not resume or pause anybody.
+        """
+        async with conn.execute("PRAGMA table_info(user_circuit_breakers)") as cursor:
+            breaker_columns = {row["name"] async for row in cursor}
+        if not breaker_columns or "tenant_key" in breaker_columns:
+            return
+
+        await conn.execute(
+            "ALTER TABLE user_circuit_breakers RENAME TO user_circuit_breakers_pre_tenant"
+        )
+        await conn.execute(
+            """
+            CREATE TABLE user_circuit_breakers (
+                user_id INTEGER NOT NULL,
+                tenant_key TEXT NOT NULL DEFAULT '',
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                paused INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT,
+                last_failure_at TEXT,
+                pause_reason TEXT,
+                PRIMARY KEY (user_id, tenant_key)
+            )
+            """
+        )
+        await conn.execute(
+            """
+            INSERT INTO user_circuit_breakers (
+                user_id,
+                tenant_key,
+                consecutive_failures,
+                paused,
+                next_attempt_at,
+                last_failure_at,
+                pause_reason
+            )
+            SELECT
+                user_id,
+                '',
+                consecutive_failures,
+                paused,
+                next_attempt_at,
+                last_failure_at,
+                pause_reason
+            FROM user_circuit_breakers_pre_tenant
+            """
+        )
+        await conn.execute("DROP TABLE user_circuit_breakers_pre_tenant")
+        logger.info("Migrated user_circuit_breakers: key widened to (user_id, tenant_key)")
+
     async def _resume_jobs(self) -> None:
-        running_user_ids: set[int] = set()
+        running_partitions: set[QueuePartition] = set()
         now = _utcnow()
         async with self._connect() as conn:
             async with conn.execute(
                 """
-                SELECT DISTINCT user_id
+                SELECT DISTINCT user_id, tenant_key
                 FROM jobs
                 WHERE status = ? AND COALESCE(cancel_requested, 0) = 0
                 """,
                 (JobStatus.RUNNING.value,),
             ) as cursor:
                 rows = await cursor.fetchall()
-                running_user_ids = {int(row["user_id"]) for row in rows}
+                running_partitions = {
+                    QueuePartition(
+                        user_id=int(row["user_id"]),
+                        tenant_key=str(row["tenant_key"] or ACCOUNT_TENANT),
+                    )
+                    for row in rows
+                }
 
             await conn.execute(
                 """
@@ -725,15 +858,15 @@ class JobQueue:
 
             async with conn.execute(
                 """
-                SELECT user_id, next_attempt_at, paused
+                SELECT user_id, tenant_key, next_attempt_at, paused
                 FROM user_circuit_breakers
                 WHERE next_attempt_at IS NOT NULL
                 """
             ) as cursor:
                 breaker_rows = await cursor.fetchall()
 
-        for user_id in running_user_ids:
-            logger.info("Resumed interrupted training jobs for user %s", user_id)
+        for partition in running_partitions:
+            logger.info("Resumed interrupted training jobs for %s", partition)
 
         for row in breaker_rows:
             if bool(row["paused"]):
@@ -742,7 +875,13 @@ class JobQueue:
             if next_attempt_at is None:
                 continue
             delay = max(0.0, (next_attempt_at - now).total_seconds())
-            self._schedule_retry_fill(int(row["user_id"]), delay)
+            self._schedule_retry_fill(
+                QueuePartition(
+                    user_id=int(row["user_id"]),
+                    tenant_key=str(row["tenant_key"] or ACCOUNT_TENANT),
+                ),
+                delay,
+            )
 
     async def _worker_loop(self) -> None:
         while not self._closed:
@@ -771,18 +910,19 @@ class JobQueue:
             if job.status is not JobStatus.PENDING:
                 return
 
-            breaker = await self.get_circuit_breaker(job.user_id)
+            partition = job.partition
+            breaker = await self.get_circuit_breaker(partition)
             now = _utcnow()
             if breaker.paused:
-                logger.warning("Skipping job %s because user %s queue is paused", job_id, job.user_id)
+                logger.warning("Skipping job %s because %s queue is paused", job_id, partition)
                 return
             if breaker.next_attempt_at is not None and breaker.next_attempt_at > now:
                 delay = (breaker.next_attempt_at - now).total_seconds()
-                self._schedule_retry_fill(job.user_id, delay)
+                self._schedule_retry_fill(partition, delay)
                 logger.info(
-                    "Delaying job %s for user %s due to failure backoff (%ss)",
+                    "Delaying job %s for %s due to failure backoff (%ss)",
                     job_id,
-                    job.user_id,
+                    partition,
                     round(delay, 2),
                 )
                 return
@@ -895,7 +1035,7 @@ class JobQueue:
                 d_prime=artifact.d_prime,
                 cancel_requested=False,
             )
-            await self._record_success(job.user_id)
+            await self._record_success(partition)
 
             # Schedule post-training recording deletion (privacy: recordings
             # are deleted after training per the privacy FAQ).
@@ -975,13 +1115,13 @@ class JobQueue:
                 error=str(exc),
                 cancel_requested=False,
             )
-            user_id = current_job.user_id if current_job is not None else None
-            if user_id is not None and not _is_expected_training_outcome(exc):
+            failed_partition = current_job.partition if current_job is not None else None
+            if failed_partition is not None and not _is_expected_training_outcome(exc):
                 if _is_shared_infrastructure_fault(exc):
                     # Our missing prerequisite: pace the queue, charge no strike.
-                    await self._record_transient_fault(user_id, str(exc))
+                    await self._record_transient_fault(failed_partition, str(exc))
                 else:
-                    await self._record_failure(user_id, str(exc))
+                    await self._record_failure(failed_partition, str(exc))
             await self._publish(
                 job_id,
                 {
@@ -1031,7 +1171,7 @@ class JobQueue:
             async with self._connect() as conn:
                 async with conn.execute(
                     """
-                    SELECT id, user_id
+                    SELECT id, user_id, tenant_key
                     FROM jobs
                     WHERE status = ?
                     ORDER BY priority DESC, created_at ASC, id ASC
@@ -1044,17 +1184,23 @@ class JobQueue:
                     if free_slots <= 0:
                         break
                     job_id = int(row["id"])
-                    user_id = int(row["user_id"])
+                    # The row's own partition, so a paused tenant only ever
+                    # holds back its own jobs -- the pre-tenant dispatcher read
+                    # user_id here and skipped every job of the shared account.
+                    partition = QueuePartition(
+                        user_id=int(row["user_id"]),
+                        tenant_key=str(row["tenant_key"] or ACCOUNT_TENANT),
+                    )
                     async with self._state_lock:
                         if job_id in self._queued_job_ids or job_id in self._running_job_ids:
                             continue
 
-                    breaker = await self._get_circuit_breaker_with_conn(conn, user_id)
+                    breaker = await self._get_circuit_breaker_with_conn(conn, partition)
                     if breaker.paused:
                         continue
                     if breaker.next_attempt_at is not None and breaker.next_attempt_at > now:
                         delay = (breaker.next_attempt_at - now).total_seconds()
-                        self._schedule_retry_fill(user_id, delay)
+                        self._schedule_retry_fill(partition, delay)
                         continue
 
                     try:
@@ -1173,29 +1319,34 @@ class JobQueue:
     async def _get_circuit_breaker_with_conn(
         self,
         conn: aiosqlite.Connection,
-        user_id: int,
+        partition: QueuePartition,
     ) -> CircuitBreakerState:
         async with conn.execute(
             """
             SELECT
                 user_id,
+                tenant_key,
                 consecutive_failures,
                 paused,
                 next_attempt_at,
                 last_failure_at,
                 pause_reason
             FROM user_circuit_breakers
-            WHERE user_id = ?
+            WHERE user_id = ? AND tenant_key = ?
             """,
-            (user_id,),
+            (partition.user_id, partition.tenant_key),
         ) as cursor:
             row = await cursor.fetchone()
 
         if row is None:
-            return CircuitBreakerState(user_id=user_id)
+            return CircuitBreakerState(
+                user_id=partition.user_id,
+                tenant_key=partition.tenant_key,
+            )
 
         return CircuitBreakerState(
             user_id=int(row["user_id"]),
+            tenant_key=str(row["tenant_key"]),
             consecutive_failures=int(row["consecutive_failures"]),
             paused=bool(row["paused"]),
             next_attempt_at=_deserialize_datetime(row["next_attempt_at"]),
@@ -1203,35 +1354,36 @@ class JobQueue:
             pause_reason=row["pause_reason"],
         )
 
-    async def _record_success(self, user_id: int) -> None:
+    async def _record_success(self, partition: QueuePartition) -> None:
         async with self._connect() as conn:
             await conn.execute(
                 """
                 INSERT INTO user_circuit_breakers (
                     user_id,
+                    tenant_key,
                     consecutive_failures,
                     paused,
                     next_attempt_at,
                     last_failure_at,
                     pause_reason
-                ) VALUES (?, 0, 0, NULL, NULL, NULL)
-                ON CONFLICT(user_id) DO UPDATE SET
+                ) VALUES (?, ?, 0, 0, NULL, NULL, NULL)
+                ON CONFLICT(user_id, tenant_key) DO UPDATE SET
                     consecutive_failures = 0,
                     paused = 0,
                     next_attempt_at = NULL,
                     last_failure_at = NULL,
                     pause_reason = NULL
                 """,
-                (user_id,),
+                (partition.user_id, partition.tenant_key),
             )
             await conn.commit()
 
-        retry_task = self._retry_tasks.pop(user_id, None)
+        retry_task = self._retry_tasks.pop(partition, None)
         if retry_task is not None:
             retry_task.cancel()
 
-    async def _record_failure(self, user_id: int, error: str) -> None:
-        breaker = await self.get_circuit_breaker(user_id)
+    async def _record_failure(self, partition: QueuePartition, error: str) -> None:
+        breaker = await self.get_circuit_breaker(partition)
         consecutive_failures = breaker.consecutive_failures + 1
         paused = consecutive_failures >= FAILURE_THRESHOLD
         next_attempt_at = None if paused else _utcnow() + timedelta(seconds=FAILURE_BACKOFF_SECONDS)
@@ -1242,13 +1394,14 @@ class JobQueue:
                 """
                 INSERT INTO user_circuit_breakers (
                     user_id,
+                    tenant_key,
                     consecutive_failures,
                     paused,
                     next_attempt_at,
                     last_failure_at,
                     pause_reason
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, tenant_key) DO UPDATE SET
                     consecutive_failures = excluded.consecutive_failures,
                     paused = excluded.paused,
                     next_attempt_at = excluded.next_attempt_at,
@@ -1256,7 +1409,8 @@ class JobQueue:
                     pause_reason = excluded.pause_reason
                 """,
                 (
-                    user_id,
+                    partition.user_id,
+                    partition.tenant_key,
                     consecutive_failures,
                     1 if paused else 0,
                     _serialize_datetime(next_attempt_at),
@@ -1267,20 +1421,20 @@ class JobQueue:
             await conn.commit()
 
         if paused:
-            retry_task = self._retry_tasks.pop(user_id, None)
+            retry_task = self._retry_tasks.pop(partition, None)
             if retry_task is not None:
                 retry_task.cancel()
             logger.warning(
-                "Paused job queue for user %s after %s consecutive failures",
-                user_id,
+                "Paused job queue for %s after %s consecutive failures",
+                partition,
                 consecutive_failures,
             )
             return
 
-        self._schedule_retry_fill(user_id, FAILURE_BACKOFF_SECONDS)
+        self._schedule_retry_fill(partition, FAILURE_BACKOFF_SECONDS)
 
-    async def _record_transient_fault(self, user_id: int, error: str) -> None:
-        """Back the user off WITHOUT spending a strike (shared-infrastructure fault).
+    async def _record_transient_fault(self, partition: QueuePartition, error: str) -> None:
+        """Back the partition off WITHOUT spending a strike (shared-infrastructure fault).
 
         Everything `_record_failure` does about pacing, and nothing it does about
         blame: `next_attempt_at` moves out by the same backoff so the queue does not
@@ -1293,7 +1447,7 @@ class JobQueue:
         instrument for it is an operator alarm (the fault is still logged and still
         classified by `app.monitoring`), not N per-customer account locks.
         """
-        breaker = await self.get_circuit_breaker(user_id)
+        breaker = await self.get_circuit_breaker(partition)
         next_attempt_at = _utcnow() + timedelta(seconds=FAILURE_BACKOFF_SECONDS)
 
         async with self._connect() as conn:
@@ -1301,18 +1455,20 @@ class JobQueue:
                 """
                 INSERT INTO user_circuit_breakers (
                     user_id,
+                    tenant_key,
                     consecutive_failures,
                     paused,
                     next_attempt_at,
                     last_failure_at,
                     pause_reason
-                ) VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(user_id) DO UPDATE SET
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, tenant_key) DO UPDATE SET
                     next_attempt_at = excluded.next_attempt_at,
                     last_failure_at = excluded.last_failure_at
                 """,
                 (
-                    user_id,
+                    partition.user_id,
+                    partition.tenant_key,
                     breaker.consecutive_failures,
                     1 if breaker.paused else 0,
                     _serialize_datetime(next_attempt_at),
@@ -1323,17 +1479,17 @@ class JobQueue:
             await conn.commit()
 
         logger.warning(
-            "Backed off user %s for %ss on a shared-infrastructure fault "
+            "Backed off %s for %ss on a shared-infrastructure fault "
             "(strike NOT charged, consecutive_failures stays %s): %s",
-            user_id,
+            partition,
             FAILURE_BACKOFF_SECONDS,
             breaker.consecutive_failures,
             error,
         )
-        self._schedule_retry_fill(user_id, FAILURE_BACKOFF_SECONDS)
+        self._schedule_retry_fill(partition, FAILURE_BACKOFF_SECONDS)
 
-    def _schedule_retry_fill(self, user_id: int, delay_seconds: float) -> None:
-        existing = self._retry_tasks.get(user_id)
+    def _schedule_retry_fill(self, partition: QueuePartition, delay_seconds: float) -> None:
+        existing = self._retry_tasks.get(partition)
         if existing is not None and not existing.done():
             return
 
@@ -1344,11 +1500,11 @@ class JobQueue:
             except asyncio.CancelledError:
                 raise
             finally:
-                self._retry_tasks.pop(user_id, None)
+                self._retry_tasks.pop(partition, None)
 
-        self._retry_tasks[user_id] = asyncio.create_task(
+        self._retry_tasks[partition] = asyncio.create_task(
             _delayed_fill(),
-            name=f"user-{user_id}-queue-retry",
+            name=f"queue-retry-{partition.user_id}-{partition.tenant_key or 'account'}",
         )
 
     async def _resolve_negatives_dir(self, user_id: int) -> Path | None:
@@ -1441,6 +1597,12 @@ class JobQueue:
             priority = int(row["priority"])
         except (IndexError, KeyError):
             priority = PRIORITY_FREE
+        # Same guard for tenant_key, added by the same kind of migration. A
+        # row that predates it belongs to the account's own partition.
+        try:
+            tenant_key = str(row["tenant_key"] or ACCOUNT_TENANT)
+        except (IndexError, KeyError):
+            tenant_key = ACCOUNT_TENANT
         return Job(
             id=int(row["id"]),
             user_id=int(row["user_id"]),
@@ -1456,6 +1618,7 @@ class JobQueue:
             model_id=int(row["model_id"]) if row["model_id"] is not None else None,
             d_prime=float(row["d_prime"]) if row["d_prime"] is not None else None,
             priority=priority,
+            tenant_key=tenant_key,
         )
 
     @asynccontextmanager
