@@ -25,7 +25,6 @@ export const sources = {
 };
 
 const nav = [
-  { label: "Pricing", href: "/pricing" },
   { label: "Docs", href: "/docs" },
   { label: "Compare", href: "/compare/picovoice" },
   { label: "Blog", href: "/blog" },
@@ -35,7 +34,6 @@ const nav = [
 const commonLinks = `
 ## Keep exploring
 
-- [Pricing](/pricing)
 - [SDK docs](/docs)
 - [Picovoice comparison](/compare/picovoice)
 - [OpenWakeWord comparison](/compare/openwakeword)
@@ -56,12 +54,12 @@ const comparisonFaqs = {
     {
       q: "Does ViolaWake require cloud inference?",
       a:
-        "No. Detection runs on device. The hosted Console is only for account, recording, training, billing, and model management workflows.",
+        "No. Detection runs on device. The hosted Console is only for account, recording, training, and model management workflows.",
     },
     {
-      q: "Does Picovoice publish public pricing?",
+      q: "Is the ViolaWake Console free?",
       a:
-        "As of 2026-05-08, the Picovoice pricing URL was checked for this page. We did not rely on unsourced third-party price snippets; teams should verify current Picovoice commercial terms directly with Picovoice.",
+        "Yes. The Console is a free service: sign up, record samples, train models, and download ONNX files at no charge, subject to monthly usage limits.",
     },
   ],
   openwakeword: [
@@ -167,83 +165,10 @@ ${commonLinks}
 `,
   },
   {
-    path: "/pricing",
-    title: "ViolaWake Pricing - Free SDK and Custom Wake Word Training",
-    description:
-      "Free Apache 2.0 SDK, free Console tier, $29 Developer plan, $99 Business plan, and enterprise options for custom wake word training.",
-    ogImage: "/og/violawake-og.png",
-    priority: "0.9",
-    changefreq: "weekly",
-    nav,
-    schema: ["SoftwareApplication", "Product", "Offer", "BreadcrumbList"],
-    faqs: [
-      {
-        q: "Is the ViolaWake SDK really free?",
-        a:
-          "Yes. The SDK is Apache 2.0 and can be used commercially. The Console charges only for hosted recording, training, billing, and model-management convenience.",
-      },
-      {
-        q: "Can I keep models if I cancel?",
-        a:
-          "Yes. Downloaded ONNX models remain yours. Canceling stops new paid Console training capacity, not local inference with models you already exported.",
-      },
-      {
-        q: "Do I need a credit card for the free tier?",
-        a:
-          "No. The free tier is intended for experimentation and includes a small monthly training allowance.",
-      },
-    ],
-    markdown: `
-# Pricing
-
-The ViolaWake SDK is free and Apache 2.0. Console pricing pays for browser recording, managed training, model management, billing, teams, and support.
-
-| Plan | Price | Best for | Included |
-|---|---:|---|---|
-| Free | $0/mo | Testing custom wake word training | 3 models per month, standard CPU queue, Apache 2.0 SDK |
-| Developer | $29/mo | Solo builders shipping a real project | 20 models per month, priority queue, email support |
-| Business | $99/mo | Teams iterating on many wake words | Unlimited models, team management, priority support |
-| Enterprise | Custom | Organizations with custom deployment needs | Volume terms, custom training configuration, support planning |
-
-[Start Free](/register?plan=free)
-[Choose Developer](/register?tier=developer)
-[Choose Business](/register?tier=business)
-[Contact Enterprise](mailto:enterprise@violawake.com)
-
-## Why the SDK is free
-
-The open-core decision is deliberate. Detection code, training code, evaluation tooling, and model-loading APIs should be auditable. The paid product is the hosted workflow that saves setup time.
-
-## Plan guidance
-
-Choose Free when you are validating whether a custom wake word works for your project. Choose Developer when you are training several names, phrases, rooms, or microphone setups. Choose Business when training is part of a team workflow or product release cycle.
-
-## Billing and cancellation
-
-Paid plans use Stripe Checkout and Stripe's billing portal. ViolaWake does not store full card numbers or CVV values. When you cancel, you should download any models you want to keep using. Local SDK inference does not require an active subscription.
-
-## FAQ
-
-### Is the ViolaWake SDK really free?
-
-Yes. The SDK is Apache 2.0 and can be used commercially. The Console charges only for hosted recording, training, billing, and model-management convenience.
-
-### Can I train models without the Console?
-
-Yes. The open CLI can train models locally. The Console exists because many developers prefer a browser workflow with recording, queueing, progress, and model management.
-
-### What happens if I cancel?
-
-Downloaded models are yours. Canceling stops paid Console capacity for new training jobs.
-
-${commonLinks}
-`,
-  },
-  {
     path: "/compare/picovoice",
     title: "ViolaWake vs Picovoice Porcupine - Open Source Alternative",
     description:
-      "Compare ViolaWake and Picovoice Porcupine for custom wake words, pricing surface, licensing, model format, accuracy claims, and deployment.",
+      "Compare ViolaWake and Picovoice Porcupine for custom wake words, cost, licensing, model format, accuracy claims, and deployment.",
     ogImage: "/og/violawake-vs-picovoice.png",
     priority: "0.95",
     changefreq: "weekly",
@@ -267,13 +192,13 @@ Yes. Pick ViolaWake when you want an Apache 2.0 SDK, ONNX model output, no runti
 | Model output | 102 KB ONNX wake head plus OpenWakeWord backbone | Picovoice .ppn/.pv assets |
 | Custom wake words | Train from user recordings in Console or CLI | Type a phrase in Picovoice Console and download a model |
 | Accuracy disclosure | 0.8% EER on production reference model; user-trained accuracy varies | FAQ claims 97%+ detection with less than 1 false alarm in 10 hours |
-| Pricing surface | Free, $29/mo Developer, $99/mo Business, custom Enterprise | Verify current commercial terms with Picovoice |
+| Cost | Free Console and free Apache 2.0 SDK | Verify current commercial terms with Picovoice |
 
 Comparison checked as of ${verifiedDate}. Competitor claims are linked in Verified claims.
 
 ## Decision guide
 
-Pick ViolaWake when the runtime artifact matters. The SDK is Apache 2.0, the wake head exports as ONNX, and detection runs locally without a ViolaWake API call. The Console is a hosted convenience for recording, training, billing, and model management; downloaded models continue to run locally.
+Pick ViolaWake when the runtime artifact matters. The SDK is Apache 2.0, the wake head exports as ONNX, and detection runs locally without a ViolaWake API call. The Console is a hosted convenience for recording, training, and model management; downloaded models continue to run locally.
 
 Pick Picovoice when procurement favors a proprietary vendor and a fast text-to-wake-word flow. Picovoice documents a broad platform matrix, Console model generation, and SDK quick starts. That is useful when your team wants vendor support and is comfortable with the AccessKey workflow.
 
@@ -322,11 +247,11 @@ Yes. ViolaWake is an open-source alternative for teams that want custom wake wor
 
 ### Does ViolaWake require cloud inference?
 
-No. Detection runs on device. The hosted Console is for account, recording, training, billing, and model management.
+No. Detection runs on device. The hosted Console is for account, recording, training, and model management.
 
-### Does Picovoice publish public pricing?
+### Is the ViolaWake Console free?
 
-As of ${verifiedDate}, the Picovoice pricing URL was checked for this page. Verify current Picovoice commercial terms directly with Picovoice before procurement.
+Yes. The Console is a free service: sign up, record samples, train models, and download ONNX files at no charge, subject to monthly usage limits.
 
 ${commonLinks}
 
@@ -373,7 +298,7 @@ OpenWakeWord's README describes it as an open-source wake word library for creat
 
 ## What ViolaWake adds
 
-ViolaWake adds product shape. Sign up, record samples in the browser, train a custom wake head, inspect metrics, download ONNX output, and use the model through one Python SDK. That workflow is useful when teammates need repeatable model creation without assembling notebooks, storage, auth, billing, and deployment docs from scratch.
+ViolaWake adds product shape. Sign up, record samples in the browser, train a custom wake head, inspect metrics, download ONNX output, and use the model through one Python SDK. That workflow is useful when teammates need repeatable model creation without assembling notebooks, storage, auth, and deployment docs from scratch.
 
 The product layer does not make wake-word accuracy automatic. It makes the quality loop visible: collect positives, add representative negatives, mine confusables, train, inspect EER and thresholds, then test streaming false alarms on target audio.
 
@@ -387,7 +312,7 @@ OpenWakeWord gives lower-level control. Its README describes 80 ms frames, a sco
 
 Pick OpenWakeWord directly when you want a Python-first framework, already have data collection and evaluation in place, or want to stay close to upstream examples. Direct use is also reasonable when your application already has a training pipeline and only needs the wake-word library.
 
-Pick ViolaWake when you need a product workflow: accounts, browser recording, managed training, model history, billing, team features, support contact, and deployable docs. The goal is not to replace OpenWakeWord's value. The goal is to make a custom wake word easier to ship.
+Pick ViolaWake when you need a product workflow: accounts, browser recording, managed training, model history, team features, support contact, and deployable docs. The goal is not to replace OpenWakeWord's value. The goal is to make a custom wake word easier to ship.
 
 ## Runtime pieces
 
@@ -611,7 +536,7 @@ ${commonLinks}
     path: "/faq",
     title: "ViolaWake FAQ - Custom Wake Word SDK and Console",
     description:
-      "Answers about offline wake word detection, Raspberry Pi support, training samples, d-prime, privacy, pricing, cancellation, and licensing.",
+      "Answers about offline wake word detection, Raspberry Pi support, training samples, d-prime, privacy, cost, and licensing.",
     ogImage: "/og/violawake-og.png",
     priority: "0.85",
     changefreq: "weekly",
@@ -646,7 +571,7 @@ ${commonLinks}
       {
         q: "Can I commercially use the SDK?",
         a:
-          "Yes. The SDK is Apache 2.0. The hosted Console is a service with its own terms and paid plans.",
+          "Yes. The SDK is Apache 2.0. The hosted Console is a free service with its own terms.",
       },
       {
         q: "Is my voice data private?",
@@ -654,9 +579,9 @@ ${commonLinks}
           "The SDK does not send inference audio to ViolaWake. Console recordings are used to provide the training service and are covered by the Privacy Policy.",
       },
       {
-        q: "What happens if I cancel?",
+        q: "What happens if I delete my account?",
         a:
-          "You keep downloaded models. Canceling stops paid Console capacity for new training jobs.",
+          "You keep downloaded models. Deleting your account removes your hosted recordings and models; local SDK inference keeps working.",
       },
     ],
     markdown: `
@@ -668,7 +593,7 @@ Alexa is a consumer assistant ecosystem with its own account, cloud services, ha
 
 ## Does the SDK work offline?
 
-Yes. Wake word detection runs locally on device. The hosted Console is for account, recording, training, billing, and model management. Once you have a model and the SDK installed, inference does not require a ViolaWake API call.
+Yes. Wake word detection runs locally on device. The hosted Console is for account, recording, training, and model management. Once you have a model and the SDK installed, inference does not require a ViolaWake API call.
 
 ## Does ViolaWake work on Raspberry Pi?
 
@@ -688,11 +613,11 @@ Yes. The ViolaWake SDK is Apache 2.0. You can use it commercially under that lic
 
 ## Is my voice data private?
 
-The SDK does not send inference audio to ViolaWake. Console recordings are processed to provide the service you requested. Read the Privacy Policy for retention, storage, billing, and email-provider details.
+The SDK does not send inference audio to ViolaWake. Console recordings are processed to provide the service you requested. Read the Privacy Policy for retention, storage, and email-provider details.
 
-## What if I cancel?
+## What if I delete my account?
 
-Downloaded ONNX models remain yours to use locally with the SDK. Canceling stops paid Console capacity for future training jobs.
+Downloaded ONNX models remain yours to use locally with the SDK. Deleting your account removes your hosted recordings and models.
 
 ## Is ViolaWake a Picovoice alternative?
 
@@ -734,7 +659,7 @@ ViolaWake exists because custom wake word training should not be locked behind o
 
 ## Who is building it
 
-ViolaWake is maintained by the same builder behind the Viola voice assistant work and the public GitHub project at [GeeIHadAGoodTime/ViolaWake](${site.github}). The project is young, but it already has the pieces that matter for an end-to-end wake word workflow: SDK, training, Console, billing, model downloads, privacy docs, and operational runbooks.
+ViolaWake is maintained by the same builder behind the Viola voice assistant work and the public GitHub project at [GeeIHadAGoodTime/ViolaWake](${site.github}). The project is young, but it already has the pieces that matter for an end-to-end wake word workflow: SDK, training, Console, model downloads, privacy docs, and operational runbooks.
 
 ## Contact
 
@@ -747,7 +672,7 @@ ${commonLinks}
     path: "/privacy",
     title: "ViolaWake Privacy Policy",
     description:
-      "Privacy policy for ViolaWake Console recordings, account data, billing metadata, SDK local inference, retention, and support requests.",
+      "Privacy policy for ViolaWake Console recordings, account data, SDK local inference, retention, and support requests.",
     ogImage: "/og/violawake-og.png",
     priority: "0.6",
     changefreq: "monthly",
@@ -756,21 +681,20 @@ ${commonLinks}
     markdown: `
 # Privacy Policy
 
-Last updated: May 8, 2026
+Last updated: July 31, 2026
 
-ViolaWake provides an open-source SDK and a hosted Console. The SDK performs wake word inference on your device. The Console stores account information, recordings, training artifacts, billing metadata, and support messages needed to provide the service.
+ViolaWake provides an open-source SDK and a hosted Console. The SDK performs wake word inference on your device. The Console stores account information, recordings, training artifacts, and support messages needed to provide the service.
 
 ## Information we collect
 
 - Account name and email address.
 - Voice recordings you upload or record in the Console.
 - Training job metadata and trained model artifacts.
-- Stripe billing identifiers and subscription state.
 - Support and contact messages you send.
 
 ## How we use information
 
-We use information to operate the Console, train requested models, process billing, send transactional email, prevent abuse, and respond to support requests. We do not sell personal information. We do not use your voice recordings for advertising.
+We use information to operate the Console, train requested models, send transactional email, prevent abuse, and respond to support requests. We do not sell personal information. We do not use your voice recordings for advertising.
 
 ## SDK local inference
 
@@ -789,7 +713,7 @@ Email [privacy@violawake.com](mailto:privacy@violawake.com) for privacy requests
     path: "/terms",
     title: "ViolaWake Terms of Service",
     description:
-      "Terms for using the ViolaWake Console, including account use, billing, acceptable use, SDK licensing, retention, and cancellation.",
+      "Terms for using the ViolaWake Console, including account use, acceptable use, SDK licensing, retention, and account deletion.",
     ogImage: "/og/violawake-og.png",
     priority: "0.6",
     changefreq: "monthly",
@@ -798,13 +722,13 @@ Email [privacy@violawake.com](mailto:privacy@violawake.com) for privacy requests
     markdown: `
 # Terms of Service
 
-Last updated: May 8, 2026
+Last updated: July 31, 2026
 
 These terms govern use of the hosted ViolaWake Console. The SDK is licensed separately under Apache License 2.0.
 
 ## Service description
 
-The Console lets users create accounts, record or upload wake word samples, submit training jobs, manage models, and use billing or team features where enabled.
+The Console lets users create accounts, record or upload wake word samples, submit training jobs, manage models, and use team features where enabled.
 
 ## Your content
 
@@ -814,9 +738,9 @@ You retain ownership of recordings you upload and models produced for your accou
 
 Do not upload recordings without consent. Do not use the service for unlawful surveillance, abuse, harassment, or attempts to overload training infrastructure.
 
-## Billing
+## Cost
 
-Paid subscriptions are processed through Stripe. Canceling ends paid Console capacity but does not remove your right to use downloaded models with the SDK.
+The Console is a free service, subject to monthly usage limits that protect training capacity. Deleting your account does not remove your right to use downloaded models with the SDK.
 
 ## Contact
 

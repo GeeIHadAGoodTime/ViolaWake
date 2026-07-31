@@ -6,7 +6,6 @@
 
 - [Home](https://violawake.com/): Product overview and quick answer.
 - [Docs](https://violawake.com/docs): SDK quickstart, API docs, and training links.
-- [Pricing](https://violawake.com/pricing): Free, Developer, Business, and Enterprise Console plans.
 - [FAQ](https://violawake.com/faq): Offline inference, Raspberry Pi, privacy, and licensing answers.
 
 ## Comparisons
@@ -24,7 +23,6 @@
 ## Markdown mirrors
 
 - [index.md](https://violawake.com/index.md)
-- [pricing.md](https://violawake.com/pricing.md)
 - [compare/picovoice.md](https://violawake.com/compare/picovoice.md)
 - [compare/openwakeword.md](https://violawake.com/compare/openwakeword.md)
 - [compare/snowboy.md](https://violawake.com/compare/snowboy.md)

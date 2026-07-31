@@ -368,7 +368,7 @@ async def get_verified_user(
     if not current_user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Verify your email address to access recording, training, and billing features.",
+            detail="Verify your email address to access recording and training features.",
         )
     return current_user
 
@@ -454,7 +454,7 @@ async def get_service_or_verified_user(
 
     When ``VIOLAWAKE_SERVICE_KEY`` is set and the request bearer matches it,
     the call is authenticated as the synthetic Viola service user (bypassing
-    email-verification + per-user billing quotas). Otherwise falls back to the
+    email-verification + per-user training quotas). Otherwise falls back to the
     standard JWT-backed ``get_verified_user`` semantics.
     """
     if _credentials_match_service_key(credentials):
@@ -471,7 +471,7 @@ async def get_service_or_verified_user(
     if not user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Verify your email address to access recording, training, and billing features.",
+            detail="Verify your email address to access recording and training features.",
         )
     return user
 

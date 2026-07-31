@@ -50,24 +50,6 @@ docker compose -f docker-compose.production.yml up -d backend
 
 Expected during the drill: HTTP 503 with `database` in `failed_checks`.
 
-## Stripe webhook end-to-end
-
-Fast local proof is covered by `console/tests/test_billing.py`: it signs a fake Stripe event with the configured webhook secret and verifies the subscription tier moves from `free` to `developer`.
-
-Live test with Stripe CLI:
-
-```bash
-stripe trigger checkout.session.completed --override 'data.object.client_reference_id=<your_user_id>'
-```
-
-If Stripe CLI is not installed, use a real-card launch test:
-
-1. Register a throwaway account.
-2. Buy the Developer plan with your own card.
-3. Verify the Billing page and `/api/billing/subscription` show `tier=developer`.
-4. Verify the confirmation email is sent.
-5. Refund the charge in Stripe.
-
 ## Backups
 
 Nightly backup target: private Cloudflare R2 bucket `violawake-backups`.
@@ -217,7 +199,6 @@ export default {
 - Cloudflare R2: grant the API token R2 bucket permissions and create private R2 S3 access keys for backups.
 - USPTO trademark search: use USPTO TESS manually before launch.
 - Docker Desktop autostart: configure Windows boot behavior manually.
-- Stripe brand-collision decision: decide whether shared Stripe account branding is acceptable.
 - Cloudflare Email Routing: enable MX records and add the Worker route above for `hello@violawake.com`.
 - Tier 3 container hardening: run `docker compose -f docker-compose.production.yml up -d --build` when ready to rebuild.
 - Search Console: submit the final site after launch.

@@ -80,7 +80,7 @@ class EmailService:
             intro=f"Hi {escape(name)}, your email is verified and your workspace is ready.",
             button_label="Open Console",
             button_url=self._console_url("/dashboard"),
-            footer="You can upload recordings, train models, and manage billing from the console.",
+            footer="You can upload recordings and train models from the console.",
         )
         return await self._send_email(to, "Welcome to ViolaWake Console", html)
 
@@ -174,33 +174,19 @@ class EmailService:
             html,
         )
 
-    async def send_quota_warning(self, to: str, used: int, limit: int, tier: str) -> bool:
-        """Send a usage warning when the user is near their tier limit."""
+    async def send_quota_warning(self, to: str, used: int, limit: int) -> bool:
+        """Send a usage warning when the user is near their monthly limit."""
         html = self._render_email(
-            heading="You are close to your training limit",
+            heading="You are close to your monthly training limit",
             intro=(
                 f"You have used <strong>{used}</strong> of <strong>{limit}</strong> "
-                f"monthly trainings on the <strong>{escape(tier.title())}</strong> plan."
+                "monthly trainings."
             ),
-            button_label="Review Plans",
-            button_url=self._console_url("/pricing"),
-            footer="Upgrade before you hit the limit if you need more model training capacity.",
+            button_label="Open Console",
+            button_url=self._console_url("/dashboard"),
+            footer="The limit resets at the start of next month.",
         )
         return await self._send_email(to, "ViolaWake usage warning", html)
-
-    async def send_subscription_activated(self, to: str, name: str, tier: str) -> bool:
-        """Send a confirmation email when a paid subscription activates."""
-        html = self._render_email(
-            heading="Subscription activated",
-            intro=(
-                f"Hi {escape(name)}, your ViolaWake "
-                f"<strong>{escape(tier.title())}</strong> subscription is active."
-            ),
-            button_label="Open Billing",
-            button_url=self._console_url("/billing"),
-            footer="You can review usage, invoices, and plan status from the Billing page.",
-        )
-        return await self._send_email(to, "Your ViolaWake subscription is active", html)
 
     async def send_account_deleted(
         self,

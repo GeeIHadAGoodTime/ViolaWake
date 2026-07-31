@@ -47,8 +47,6 @@ RESET_PASSWORD_LIMIT = "10/5 minutes"
 CHANGE_PASSWORD_LIMIT = "5/minute"
 RECORDING_UPLOAD_LIMIT = "100/15 minutes"
 TRAINING_SUBMIT_LIMIT = "5/hour"
-CHECKOUT_LIMIT = "10/hour"
-PORTAL_LIMIT = "10/hour"
 TEAM_INVITE_LIMIT = "20/hour"
 # Public bug-report form: no login, so keep it strict — enough for a genuine
 # reporter to file a couple of tickets, tight enough to resist bulk spam

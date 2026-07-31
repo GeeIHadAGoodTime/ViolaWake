@@ -86,16 +86,9 @@ def healthy_runtime(client, monkeypatch):
             },
         }
 
-    def fake_check_billing() -> dict[str, object]:
-        return {
-            "status": "ok",
-            "configured": True,
-        }
-
     monkeypatch.setattr(health_module, "_check_database", fake_check_database)
     monkeypatch.setattr(health_module, "_check_training_queue", fake_check_training_queue)
     monkeypatch.setattr(health_module, "_check_storage", fake_check_storage)
-    monkeypatch.setattr(health_module, "_check_billing", fake_check_billing)
     monkeypatch.setattr(health_module.settings, "admin_token", ADMIN_HEALTH_TOKEN)
     monkeypatch.setattr(client.app.state, "startup_complete", True, raising=False)
 
@@ -161,7 +154,6 @@ def test_health_details_returns_component_breakdown(client, healthy_runtime) -> 
     assert "database" in data["components"]
     assert "storage" in data["components"]
     assert "training_queue" in data["components"]
-    assert "billing" in data["components"]
     assert data["components"]["database"]["connected"] is True
     assert data["components"]["storage"]["status"] == "ok"
 

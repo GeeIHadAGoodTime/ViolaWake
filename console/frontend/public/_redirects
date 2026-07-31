@@ -1,4 +1,3 @@
-/pricing /pricing/index.html 200
 /privacy /privacy/index.html 200
 /terms /terms/index.html 200
 /contact /contact/index.html 200
@@ -21,7 +20,6 @@
 /record /app.html 200
 /record/* /app.html 200
 /training/* /app.html 200
-/billing /app.html 200
 /model/* /app.html 200
 /account/* /app.html 200
 /teams /app.html 200

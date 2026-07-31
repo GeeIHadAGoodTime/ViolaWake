@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     # Training
     training_timeout: int = 1800  # seconds (30 minutes)
     max_concurrent_jobs: int = 2
-    negatives_corpus_dir: str = ""  # Path to curated negative audio corpus (paid tier)
+    negatives_corpus_dir: str = ""  # Path to curated negative audio corpus
     # A *dispatchable* pending job (not blocked by a paused/backoff circuit
     # breaker) that has waited longer than this while a worker slot is free is a
     # genuine dispatcher wedge -> health reports ERROR so it pages, instead of
@@ -89,17 +89,9 @@ class Settings(BaseSettings):
     service_user_email: str = "viola-service@viola.internal"
     service_user_name: str = "Viola Service"
 
-    # Stripe billing
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_price_developer: str = ""  # Stripe Price ID for $29/mo Developer tier
-    stripe_price_business: str = ""  # Stripe Price ID for $99/mo Business tier
     sentry_dsn: str = ""
 
-    # Free trial
-    trial_days: int = 14  # 0 to disable free trial for paid tiers
-
-    # Console URLs (for Stripe checkout redirect)
+    # Console URLs (for links in transactional email)
     console_base_url: str = "http://localhost:5173"
 
     # Public base URL of THIS backend API (e.g. https://api.violawake.com).
@@ -214,11 +206,6 @@ class Settings(BaseSettings):
                 "https://violawake.com",
             ]
         return list(DEFAULT_CORS_ORIGINS)
-
-    @property
-    def billing_enabled(self) -> bool:
-        """Billing features require a configured Stripe secret key."""
-        return bool(self.stripe_secret_key)
 
 
 settings = Settings()

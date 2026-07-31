@@ -52,12 +52,6 @@ export default function Layout({ children }: LayoutProps) {
               <Link to="/teams" className="nav-link">
                 Teams
               </Link>
-              <Link to="/billing" className="nav-link">
-                Billing
-              </Link>
-              <Link to="/pricing" className="nav-link">
-                Plans
-              </Link>
               <Link
                 to="/account/password"
                 className="nav-link nav-account"
@@ -77,9 +71,6 @@ export default function Layout({ children }: LayoutProps) {
             </>
           ) : (
             <>
-              <Link to="/pricing" className="nav-link">
-                Pricing
-              </Link>
               <Link to="/contact" className="nav-link">
                 Contact
               </Link>
@@ -97,7 +88,7 @@ export default function Layout({ children }: LayoutProps) {
       {isAuthenticated && user && !user.email_verified && (
         <div className="verification-banner" role="status">
           <span>
-            Verify your email to upload recordings, start training, and manage billing.
+            Verify your email to upload recordings and start training.
             Check your inbox for the verification link.
           </span>
           {resendState === "sent" ? (
@@ -129,7 +120,6 @@ export default function Layout({ children }: LayoutProps) {
       <footer className="app-footer" aria-label="Site footer">
         <div className="app-footer-inner">
           <div className="app-footer-links">
-            <Link to="/pricing">Pricing</Link>
             <Link to="/contact">Contact</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/terms">Terms</Link>

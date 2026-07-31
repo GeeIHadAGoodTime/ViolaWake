@@ -1584,7 +1584,7 @@ class JobQueue:
             return
 
         try:
-            from app.routes.billing import refund_usage
+            from app.quota import refund_usage
 
             async with async_session_factory() as session:
                 await refund_usage(session, int(user_id), period_start, action="training_job")

@@ -51,9 +51,9 @@ try:
         _utcnow,
     )
     from app.models import UsageRecord, User
-    from app.routes import billing as billing_mod
+    from app import quota as billing_mod
     from app.routes import jobs as jobs_mod
-    from app.routes.billing import record_usage
+    from app.quota import record_usage
     from app.services.training_service import SharedInfrastructureUnavailableError
     from app.tenancy import QueuePartition
 

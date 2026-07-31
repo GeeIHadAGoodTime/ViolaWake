@@ -1,6 +1,6 @@
 # ViolaWake Live Deployment Tests
 
-This suite verifies the deployed ViolaWake frontend, API, PyPI package, email, billing, and WASM claims. Every test is marked `live` and is skipped unless `VIOLAWAKE_LIVE=1` is set.
+This suite verifies the deployed ViolaWake frontend, API, PyPI package, email, and WASM claims. Every test is marked `live` and is skipped unless `VIOLAWAKE_LIVE=1` is set.
 
 ## Targets
 
@@ -38,23 +38,20 @@ VIOLAWAKE_LIVE=1 pytest tests/live --no-cov -ra -vv
 - `VIOLAWAKE_LIVE_MAILOSAUR_KEY`: Mailosaur API key for automated verification email checks.
 - `VIOLAWAKE_LIVE_MAILOSAUR_SERVER_ID`: Mailosaur server id; required with the Mailosaur key.
 - `VIOLAWAKE_LIVE_WEBHOOK_URL`: optional webhook polling URL if inbound email is externally routed there.
-- `VIOLAWAKE_STRIPE_TEST_MODE=1`: enables Stripe Checkout card-flow tests. Use only with Stripe test-mode keys.
 - `VIOLAWAKE_LIVE_RATE_LIMIT=1`: enables tests that intentionally consume auth rate-limit budget.
 - `VIOLAWAKE_LIVE_UPLOAD_QUOTA=1`: enables the high-volume upload/quota probe against the live deployment.
 - `VIOLAWAKE_LIVE_STT=1`: enables faster-whisper model download for the STT probe.
 
 ## Coverage
 
-- `test_live_api.py`: health, registration, duplicate registration, login failure, `/me`, billing checkout, recordings auth, SQL injection validation, path traversal, JWT tamper, optional rate-limit and upload quota probes.
-- `test_live_website.py`: landing, pricing, privacy/terms, registration, login, forgot password, Developer checkout click, cookies, bogus route behavior, mobile viewport, console/network errors.
+- `test_live_api.py`: health, registration, duplicate registration, login failure, `/me`, recordings auth, SQL injection validation, path traversal, JWT tamper, optional rate-limit and upload quota probes.
+- `test_live_website.py`: landing, privacy/terms, registration, login, forgot password, cookies, bogus route behavior, mobile viewport, console/network errors.
 - `test_live_sdk.py`: clean-venv `pip install violawake`, optional `violawake[all]`, detector/VAD/VoicePipeline/STT/TTS behavior, edge cases.
 - `test_live_wasm.py`: live demo route reachability and optional ONNX/browser memory probes when assets exist.
 - `test_live_email.py`: Resend verification through Mailosaur/webhook when configured, otherwise records whether live registration auto-verifies.
-- `test_live_billing.py`: Stripe Checkout with test card, skipped unless `VIOLAWAKE_STRIPE_TEST_MODE=1`.
 
 ## Interpreting Common Failures
 
-- `/api/billing/checkout` returns `503`: Stripe secret or price env vars are not configured on the backend.
 - Registration returns `email_verified=true`: Resend is disabled or email sending failed and the backend auto-verified the user.
 - Email test skips with an unverified user: Resend may be configured, but no automated inbox was provided to verify delivery.
 - `pip install violawake[all]` fails: the published extras are not clean-machine installable. The smoke path only checks the core install.

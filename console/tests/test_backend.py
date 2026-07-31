@@ -608,7 +608,7 @@ class TestAuth:
         assert len(models) >= 1
         assert any(item["available"] for item in models)
 
-    def test_unverified_user_blocked_from_recording_training_and_billing(
+    def test_unverified_user_blocked_from_recording_and_training(
         self, client, unverified_auth_headers,
     ) -> None:
         wav_data = make_wav_bytes()
@@ -628,9 +628,6 @@ class TestAuth:
             json={"wake_word": "blocked", "recording_ids": [1], "epochs": 5},
         )
         assert training_resp.status_code == 403
-
-        billing_resp = client.get("/api/billing/usage", headers=unverified_auth_headers)
-        assert billing_resp.status_code == 403
 
 
 # ── Recording Tests ──────────────────────────────────────────────────────────

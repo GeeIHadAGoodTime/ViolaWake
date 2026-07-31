@@ -77,29 +77,6 @@ async def test_me_with_token_returns_profile(
 
 
 @pytest.mark.smoke
-async def test_billing_checkout_actual_route_configuration(
-    http_session: httpx.AsyncClient,
-    authed_user: AuthUser,
-    record_property: pytest.RecordProperty,
-) -> None:
-    """Probe the route used by the deployed frontend/source code."""
-    response = await http_session.post(
-        "/api/billing/checkout",
-        headers=auth_headers(authed_user.token),
-        json={"tier": "developer"},
-    )
-    record_property("status_code", response.status_code)
-    record_property("body", str(json_or_text(response))[:500])
-
-    assert response.status_code in (200, 503), json_or_text(response)
-    if response.status_code == 200:
-        checkout_url = response.json().get("checkout_url")
-        assert isinstance(checkout_url, str) and checkout_url.startswith("https://checkout.stripe.com")
-    else:
-        assert "configured" in str(json_or_text(response)).lower()
-
-
-@pytest.mark.smoke
 async def test_recordings_auth_required_and_fresh_user_list_empty(
     http_session: httpx.AsyncClient,
     authed_user: AuthUser,

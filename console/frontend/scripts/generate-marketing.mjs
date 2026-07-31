@@ -402,7 +402,6 @@ function renderFooter() {
       <p>Open-source custom wake word training and on-device detection.</p>
     </div>
     <div class="static-footer-links">
-      <a href="/pricing">Pricing</a>
       <a href="/docs">Docs</a>
       <a href="/compare/picovoice">Picovoice alternative</a>
       <a href="/privacy">Privacy</a>
@@ -506,7 +505,6 @@ async function writeRobots() {
     "/dashboard",
     "/record",
     "/training",
-    "/billing",
     "/model",
     "/account",
     "/teams",
@@ -571,7 +569,6 @@ async function writeLlmsTxt() {
     "",
     "- [Home](https://violawake.com/): Product overview and quick answer.",
     "- [Docs](https://violawake.com/docs): SDK quickstart, API docs, and training links.",
-    "- [Pricing](https://violawake.com/pricing): Free, Developer, Business, and Enterprise Console plans.",
     "- [FAQ](https://violawake.com/faq): Offline inference, Raspberry Pi, privacy, and licensing answers.",
     "",
     "## Comparisons",
@@ -648,7 +645,6 @@ async function writeRedirects() {
     "/record",
     "/record/*",
     "/training/*",
-    "/billing",
     "/model/*",
     "/account/*",
     "/teams",

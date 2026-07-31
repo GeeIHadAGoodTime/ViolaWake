@@ -161,17 +161,6 @@ class UsageRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
-class ProcessedStripeEvent(Base):
-    __tablename__ = "processed_stripe_events"
-
-    event_id: Mapped[str] = mapped_column(Text, primary_key=True)
-    processed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-
 class InboundEmailAutoReply(Base):
     __tablename__ = "inbound_email_auto_replies"
 

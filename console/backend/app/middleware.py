@@ -283,19 +283,17 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     # Conservative CSP for an API + console SaaS:
     # - default-src 'none' to deny by default
     # - frame-ancestors 'none' to deny iframe embedding (defence-in-depth alongside X-Frame-Options)
-    # - connect-src to api.violawake.com + Stripe (checkout/portal redirects originate browser-side)
     # - img-src/style-src/script-src 'self' for the React bundle; 'unsafe-inline' for Tailwind+Vite hash css
     _CSP = (
         "default-src 'none'; "
-        "script-src 'self' https://js.stripe.com; "
+        "script-src 'self'; "
         "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: https://*.stripe.com; "
+        "img-src 'self' data:; "
         "font-src 'self' data:; "
-        "connect-src 'self' https://api.violawake.com https://api.stripe.com; "
-        "frame-src https://checkout.stripe.com https://js.stripe.com; "
+        "connect-src 'self' https://api.violawake.com; "
         "frame-ancestors 'none'; "
         "base-uri 'self'; "
-        "form-action 'self' https://checkout.stripe.com"
+        "form-action 'self'"
     )
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
