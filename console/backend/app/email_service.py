@@ -109,6 +109,59 @@ class EmailService:
         )
         return await self._send_email(to, f"Your ViolaWake model {model_name} is ready", html)
 
+    async def send_training_failed(
+        self,
+        to: str,
+        wake_word: str,
+        reason: str,
+        *,
+        attempt_credited: bool = False,
+        queue_paused: bool = False,
+    ) -> bool:
+        """Tell a customer their training run stopped, and what it cost them.
+
+        ``send_training_complete`` had no counterpart, so the console emailed on
+        success and said nothing on failure. The only failure channel was the SSE
+        progress stream, which reaches a browser tab that is still open on that
+        page -- close it, or fail overnight, and the product never told the customer
+        anything at all. That silence is what left real accounts paused and
+        uncontacted for weeks (GeeIHadAGoodTime/Viola#4207, ledger C-050).
+
+        The two facts a failure email has to carry beyond "it failed" are whether it
+        cost an attempt and whether the account can still train, because those are
+        the two things the customer cannot see for themselves.
+        """
+        detail = escape(reason.strip()) if reason.strip() else "The run did not finish."
+        if attempt_credited:
+            detail += (
+                " <strong>This attempt was credited back, so it does not count "
+                "toward your monthly training limit.</strong>"
+            )
+        if queue_paused:
+            detail += (
+                " Training is paused on your account after several failed runs in a"
+                " row. You can resume it from the dashboard whenever you want to try"
+                " again."
+            )
+        html = self._render_email(
+            heading="Training didn't finish",
+            intro=(
+                f"Your <strong>{escape(wake_word)}</strong> wake-word training run "
+                f"stopped before it produced a model. {detail}"
+            ),
+            button_label="Open Console",
+            button_url=self._console_url("/dashboard"),
+            footer=(
+                "This mailbox is not monitored. If you need a hand, use the Contact "
+                "page in the console."
+            ),
+        )
+        return await self._send_email(
+            to,
+            f"Your ViolaWake training for {wake_word} didn't finish",
+            html,
+        )
+
     async def send_team_invite(
         self,
         to_email: str,

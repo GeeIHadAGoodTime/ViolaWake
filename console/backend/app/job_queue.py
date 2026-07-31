@@ -82,6 +82,20 @@ def _is_shared_infrastructure_fault(exc: BaseException) -> bool:
     return any(base.__name__ in _SHARED_INFRASTRUCTURE_FAULTS for base in type(exc).__mro__)
 
 
+# Not spending a strike (above) was only half the debt. The OTHER per-customer
+# currency is the monthly training quota, and it is charged at submit time on the
+# premise that "every submission burns real training compute" -- a premise that is
+# simply false for a job we never ran. A free-tier customer gets three attempts a
+# month, so one corpus outage could permanently cost a third of their month with no
+# refund path in the product at all (GeeIHadAGoodTime/Viola#4207, ledger C-337 /
+# C-212). Whenever a job ends without having consumed the compute the charge pays
+# for, the attempt goes back and the customer is told so in the same sentence.
+ATTEMPT_CREDITED_NOTE = (
+    "This attempt was credited back and does not count toward your monthly "
+    "training limit."
+)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -184,6 +198,18 @@ class TooManySubscribersError(RuntimeError):
     """Raised when a job already has too many SSE subscribers."""
 
 
+class UserQueuePausedError(RuntimeError):
+    """Raised when a paused user submits a job the queue could never dispatch.
+
+    ``_fill_queue_from_db`` and ``_execute_job`` both skip a paused user, so before
+    this existed a submission from a paused account was accepted, charged a training
+    attempt, answered "Queued for training.", and then sat PENDING forever. The
+    customer saw a queued job and lost an attempt for it; nothing ever ran. Refusing
+    the submit is the honest form of the same decision, and it happens before
+    ``record_usage`` so nothing is spent.
+    """
+
+
 class JobQueue:
     """Persistent async training job queue."""
 
@@ -213,6 +239,10 @@ class JobQueue:
         """Initialize persistence and start the dispatcher loop."""
         await self._initialize_db()
         await self._resume_jobs()
+        # Reconcile jobs stranded by a pause that happened before this process (or
+        # before this code) existed, so a restart is when they stop lying instead of
+        # one more restart they survive.
+        await self._abandon_stranded_pending_jobs()
         self._worker_task = asyncio.create_task(self._worker_loop(), name="job-queue-worker")
         await self._fill_queue_from_db()
         logger.info("Job queue started with max_concurrent=%s", settings.max_concurrent_jobs)
@@ -258,6 +288,18 @@ class JobQueue:
         When *priority* is not supplied it is resolved automatically from the
         user's subscription tier (free=0, developer=5, business=10).
         """
+        # Refuse before anything is persisted or charged: a paused user's job is
+        # skipped by both the dispatcher and the executor, so accepting it would
+        # spend a training attempt on a run that can never start.
+        breaker = await self.get_circuit_breaker(user_id)
+        if breaker.paused:
+            raise UserQueuePausedError(
+                "Training is paused on your account after "
+                f"{breaker.consecutive_failures} failed runs in a row, so this job "
+                "was not queued and no training attempt was used. Resume training "
+                "from your dashboard to try again."
+            )
+
         if await self._pending_count() >= self._queue.maxsize:
             raise QueueFullError("Training queue is full. Please try again later.")
 
@@ -670,6 +712,15 @@ class JobQueue:
                     "ALTER TABLE jobs ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0"
                 )
                 logger.info("Migrated jobs table: added cancel_requested column")
+            if "usage_refunded" not in columns:
+                # The credit claim lives on the job row, not in the caller, so a
+                # job can be credited at most once no matter how many code paths
+                # decide it deserves one. Defaulting existing rows to 0 is right:
+                # nothing has ever been credited before this column existed.
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN usage_refunded INTEGER NOT NULL DEFAULT 0"
+                )
+                logger.info("Migrated jobs table: added usage_refunded column")
 
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_priority_created ON jobs(status, priority DESC, created_at ASC)"
@@ -774,7 +825,17 @@ class JobQueue:
             breaker = await self.get_circuit_breaker(job.user_id)
             now = _utcnow()
             if breaker.paused:
-                logger.warning("Skipping job %s because user %s queue is paused", job_id, job.user_id)
+                # A job already PENDING when the account paused (a sibling of the
+                # run that tripped the breaker) is stranded: nothing dispatches it
+                # and nothing ever will. Returning here left it PENDING forever --
+                # the customer's console said "Queued" indefinitely while the
+                # attempt stayed spent. End it honestly and give the attempt back.
+                await self._abandon_before_running(
+                    job,
+                    "Training did not start: your training queue is paused after "
+                    f"{breaker.consecutive_failures} failed runs in a row. Resume "
+                    "training from your dashboard to try again.",
+                )
                 return
             if breaker.next_attempt_at is not None and breaker.next_attempt_at > now:
                 delay = (breaker.next_attempt_at - now).total_seconds()
@@ -968,20 +1029,30 @@ class JobQueue:
         except Exception as exc:
             current_job = await self.get_job(job_id)
             completed_at = _utcnow()
+            user_id = current_job.user_id if current_job is not None else None
+            credited = False
+            if user_id is not None and not _is_expected_training_outcome(exc):
+                if _is_shared_infrastructure_fault(exc):
+                    # Our missing prerequisite: pace the queue, charge no strike,
+                    # and give the attempt back. The strike exemption alone still
+                    # left the customer paying for our outage in the only currency
+                    # the free tier meters -- three runs a month.
+                    await self._record_transient_fault(user_id, str(exc))
+                    if current_job is not None:
+                        credited = await self._credit_training_attempt(current_job)
+                else:
+                    await self._record_failure(user_id, str(exc))
+
+            # Built after the classification so the customer is never told their
+            # attempt came back when it did not.
+            error_text = f"{exc} {ATTEMPT_CREDITED_NOTE}" if credited else str(exc)
             await self._update_job(
                 job_id,
                 status=JobStatus.FAILED,
                 completed_at=completed_at,
-                error=str(exc),
+                error=error_text,
                 cancel_requested=False,
             )
-            user_id = current_job.user_id if current_job is not None else None
-            if user_id is not None and not _is_expected_training_outcome(exc):
-                if _is_shared_infrastructure_fault(exc):
-                    # Our missing prerequisite: pace the queue, charge no strike.
-                    await self._record_transient_fault(user_id, str(exc))
-                else:
-                    await self._record_failure(user_id, str(exc))
             await self._publish(
                 job_id,
                 {
@@ -992,7 +1063,7 @@ class JobQueue:
                     "train_loss": 0.0,
                     "val_loss": 0.0,
                     "message": "Training failed.",
-                    "error": str(exc),
+                    "error": error_text,
                     "d_prime": current_job.d_prime if current_job is not None else None,
                     "model_id": current_job.model_id if current_job is not None else None,
                     "queue_position": None,
@@ -1005,6 +1076,10 @@ class JobQueue:
                 source="job_queue",
                 extra={"job_id": job_id},
             )
+            if current_job is not None:
+                await self._notify_training_failed(
+                    current_job, error_text, credited=credited
+                )
         finally:
             async with self._state_lock:
                 self._running_job_ids.discard(job_id)
@@ -1012,6 +1087,211 @@ class JobQueue:
             if output_dir is not None and output_dir.exists():
                 shutil.rmtree(output_dir, ignore_errors=True)
             await self._fill_queue_from_db()
+
+    async def _credit_training_attempt(self, job: Job) -> bool:
+        """Give one training attempt back for a job that produced no model.
+
+        The claim is taken on the job row first (``usage_refunded`` 0 -> 1 in a
+        single guarded UPDATE), so a job is credited at most once however many code
+        paths think it deserves one. Only then does the billing counter move, and it
+        moves in the period the charge was actually made in (derived from
+        ``job.created_at``), so a job submitted on the last day of a month cannot
+        turn a stale charge into a bonus attempt in the next one.
+
+        Returns True only when a counter really moved, so no caller can tell a
+        customer their attempt came back when it did not. On any failure the claim is
+        released rather than swallowed -- a lost credit is a customer silently out an
+        attempt, which is the entire bug this exists to close.
+        """
+        async with self._connect() as conn:
+            cursor = await conn.execute(
+                "UPDATE jobs SET usage_refunded = 1 "
+                "WHERE id = ? AND COALESCE(usage_refunded, 0) = 0",
+                (job.id,),
+            )
+            await conn.commit()
+            if cursor.rowcount == 0:
+                return False
+
+        credited = False
+        try:
+            from app.routes.billing import period_start_for, refund_usage
+
+            async with async_session_factory() as session:
+                credited = await refund_usage(
+                    session,
+                    job.user_id,
+                    action="training_job",
+                    period_start=period_start_for(job.created_at),
+                )
+                await session.commit()
+        except Exception as exc:
+            log_exception(
+                logger,
+                exc,
+                message="Training attempt credit failed",
+                source="job_queue",
+                extra={"job_id": job.id},
+            )
+
+        if not credited:
+            # Either the credit raised, or there was nothing to reverse. Release the
+            # claim so a retry (or an operator) can still issue it.
+            async with self._connect() as conn:
+                await conn.execute(
+                    "UPDATE jobs SET usage_refunded = 0 WHERE id = ?",
+                    (job.id,),
+                )
+                await conn.commit()
+            return False
+
+        return True
+
+    async def _abandon_stranded_pending_jobs(self, user_id: int | None = None) -> int:
+        """End every PENDING job that belongs to a paused user. Return the count.
+
+        A pause strands the rest of that user's queue: ``_fill_queue_from_db`` skips
+        a paused user, so their other PENDING jobs are never dispatched and never
+        will be. They stayed PENDING forever, charged, showing "Queued" in the
+        console (this is the shape that stranded job 85 in the #1481 wedge).
+
+        Called at the causal moment (``_record_failure`` when it pauses the account,
+        scoped to that user) and once at boot with no scope, which reconciles
+        anything stranded by a restart, a deploy, or a pause that predates this code.
+
+        The boot pass deliberately does not email. Those strands are weeks old, the
+        customer stopped waiting long ago, and the human contact for the already
+        affected accounts is a founder-approved decision (GeeIHadAGoodTime/Viola#2066),
+        not something a container restart should fire off on its own. The ledger and
+        the job state are still corrected, which is what the customer is owed here.
+        """
+        sql = (
+            "SELECT j.id FROM jobs j "
+            "JOIN user_circuit_breakers b ON b.user_id = j.user_id "
+            "WHERE j.status = ? AND b.paused = 1"
+        )
+        params: list[Any] = [JobStatus.PENDING.value]
+        if user_id is not None:
+            sql += " AND j.user_id = ?"
+            params.append(user_id)
+
+        async with self._connect() as conn, conn.execute(sql, tuple(params)) as cursor:
+            rows = await cursor.fetchall()
+
+        abandoned = 0
+        for row in rows:
+            job = await self.get_job(int(row["id"]))
+            if job is None or job.status is not JobStatus.PENDING:
+                continue
+            await self._abandon_before_running(
+                job,
+                "Training did not start: your training queue was paused before this "
+                "run could begin. Resume training from your dashboard to try again.",
+                notify=user_id is not None,
+            )
+            abandoned += 1
+
+        if abandoned:
+            logger.warning(
+                "Ended %s stranded pending job(s) for paused user(s) %s",
+                abandoned,
+                user_id if user_id is not None else "(boot reconciliation)",
+            )
+        return abandoned
+
+    async def _abandon_before_running(
+        self,
+        job: Job,
+        reason: str,
+        *,
+        notify: bool = True,
+    ) -> None:
+        """End a job the queue never dispatched, and give the attempt back.
+
+        A job that never started consumed none of the training compute the
+        submit-time charge pays for, so leaving it PENDING was the worst of both
+        outcomes: the customer stayed out an attempt AND the console kept saying
+        "Queued" indefinitely, with no failure, no email and no end state.
+        """
+        credited = await self._credit_training_attempt(job)
+        message = f"{reason} {ATTEMPT_CREDITED_NOTE}" if credited else reason
+
+        await self._update_job(
+            job.id,
+            status=JobStatus.FAILED,
+            completed_at=_utcnow(),
+            error=message,
+            cancel_requested=False,
+        )
+        await self._publish(
+            job.id,
+            {
+                "status": JobStatus.FAILED.value,
+                "progress": job.progress_pct,
+                "epoch": 0,
+                "total_epochs": job.epochs,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "message": "Training did not start.",
+                "error": message,
+                "d_prime": job.d_prime,
+                "model_id": job.model_id,
+                "queue_position": None,
+            },
+        )
+        logger.warning(
+            "Job %s for user %s never ran (%s); attempt credited=%s",
+            job.id,
+            job.user_id,
+            reason,
+            credited,
+        )
+        if notify:
+            await self._notify_training_failed(job, message, credited=credited)
+
+    async def _notify_training_failed(
+        self,
+        job: Job,
+        reason: str,
+        *,
+        credited: bool,
+    ) -> None:
+        """Best-effort "your training didn't finish" email.
+
+        ``send_training_complete`` had no counterpart, so a run that succeeded
+        emailed the customer and a run that failed told them nothing outside a live
+        SSE stream -- which only reaches a browser tab that happens to still be open
+        on the progress page. Close the tab, or fail overnight, and the product said
+        nothing at all (ledger C-050). Mirrors the completion email's best-effort
+        shape: a mail failure must never change the job's outcome.
+        """
+        try:
+            from app.email_service import get_email_service
+
+            email_svc = get_email_service()
+            if not email_svc.enabled:
+                return
+
+            async with async_session_factory() as session:
+                user = await session.get(User, job.user_id)
+            if user is None:
+                return
+
+            breaker = await self.get_circuit_breaker(job.user_id)
+            await email_svc.send_training_failed(
+                to=user.email,
+                wake_word=job.wake_word,
+                reason=reason,
+                attempt_credited=credited,
+                queue_paused=breaker.paused,
+            )
+        except Exception as email_exc:
+            log_exception(
+                logger,
+                email_exc,
+                message="Training-failed email failed",
+                source="email",
+            )
 
     async def _pending_count(self) -> int:
         async with self._connect() as conn, conn.execute(
@@ -1275,6 +1555,9 @@ class JobQueue:
                 user_id,
                 consecutive_failures,
             )
+            # The pause just stranded the rest of this user's queue. End those jobs
+            # now instead of leaving them PENDING forever with the attempts spent.
+            await self._abandon_stranded_pending_jobs(user_id)
             return
 
         self._schedule_retry_fill(user_id, FAILURE_BACKOFF_SECONDS)

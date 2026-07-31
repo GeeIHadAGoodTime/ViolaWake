@@ -12,7 +12,13 @@ from app.auth import (
     is_service_user,
 )
 from app.database import get_db
-from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
+from app.job_queue import (
+    Job,
+    QueueFullError,
+    TooManyPendingJobsError,
+    UserQueuePausedError,
+    init_job_queue,
+)
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.routes.billing import check_training_quota, record_usage
@@ -130,6 +136,14 @@ async def submit_training_job(
             recording_ids=recording_ids,
             epochs=epochs,
         )
+    except UserQueuePausedError as exc:
+        # Deliberately raised before record_usage below: the queue cannot dispatch
+        # a paused user's job, so charging a training attempt for it would take a
+        # third of a free-tier month for a run that never starts.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     except TooManyPendingJobsError as exc:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

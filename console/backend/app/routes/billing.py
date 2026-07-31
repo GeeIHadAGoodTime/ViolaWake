@@ -96,10 +96,22 @@ async def _verified_user_with_rate_key(
     return current_user
 
 
+def period_start_for(moment: datetime) -> datetime:
+    """Return the first instant of the UTC month that *moment* falls in.
+
+    Public because reversing a charge has to land in the period the charge was
+    made in, and only the caller knows when that was -- see ``refund_usage``.
+    A naive datetime is read as UTC, matching how the queue serializes times.
+    """
+    aware = moment if moment.tzinfo is not None else moment.replace(tzinfo=timezone.utc)
+    return aware.astimezone(timezone.utc).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
+
 def _current_period_start() -> datetime:
     """Return the first instant of the current UTC month (billing period)."""
-    now = datetime.now(timezone.utc)
-    return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return period_start_for(datetime.now(timezone.utc))
 
 
 def _current_period_end() -> datetime:
@@ -259,6 +271,58 @@ async def record_usage(db: AsyncSession, user_id: int, action: str = "training_j
             await db.flush()
     else:
         await db.flush()
+
+
+# ---------------------------------------------------------------------------
+# Public helper: refund_usage (called by the job queue)
+# ---------------------------------------------------------------------------
+
+async def refund_usage(
+    db: AsyncSession,
+    user_id: int,
+    *,
+    action: str = "training_job",
+    period_start: datetime | None = None,
+) -> bool:
+    """Credit one attempt back. Return True only if a counter actually moved.
+
+    The mirror of :func:`record_usage`, and the reason it has to exist: the charge
+    fires at SUBMIT time (``routes/jobs.py::submit_training_job``) on the premise
+    that a submission burns real training compute. When the job never runs -- our
+    shared-infrastructure outage, or a queue that was paused before it dispatched --
+    that premise is false, and on the free tier the customer is permanently out one
+    of three attempts for the month with no way to get it back. Before this there
+    was no decrement anywhere in the product, so "our fault" and "your fault" cost
+    the customer exactly the same.
+
+    The reversal lands on the period the charge was made against rather than on
+    "now", so a job submitted 07-31 that fails 08-01 cannot mint a bonus fourth
+    August attempt out of a July charge.
+
+    ``count > 0`` is part of the WHERE clause, not a Python check, so no caller and
+    no race can drive a usage counter negative.
+    """
+    period = period_start if period_start is not None else _current_period_start()
+    result = await db.execute(
+        update(UsageRecord)
+        .where(
+            UsageRecord.user_id == user_id,
+            UsageRecord.action == action,
+            UsageRecord.period_start == period,
+            UsageRecord.count > 0,
+        )
+        .values(count=UsageRecord.count - 1)
+    )
+    await db.flush()
+    credited = result.rowcount > 0
+    if credited:
+        logger.info(
+            "Credited one %s attempt back to user %s for period %s",
+            action,
+            user_id,
+            period.isoformat(),
+        )
+    return credited
 
 
 # ---------------------------------------------------------------------------
