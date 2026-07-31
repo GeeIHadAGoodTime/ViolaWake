@@ -444,6 +444,33 @@ class JobQueue:
             return None
         return self._row_to_job(row)
 
+    async def mark_usage_charged(
+        self,
+        job_id: int,
+        *,
+        user_id: int,
+        period_start: datetime,
+    ) -> None:
+        """Record that a billing attempt was charged for *job_id*.
+
+        Stamps the account charged and the period the charge landed in, and
+        resets the one-shot refund flag. The failure handler reads these back
+        to refund the exact charged period at most once if the job later dies
+        on our infrastructure (#4207). Called by the submit route right after
+        the job row exists, so a charged job is always marked refundable before
+        the worker can pick it up.
+        """
+        async with self._connect() as conn:
+            await conn.execute(
+                """
+                UPDATE jobs
+                SET usage_user_id = ?, usage_period_start = ?, usage_refunded = 0
+                WHERE id = ?
+                """,
+                (user_id, _serialize_datetime(period_start), job_id),
+            )
+            await conn.commit()
+
     async def list_jobs(self, partition: QueuePartition | int) -> list[Job]:
         """List persisted jobs for one partition, newest first.
 
@@ -734,6 +761,26 @@ class JobQueue:
                     "ALTER TABLE jobs ADD COLUMN tenant_key TEXT NOT NULL DEFAULT ''"
                 )
                 logger.info("Migrated jobs table: added tenant_key column")
+            # Charge-tracking (#4207): which billing account was charged for this
+            # job, which period the charge landed in, and whether that charge has
+            # already been refunded. NULL usage_period_start means "no refundable
+            # charge recorded" -- exactly the state of every pre-migration row, so
+            # none of them are ever refunded by accident.
+            if "usage_user_id" not in columns:
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN usage_user_id INTEGER"
+                )
+                logger.info("Migrated jobs table: added usage_user_id column")
+            if "usage_period_start" not in columns:
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN usage_period_start TEXT"
+                )
+                logger.info("Migrated jobs table: added usage_period_start column")
+            if "usage_refunded" not in columns:
+                await conn.execute(
+                    "ALTER TABLE jobs ADD COLUMN usage_refunded INTEGER NOT NULL DEFAULT 0"
+                )
+                logger.info("Migrated jobs table: added usage_refunded column")
 
             await conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_priority_created ON jobs(status, priority DESC, created_at ASC)"
@@ -1116,12 +1163,23 @@ class JobQueue:
                 cancel_requested=False,
             )
             failed_partition = current_job.partition if current_job is not None else None
+            infra_fault = _is_shared_infrastructure_fault(exc)
             if failed_partition is not None and not _is_expected_training_outcome(exc):
-                if _is_shared_infrastructure_fault(exc):
-                    # Our missing prerequisite: pace the queue, charge no strike.
+                if infra_fault:
+                    # Our missing prerequisite: pace the queue, charge no strike,
+                    # and refund the attempt this job spent at submit -- the job
+                    # consumed essentially none of the compute the charge exists
+                    # to meter (#4207).
                     await self._record_transient_fault(failed_partition, str(exc))
+                    await self._refund_usage_for_job(job_id)
                 else:
                     await self._record_failure(failed_partition, str(exc))
+            # Failure email: the console had send_training_complete but no failure
+            # counterpart, so a failed customer learned nothing by email (#4207).
+            # An infra fault is refunded, so the copy must say the attempt was not
+            # charged; a genuine failure kept its charge.
+            if current_job is not None:
+                await self._send_failure_email(current_job, str(exc), charged=not infra_fault)
             await self._publish(
                 job_id,
                 {
@@ -1487,6 +1545,89 @@ class JobQueue:
             error,
         )
         self._schedule_retry_fill(partition, FAILURE_BACKOFF_SECONDS)
+
+    async def _refund_usage_for_job(self, job_id: int) -> None:
+        """Credit back the training attempt charged for *job_id*, at most once.
+
+        Only reached for a shared-infrastructure fault -- a genuine per-user
+        failure keeps its charge (the guard is narrow, not an amnesty). The
+        once-only guarantee is a two-DB claim: flip ``usage_refunded`` 0->1 in
+        the queue DB FIRST, guarded by ``WHERE usage_refunded = 0 AND
+        usage_period_start IS NOT NULL`` so exactly one caller can win it however
+        many paths ask; only the winner then decrements the billing counter for
+        the SAME period the charge landed in. If the billing decrement fails, the
+        claim is rolled back so the refund is retryable and never silently lost --
+        the invariant is at-most-once, never a phantom double credit.
+        """
+        async with self._connect() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE jobs
+                SET usage_refunded = 1
+                WHERE id = ? AND usage_refunded = 0 AND usage_period_start IS NOT NULL
+                """,
+                (job_id,),
+            )
+            await conn.commit()
+            if cursor.rowcount == 0:
+                # Already refunded, or never carried a refundable charge.
+                return
+            async with conn.execute(
+                "SELECT usage_user_id, usage_period_start FROM jobs WHERE id = ?",
+                (job_id,),
+            ) as read_cursor:
+                row = await read_cursor.fetchone()
+
+        user_id = row["usage_user_id"] if row is not None else None
+        period_start = _deserialize_datetime(row["usage_period_start"]) if row is not None else None
+        if user_id is None or period_start is None:
+            return
+
+        try:
+            from app.routes.billing import refund_usage
+
+            async with async_session_factory() as session:
+                await refund_usage(session, int(user_id), period_start, action="training_job")
+                await session.commit()
+        except Exception as exc:
+            # Roll the claim back so a later path (or a retry) can still refund;
+            # never leave a claimed-but-not-credited job.
+            with suppress(Exception):
+                async with self._connect() as conn:
+                    await conn.execute(
+                        "UPDATE jobs SET usage_refunded = 0 WHERE id = ?",
+                        (job_id,),
+                    )
+                    await conn.commit()
+            log_exception(
+                logger,
+                exc,
+                message="Failed to refund training attempt after infrastructure fault",
+                source="job_queue",
+                extra={"job_id": job_id},
+            )
+
+    async def _send_failure_email(self, job: Job, reason: str, *, charged: bool) -> None:
+        """Best-effort training-FAILED email (the missing counterpart to complete)."""
+        try:
+            from app.email_service import get_email_service
+
+            email_svc = get_email_service()
+            if not email_svc.enabled:
+                return
+            async with async_session_factory() as session:
+                user = await session.get(User, job.user_id)
+            if user is not None:
+                await email_svc.send_training_failed(
+                    to=user.email,
+                    model_name=job.wake_word,
+                    reason=reason,
+                    charged=charged,
+                )
+        except Exception as email_exc:
+            log_exception(
+                logger, email_exc, message="Training-failed email failed", source="email"
+            )
 
     def _schedule_retry_fill(self, partition: QueuePartition, delay_seconds: float) -> None:
         existing = self._retry_tasks.get(partition)

@@ -109,6 +109,47 @@ class EmailService:
         )
         return await self._send_email(to, f"Your ViolaWake model {model_name} is ready", html)
 
+    async def send_training_failed(
+        self,
+        to: str,
+        model_name: str,
+        reason: str,
+        *,
+        charged: bool = True,
+    ) -> bool:
+        """Notify the customer that a training run failed.
+
+        The console had ``send_training_complete`` but no failure counterpart, so
+        a customer whose run failed learned nothing by email -- the missing half of
+        the training-outcome channel (#4207). ``charged`` tells the reader whether
+        the attempt counted against their monthly quota: our-side infrastructure
+        faults are refunded, so the copy must not imply they lost an attempt.
+        """
+        if charged:
+            billing_line = (
+                "This run counted as one of your monthly training attempts. "
+                "Wake-word training varies run to run, so training again with the "
+                "same recordings often succeeds."
+            )
+        else:
+            billing_line = (
+                "This failure was on our side, not your recordings, so it did "
+                "<strong>not</strong> count against your monthly training attempts."
+            )
+        html = self._render_email(
+            heading="Training didn't finish",
+            intro=(
+                f"Your training run for <strong>{escape(model_name)}</strong> did not "
+                f"complete.<br><br>Reason: {escape(reason)}<br><br>{billing_line}"
+            ),
+            button_label="Open Console",
+            button_url=self._console_url("/dashboard"),
+            footer="You can review the run and try again from your dashboard.",
+        )
+        return await self._send_email(
+            to, f"Your ViolaWake training for {model_name} didn't finish", html
+        )
+
     async def send_team_invite(
         self,
         to_email: str,

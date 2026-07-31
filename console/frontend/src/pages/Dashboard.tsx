@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Model, SubscriptionResponse } from "../types";
 import { getModels, getSubscription } from "../api";
 import ModelCard from "../components/ModelCard";
+import TrainingPauseBanner from "../components/TrainingPauseBanner";
 
 export default function DashboardPage() {
   const [models, setModels] = useState<Model[]>([]);
@@ -92,6 +93,8 @@ export default function DashboardPage() {
           + Train New Model
         </button>
       </div>
+
+      <TrainingPauseBanner onResumed={loadModels} />
 
       {showUpgrade && (
         <div className="dashboard-upgrade-banner" role="status">

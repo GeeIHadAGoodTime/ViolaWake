@@ -71,6 +71,14 @@ export interface TrainingStartResponse {
   status: TrainingStatus;
 }
 
+export interface CircuitBreakerState {
+  consecutive_failures: number;
+  paused: boolean;
+  next_attempt_at: string | null;
+  last_failure_at: string | null;
+  pause_reason: string | null;
+}
+
 export interface TrainingEvent {
   status: TrainingStatus;
   progress: number;

@@ -23,6 +23,17 @@ import { ToastProvider } from "../contexts/ToastContext";
 vi.mock("../api", () => ({
   getModels: vi.fn(),
   getSubscription: vi.fn(),
+  // The dashboard now renders a TrainingPauseBanner that reads breaker state on
+  // mount (#4207). Default it to not-paused so it renders nothing and leaves
+  // these quota-contradiction assertions unchanged.
+  getCircuitBreakerState: vi.fn().mockResolvedValue({
+    consecutive_failures: 0,
+    paused: false,
+    next_attempt_at: null,
+    last_failure_at: null,
+    pause_reason: null,
+  }),
+  resumeTraining: vi.fn(),
 }));
 
 function renderDashboard() {
