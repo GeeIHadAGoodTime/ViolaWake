@@ -2,6 +2,17 @@
 
 Update this file before each release. These notes are used as the GitHub Release body in `.github/workflows/release.yml`.
 
+## v0.2.10 - ViolaWake Is a Free Service
+
+### Highlights
+
+- **The ViolaWake Console is now free.** Payments were removed entirely: no paid tiers, no checkout, no billing pages. Sign up, record, train up to 3 models a month, and download ONNX models at no charge.
+- **No SDK code changes.** This release refreshes the published package metadata (README) so PyPI matches the free service. The SDK remains Apache 2.0 and runs fully on-device.
+
+### Breaking Changes
+
+- None. (Server-side, the Console's `/api/billing/*` endpoints were removed; the SDK never called them.)
+
 ## v0.2.6 - Console Recording + Quality Visibility
 
 ### Highlights
