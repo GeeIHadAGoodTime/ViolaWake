@@ -14,3 +14,11 @@
 entrypoint.sh text eol=lf
 Dockerfile* text eol=lf
 *.py text eol=lf
+
+# systemd units are installed verbatim onto a Linux host. A CRLF unit parses,
+# but every value keeps a trailing carriage return -- so ExecStart's last
+# argument becomes "<path>\r" and the unit fails with a file-not-found that
+# reads exactly like a typo. Same failure family as the entrypoint.sh incident
+# above, one layer out.
+*.service text eol=lf
+*.timer text eol=lf

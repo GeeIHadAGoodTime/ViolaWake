@@ -325,3 +325,24 @@ gates:
       - console/tests/test_service_tenant_isolation.py::TestPartitionBoundary::test_submission_offers_no_bare_account_form
       - console/tests/test_service_tenant_isolation.py::TestMigrationFromPreTenantDatabase::test_existing_rows_keep_their_state_and_gain_partitioning
       - console/tests/test_service_tenant_isolation.py::TestMigrationFromPreTenantDatabase::test_migration_is_idempotent
+  - gate_id: backend-deploy-automation
+    contract: A commit merged to master must reach the running api.violawake.com backend without a human SSH session, and must do it safely. The reconciler builds the target commit, labels the image with it, import-preflights the image, recreates the container, then proves the RUNNING image carries the target revision before calling it deployed. It defers rather than killing an in-flight training job, refuses a destructive alembic revision, refuses to build under the host disk floor, never force-moves a dirty or diverged deploy checkout, rolls back to the previously running image on any failed verification, and pages when undeployed drift outlives the staleness window. Proven against master 3697759 - the box was serving 577a5f7 with a merged customer-facing billing fix still undeployed two hours after it landed, and no workflow in the repo built or shipped a backend image at all.
+    detector: tests/unit/test_deploy_backend.py
+    own_tests:
+      - tests/unit/test_deploy_backend.py::test_timer_and_service_units_are_shipped
+      - tests/unit/test_deploy_backend.py::test_build_is_labelled_with_the_commit_it_was_built_from
+      - tests/unit/test_deploy_backend.py::test_happy_path_builds_preflights_recreates_and_verifies
+      - tests/unit/test_deploy_backend.py::test_preflight_runs_before_the_container_is_recreated
+      - tests/unit/test_deploy_backend.py::test_no_drift_is_a_noop
+      - tests/unit/test_deploy_backend.py::test_in_flight_training_jobs_defer_instead_of_killing_the_job
+      - tests/unit/test_deploy_backend.py::test_unreadable_job_queue_is_not_permission_to_deploy
+      - tests/unit/test_deploy_backend.py::test_destructive_migration_blocks_the_unattended_deploy
+      - tests/unit/test_deploy_backend.py::test_low_disk_refuses_to_build
+      - tests/unit/test_deploy_backend.py::test_dirty_deploy_checkout_refuses
+      - tests/unit/test_deploy_backend.py::test_diverged_checkout_is_never_force_moved
+      - tests/unit/test_deploy_backend.py::test_unhealthy_container_rolls_back_to_the_previous_image
+      - tests/unit/test_deploy_backend.py::test_rollback_restores_service_and_reports_exit_2
+      - tests/unit/test_deploy_backend.py::test_healthy_container_serving_the_old_revision_is_a_failed_deploy
+      - tests/unit/test_deploy_backend.py::test_build_failure_never_recreates_the_container
+      - tests/unit/test_deploy_backend.py::test_import_preflight_failure_never_recreates_the_container
+      - tests/unit/test_deploy_backend.py::test_persistent_undeployed_drift_pages

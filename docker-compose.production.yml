@@ -19,6 +19,16 @@ services:
     build:
       context: .
       dockerfile: console/Dockerfile.backend
+      # Which commit this image was built from. scripts/deploy_backend.py sets
+      # VIOLAWAKE_BUILD_SHA and then reads this label back off the RUNNING
+      # container to answer "what is actually serving?" -- a question the tag
+      # `:latest` cannot answer, and the question behind every "is that fix
+      # live?" ambiguity this stack has had. A hand-run `docker compose build`
+      # with the variable unset simply labels the image `unknown`, which the
+      # deploy script treats as "not verifiable", never as "up to date".
+      labels:
+        org.opencontainers.image.revision: ${VIOLAWAKE_BUILD_SHA:-unknown}
+        org.opencontainers.image.source: https://github.com/GeeIHadAGoodTime/ViolaWake
     # GHCR mirror of the locally-built image so a fresh host can
     # `docker compose pull backend` instead of rebuilding from source.
     # On the build host, `docker compose build` produces this same name.

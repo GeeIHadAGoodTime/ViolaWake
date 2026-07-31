@@ -1,0 +1,30 @@
+# One tick of the ViolaWake backend deploy reconciler (see
+# scripts/deploy_backend.py). Driven by the paired .timer; oneshot so a single
+# bad tick can never wedge the timer.
+#
+# Installed by infra/deploy/install.sh, which substitutes @REPO_ROOT@ and
+# @PYTHON@ for this host's real paths. Do not hand-edit the installed copy --
+# the box-drift pager compares it against the repo and a hand-edit is exactly
+# the divergence this whole change exists to remove.
+#
+# flock -n -E 0: if a previous tick is still building, this tick exits 0 and
+# leaves it alone rather than stacking a second build onto the same host.
+[Unit]
+Description=ViolaWake backend deploy reconciler (one tick)
+Documentation=file://@REPO_ROOT@/docs/DEPLOYMENT.md
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO_ROOT@
+# Optional, off-VCS. Where the operator points the red-alert sink and any
+# host-specific overrides. Leading '-' means a missing file is not an error.
+EnvironmentFile=-/etc/violawake-deploy.env
+ExecStart=/usr/bin/flock -n -E 0 /run/violawake-deploy.lock @PYTHON@ @REPO_ROOT@/scripts/deploy_backend.py
+# A cold-cache image build is the long pole; the script's own build timeout is
+# lower, so this is a backstop, not the operative limit.
+TimeoutStartSec=4800
+StandardOutput=journal
+StandardError=journal
