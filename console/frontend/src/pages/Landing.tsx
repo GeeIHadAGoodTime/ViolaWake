@@ -175,8 +175,9 @@ for frame in mic_stream():
             <div className="step-number">3</div>
             <h3 className="step-title">Train</h3>
             <p className="step-desc">
-              Train a custom TemporalCNN head on OpenWakeWord embeddings and
-              review the metrics.
+              We supplement your recordings with thousands of generated voice
+              samples and confusable negatives, then train a custom TemporalCNN
+              head on OpenWakeWord embeddings.
             </p>
           </div>
           <div className="step-card">

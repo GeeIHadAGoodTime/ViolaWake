@@ -136,7 +136,7 @@ ViolaWake's production reference model is a TemporalCNN(96, 9) wake head with 25
 
 1. Sign up.
 2. Record 10+ samples.
-3. Train a custom TemporalCNN head.
+3. Train a custom TemporalCNN head. Training supplements your recordings with thousands of generated voice samples and confusable negatives so the model generalizes beyond your voice.
 4. Review metrics.
 5. Download the ONNX model.
 6. Deploy with the Apache 2.0 SDK.
@@ -210,7 +210,7 @@ For offline-only deployments, confirm Picovoice license behavior directly with P
 
 ## Training and model ownership
 
-Porcupine's Console flow is optimized for speed: choose a language, type the phrase, train, and download a platform-specific model. ViolaWake asks for real voice samples because it trains a detector from your recordings. A first test can start with 10 samples; production work should add more speakers, rooms, microphones, distances, background speech, music, and hard negatives.
+Porcupine's Console flow is optimized for speed: choose a language, type the phrase, train, and download a platform-specific model. ViolaWake starts from real voice samples you record, then supplements them with a generated corpus: text-to-speech positives in many voices plus two rounds of phonetically-confusable negatives, so the detector generalizes beyond your voice and your room. A first test can start with 10 samples; production work should add more speakers, rooms, microphones, distances, background speech, music, and hard negatives.
 
 ViolaWake's ownership story is direct. You receive an ONNX wake head. You can version it, evaluate it, ship it inside your release artifact, and run it with the Apache 2.0 SDK. The training pipeline uses an OpenWakeWord embedding backbone and a small ViolaWake TemporalCNN head.
 
@@ -561,7 +561,7 @@ ${commonLinks}
       {
         q: "How many training samples do I need?",
         a:
-          "The Console can test with 10 recordings. Production deployments should collect more samples across speakers, rooms, microphones, distances, and background conditions.",
+          "The Console can test with 10 recordings. Training supplements your recordings with thousands of generated text-to-speech samples and confusable negatives, which is why a small recording set can produce a usable first model. Production deployments should still collect more samples across speakers, rooms, microphones, distances, and background conditions.",
       },
       {
         q: "What is d-prime?",
@@ -601,7 +601,7 @@ Yes, with the normal caveat that wake word quality depends on the exact hardware
 
 ## How many training samples do I need?
 
-The Console can run a first test from 10 recordings. That is useful for proving the workflow. Production work needs more data. Collect more speakers, more rooms, different distances, background speech, music, fans, TV, and phonetically similar words.
+The Console can run a first test from 10 recordings. That is useful for proving the workflow. Behind the scenes, training supplements your recordings with thousands of generated samples: text-to-speech positives in many voices, augmented variants of your clips, and two rounds of phonetically-confusable negatives. That generated corpus is why a small recording set can produce a usable first model. Production work still needs more real data. Collect more speakers, more rooms, different distances, background speech, music, fans, TV, and phonetically similar words.
 
 ## What is d-prime?
 
