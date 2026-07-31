@@ -224,6 +224,17 @@ gates:
       - console/tests/test_training_queue_wedge.py::test_health_paused_blocked_only_is_ok
       - console/tests/test_training_queue_wedge.py::test_health_genuine_dispatch_wedge_is_error
       - console/tests/test_training_queue_wedge.py::test_health_normal_backlog_all_slots_busy_is_ok
+  - gate_id: infra-fault-refunds-training-attempt
+    contract: A training job that dies on OUR infrastructure (a SharedInfrastructureUnavailableError shared-corpus/TTS outage, or a job that can never dispatch because the account is already paused) must not spend one of a customer's monthly training attempts, and a failure must be communicated. Concretely (violawake issue 4207, four hard-paused uncontacted accounts 122/130/138/150, quota reset 2026-08-01) submit_training_job charges at submit via record_usage, so a paused account's submit is REFUSED with 409 BEFORE record_usage fires; an infra-fault failure in _execute_job calls _refund_usage_for_job, which credits the attempt back exactly once (the job row's one-shot usage_refunded flag guards however many paths ask) and against the period the charge was made in (mark_usage_charged stamps usage_period_start; refund_usage decrements that period with a count greater than zero clamp, so a 07-31 submit failing 08-01 credits July and can never mint a bonus August attempt); a genuine per-user failure still keeps its charge and still trips the breaker (the guard is narrow, not an amnesty); and every failure sends send_training_failed (the console had send_training_complete and no counterpart), with charged False on an infra fault so the copy never implies a lost attempt. Reds on the pre-fix shape -- charge-at-submit with no refund seam, no paused-submit guard, and no failure email.
+    detector: console/tests/test_infra_fault_does_not_charge_attempt.py
+    own_tests:
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_infra_fault_refunds_the_charged_attempt
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_refund_is_idempotent_and_spares_the_legit_attempt
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_a_genuine_failure_keeps_its_charge_and_trips_the_breaker
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_paused_submit_is_refused_before_any_charge
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_a_failure_emails_the_customer
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_infra_fault_email_says_the_attempt_was_not_charged
+      - console/tests/test_infra_fault_does_not_charge_attempt.py::test_a_pause_is_visible_and_clearable
   - gate_id: edge-tts-synthesis-resilience
     contract: "EDGE_TTS_VOICES must never carry a voice Microsoft has retired server-side (GlitchTip 34/38, ticket 1768 -- en-US-DavisNeural + 6 others silently failed every attempt, forever); a distinct (voice, text) edge-tts failure must be reported on its own instead of being deduped away by an earlier, unrelated failure sharing the same generic exception text; that dedup state must reset per training job so one job's failure never silently suppresses a different job's identical failure; and the Kokoro TTS fallback must apply per-sample, never sticking to Kokoro-only for an entire run's remaining (and otherwise-healthy) voices just because one earlier voice failed."
     detector: tests/unit/test_train.py

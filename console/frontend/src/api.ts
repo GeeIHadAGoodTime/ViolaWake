@@ -6,6 +6,7 @@ import type {
   BulkUploadResponse,
   RecordingCountResponse,
   TrainingStartResponse,
+  CircuitBreakerState,
   TrainingJob,
   Model,
   ModelConfig,
@@ -372,6 +373,22 @@ export async function createTrainingStream(
   const token = await createDownloadToken("training_stream", jobId);
   const url = `${BASE_URL}/training/stream/${jobId}?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
+}
+
+/**
+ * Read the caller's training circuit-breaker state. When `paused` is true the
+ * account is locked after repeated failures and no new training can dispatch
+ * until it is resumed.
+ */
+export async function getCircuitBreakerState(): Promise<CircuitBreakerState> {
+  return request<CircuitBreakerState>("/jobs/circuit-breaker/state");
+}
+
+/**
+ * Clear a training pause and let queued work resume. Idempotent server-side.
+ */
+export async function resumeTraining(): Promise<MessageResponse> {
+  return request<MessageResponse>("/jobs/resume", { method: "POST" });
 }
 
 // --- Models ---

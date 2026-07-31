@@ -261,6 +261,49 @@ async def record_usage(db: AsyncSession, user_id: int, action: str = "training_j
         await db.flush()
 
 
+async def refund_usage(
+    db: AsyncSession,
+    user_id: int,
+    period_start: datetime,
+    action: str = "training_job",
+) -> None:
+    """Credit back one previously-charged attempt for a SPECIFIC billing period.
+
+    Charge-at-submit (``record_usage`` above) is a deliberate premise -- a
+    submission consumes training compute -- but it breaks when a job dies on
+    OUR infrastructure before it consumes that compute (#4207). The refund is
+    the exception to the rule, and it must be exact in two ways:
+
+    * **Period-correct.** The credit lands on ``period_start`` -- the period the
+      charge was actually made in, carried on the job row -- never the current
+      period. A 07-31 submit that fails on 08-01 must decrement July's counter,
+      not mint a bonus attempt in August.
+    * **Clamped, never negative.** ``count > 0`` is part of the WHERE clause, so
+      a refund can only lower a positive counter. If no row exists for that
+      period (e.g. the charge was never actually recorded), or the counter is
+      already zero, the statement matches nothing and does nothing -- it can
+      never create a row or push a counter below zero, so it can never manufacture
+      quota the user did not have.
+
+    Idempotency across "however many paths ask" is the CALLER's guard (the job
+    row's one-shot ``usage_refunded`` flag), not this function's: this decrements
+    unconditionally when it matches, so calling it twice for one charge would
+    over-credit. It is deliberately the narrow arithmetic primitive; the job
+    queue owns the once-only claim.
+    """
+    await db.execute(
+        update(UsageRecord)
+        .where(
+            UsageRecord.user_id == user_id,
+            UsageRecord.action == action,
+            UsageRecord.period_start == period_start,
+            UsageRecord.count > 0,
+        )
+        .values(count=UsageRecord.count - 1)
+    )
+    await db.flush()
+
+
 # ---------------------------------------------------------------------------
 # Public helper: check_training_quota (dependency for training route)
 # ---------------------------------------------------------------------------

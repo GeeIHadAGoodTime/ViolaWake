@@ -202,6 +202,11 @@ def mock_training_queue():
     queue = SimpleNamespace()
     job_ids = iter(range(1, 1000))
     queue.submit_job = AsyncMock(side_effect=lambda **_: next(job_ids))
+    # submit_training_job now consults the breaker (refuse a paused submit before
+    # charging, #4207) and stamps the charged period on the job for a later
+    # refund; the stub queue must answer both like a healthy, unpaused queue.
+    queue.get_circuit_breaker = AsyncMock(return_value=SimpleNamespace(paused=False))
+    queue.mark_usage_charged = AsyncMock(return_value=None)
 
     with patch("app.routes.jobs.init_job_queue", new=AsyncMock(return_value=queue)):
         yield queue

@@ -754,7 +754,11 @@ class TestTraining:
 
     def test_start_training(self, client, auth_headers) -> None:
         ids = self._upload_samples(client, auth_headers, "traintest")
-        queue = SimpleNamespace(submit_job=AsyncMock(return_value=101))
+        queue = SimpleNamespace(
+            submit_job=AsyncMock(return_value=101),
+            get_circuit_breaker=AsyncMock(return_value=SimpleNamespace(paused=False)),
+            mark_usage_charged=AsyncMock(return_value=None),
+        )
         with patch("app.routes.jobs.init_job_queue", new=AsyncMock(return_value=queue)):
             resp = client.post(
                 "/api/training/start",
@@ -790,6 +794,8 @@ class TestTraining:
         queue = SimpleNamespace(
             submit_job=AsyncMock(return_value=job.id),
             get_job=AsyncMock(return_value=job),
+            get_circuit_breaker=AsyncMock(return_value=SimpleNamespace(paused=False)),
+            mark_usage_charged=AsyncMock(return_value=None),
         )
         with patch("app.routes.jobs.init_job_queue", new=AsyncMock(return_value=queue)):
             resp = client.post(

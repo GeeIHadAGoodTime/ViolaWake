@@ -15,7 +15,7 @@ from app.database import get_db
 from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
-from app.routes.billing import check_training_quota, record_usage
+from app.routes.billing import _current_period_start, check_training_quota, record_usage
 from app.schemas import (
     JobCircuitBreakerResponse,
     JobResponse,
@@ -129,6 +129,23 @@ async def submit_training_job(
     wake_word, recording_ids, epochs = await validate_training_request(body, current_user, db)
     queue = await init_job_queue()
 
+    # A paused breaker (FAILURE_THRESHOLD real failures, next_attempt_at=NULL)
+    # only clears via resume_user -- the dispatcher skips its jobs silently and
+    # they can never auto-run. Charging an attempt for a job that can never
+    # dispatch is exactly the #4207 harm, so refuse BEFORE record_usage fires.
+    # Only `paused` blocks here; a plain backoff (next_attempt_at in the future)
+    # is temporary and the job WILL run once it elapses, so those still enqueue.
+    breaker = await queue.get_circuit_breaker(partition)
+    if breaker.paused:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Training is paused after repeated failures and must be resumed "
+                "before you can submit again. No training attempt was used."
+            ),
+            headers={"X-Training-Paused": "1"},
+        )
+
     try:
         job_id = await queue.submit_job(
             partition=partition,
@@ -147,6 +164,14 @@ async def submit_training_job(
             detail=str(exc),
         ) from exc
 
+    # Charge the attempt, and stamp the job with the account + period the charge
+    # landed in. The failure handler reads those back to refund the SAME period
+    # (so a month-boundary failure cannot mint a bonus attempt) exactly once
+    # (via the row's one-shot usage_refunded flag) if the job dies on our
+    # infrastructure. Stamp first so the worker can never observe a charged job
+    # that is not yet marked refundable.
+    period_start = _current_period_start()
+    await queue.mark_usage_charged(job_id, user_id=current_user.id, period_start=period_start)
     await record_usage(db, current_user.id, action="training_job")
     return JobSubmitResponse(job_id=job_id, status="queued")
 
