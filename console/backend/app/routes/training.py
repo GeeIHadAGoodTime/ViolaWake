@@ -19,7 +19,7 @@ from app.database import get_db
 from app.job_queue import TooManySubscribersError, init_job_queue
 from app.models import User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
-from app.routes.billing import check_training_quota
+from app.quota import check_training_quota
 from app.routes.jobs import get_owned_job_or_404, submit_training_job
 from app.schemas import JobSubmitRequest, TrainingStartResponse, TrainingStatusResponse
 
@@ -112,7 +112,7 @@ async def _resolve_sse_user(
     if not user.email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Verify your email address to access recording, training, and billing features.",
+            detail="Verify your email address to access recording and training features.",
         )
     return user
 

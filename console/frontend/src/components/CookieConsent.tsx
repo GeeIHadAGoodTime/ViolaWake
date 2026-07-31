@@ -9,7 +9,7 @@ export default function CookieBanner() {
       buttonStyle={{ background: "#5b4bd8", color: "#fff", borderRadius: "6px", padding: "0.5rem 1.25rem", fontWeight: 600 }}
       expires={365}
     >
-      We use cookies for authentication and payment processing.{" "}
+      We use cookies for authentication.{" "}
       <a href="/privacy" style={{ color: "#a29bfe", textDecoration: "underline", textUnderlineOffset: "0.15em" }}>Privacy Policy</a>
     </CookieConsent>
   );

@@ -5,7 +5,7 @@ export default function PrivacyPage() {
     <div className="legal-page">
       <div className="legal-content">
         <h1 className="legal-title">Privacy Policy</h1>
-        <p className="legal-updated">Last updated: May 8, 2026</p>
+        <p className="legal-updated">Last updated: July 31, 2026</p>
 
         <section className="legal-section">
           <h2>1. Introduction</h2>
@@ -45,12 +45,6 @@ export default function PrivacyPage() {
             sooner.
           </p>
 
-          <h3>2.4 Billing Information</h3>
-          <p>
-            Payment processing is handled by Stripe. We do not store full card
-            numbers or CVV values. We store only the subscription and billing
-            metadata needed to manage your Console account.
-          </p>
         </section>
 
         <section className="legal-section">
@@ -58,7 +52,6 @@ export default function PrivacyPage() {
           <ul>
             <li>Provide and maintain the ViolaWake Console</li>
             <li>Train the wake word model you requested</li>
-            <li>Process subscriptions and billing events</li>
             <li>
               Send service emails such as verification, password reset, and
               training completion messages
@@ -119,37 +112,18 @@ export default function PrivacyPage() {
             </li>
             <li>
               Account deletion immediately removes account access, scrubs
-              account identity fields, cancels the linked Stripe customer, and
-              schedules retained recordings, trained models, and job records for
-              permanent deletion after 30 days.
+              account identity fields, and schedules retained recordings,
+              trained models, and job records for permanent deletion after 30
+              days.
             </li>
           </ul>
         </section>
 
         <section className="legal-section">
-          <h2>8. Payment Processing</h2>
-          <p>
-            Payment processing is provided by Stripe. When you start or manage a
-            paid subscription, we share the information needed to create and
-            manage the Stripe Checkout or billing session, including your email
-            address and any billing address collected by Stripe Checkout. Stripe
-            processes payment details under its own privacy policy, available at{" "}
-            <a
-              href="https://stripe.com/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              stripe.com/privacy
-            </a>
-            .
-          </p>
-        </section>
-
-        <section className="legal-section">
-          <h2>9. Email Service</h2>
+          <h2>8. Email Service</h2>
           <p>
             We use Resend to send transactional emails on our behalf, including
-            account verification, password reset, billing, and training status
+            account verification, password reset, and training status
             messages. Resend receives the email address and message content
             needed to deliver those emails. Resend&apos;s privacy policy is
             available at{" "}
@@ -165,7 +139,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="legal-section">
-          <h2>10. Your Rights</h2>
+          <h2>9. Your Rights</h2>
           <ul>
             <li>Access the account information we hold about you</li>
             <li>Correct inaccurate account details</li>
@@ -174,16 +148,16 @@ export default function PrivacyPage() {
           </ul>
           <p>
             You can export or delete your account at any time from the Account
-            Settings page. Account deletion cancels your Stripe customer record,
-            removes account access immediately, and schedules retained artifacts
-            for permanent deletion after 30 days. You can also contact{" "}
+            Settings page. Account deletion removes account access immediately
+            and schedules retained artifacts for permanent deletion after 30
+            days. You can also contact{" "}
             <a href="mailto:privacy@violawake.com">privacy@violawake.com</a> for
             privacy-related requests.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2>11. Changes to This Policy</h2>
+          <h2>10. Changes to This Policy</h2>
           <p>
             We may update this Privacy Policy from time to time. When we make
             material changes, we will update the date above and publish the
@@ -192,7 +166,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="legal-section">
-          <h2>12. Contact</h2>
+          <h2>11. Contact</h2>
           <p>
             For questions about this Privacy Policy or our data practices,
             contact us at{" "}

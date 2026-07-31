@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Console
+- **ViolaWake Console is now a free service.** Removed the ability to pay and all mention of paying: Stripe checkout/webhook/portal/subscription endpoints, the Pricing and Billing pages, upgrade banners and CTAs, paid-tier marketing copy, Stripe CSP/permissions-policy entries, and the `stripe` dependency. Legal pages (Terms/Privacy) rewritten for a free service. The monthly training limit (3 models/month) remains as a capacity protection and no longer references upgrades.
+
 ## [0.2.9] - 2026-06-04
 
 ### Console Backend

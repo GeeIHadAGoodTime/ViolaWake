@@ -85,8 +85,8 @@ for frame in mic_stream():
                 <td>AccessKey required by Picovoice docs<sup>2</sup></td>
               </tr>
               <tr>
-                <td>Console Pricing</td>
-                <td className="comparison-highlight">Free / $29 / $99</td>
+                <td>Console</td>
+                <td className="comparison-highlight">Free</td>
                 <td>Verify current Picovoice terms directly<sup>3</sup></td>
               </tr>
               <tr>
@@ -145,8 +145,8 @@ for frame in mic_stream():
             <div className="step-number">1</div>
             <h3 className="step-title">Sign up free</h3>
             <p className="step-desc">
-              Create an account and open the browser recorder. No credit card
-              is required for the free tier.
+              Create an account and open the browser recorder. The Console
+              is free to use.
             </p>
           </div>
           <div className="step-card">
@@ -228,32 +228,16 @@ for frame in mic_stream():
         </div>
       </section>
 
-      {/* Pricing Preview */}
+      {/* Free CTA */}
       <section className="section pricing-preview-section">
-        <h2 className="section-title">Simple, honest pricing</h2>
+        <h2 className="section-title">Free to use</h2>
         <p className="section-subtitle">
-          The SDK is always free. Pay only for Console training when you need it.
+          The SDK is Apache 2.0 and the Console is free. Sign up, train up to 3
+          models a month, and download ONNX files that are yours forever.
         </p>
-        <div className="pricing-preview-grid">
-          <div className="pricing-preview-card">
-            <h3>Free</h3>
-            <p className="pricing-preview-price">$0<span>/mo</span></p>
-            <p className="pricing-preview-desc">3 models per month. Perfect for experimentation.</p>
-          </div>
-          <div className="pricing-preview-card pricing-preview-popular">
-            <h3>Developer</h3>
-            <p className="pricing-preview-price">$29<span>/mo</span></p>
-            <p className="pricing-preview-desc">20 models, priority queue. For serious projects.</p>
-          </div>
-          <div className="pricing-preview-card">
-            <h3>Business</h3>
-            <p className="pricing-preview-price">$99<span>/mo</span></p>
-            <p className="pricing-preview-desc">Unlimited models, accelerated training. Ship at scale.</p>
-          </div>
-        </div>
         <div className="pricing-preview-cta">
-          <Link to="/pricing" className="btn btn-ghost btn-large">
-            See full pricing details
+          <Link to="/register" className="btn btn-primary btn-large">
+            Get started
           </Link>
         </div>
       </section>
@@ -264,7 +248,6 @@ for frame in mic_stream():
           <div className="footer-links">
             <div className="footer-col">
               <h4>Product</h4>
-              <Link to="/pricing">Pricing</Link>
               <a
                 href="https://github.com/GeeIHadAGoodTime/ViolaWake"
                 target="_blank"

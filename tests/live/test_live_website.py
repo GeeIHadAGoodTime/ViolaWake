@@ -60,12 +60,6 @@ def test_landing_marketing_metrics_match_claims(site_url: str, live_page: Page) 
         assert claim in body
 
 
-def test_pricing_page_renders_all_tiers(site_url: str, live_page: Page) -> None:
-    live_page.goto(join_url(site_url, "/pricing"), wait_until="networkidle")
-    for text in ("Free", "$0", "Developer", "$29", "Business", "$99", "Enterprise", "Custom"):
-        expect(live_page.get_by_text(text, exact=False).first).to_be_visible()
-
-
 @pytest.mark.parametrize("path,heading", [("/privacy", "Privacy"), ("/terms", "Terms")])
 def test_legal_pages_render(site_url: str, live_page: Page, path: str, heading: str) -> None:
     live_page.goto(join_url(site_url, path), wait_until="networkidle")
@@ -200,34 +194,6 @@ def test_forgot_password_renders_and_submits(
     expect(live_page.get_by_text(re.compile("reset link", re.I))).to_be_visible(timeout=10_000)
 
 
-def test_developer_tier_get_started_opens_stripe_or_503(
-    api_base_url: str,
-    site_url: str,
-    live_page: Page,
-    email_factory,
-    record_property: pytest.RecordProperty,
-) -> None:
-    email = email_factory("browser-checkout")
-    token = _register_sync(api_base_url, email, name="Browser Checkout")
-
-    live_page.goto(site_url)
-    live_page.evaluate("token => localStorage.setItem('token', token)", token)
-    live_page.goto(join_url(site_url, "/pricing"), wait_until="networkidle")
-
-    developer_card = live_page.locator(".pricing-card").filter(has_text="Developer")
-    developer_card.locator("button", has_text="Get Started").click()
-    live_page.wait_for_timeout(6000)
-
-    record_property("post_click_url", live_page.url)
-    body_text = live_page.locator("body").inner_text()
-    record_property("post_click_text", body_text[:500])
-
-    if live_page.url.startswith("https://checkout.stripe.com"):
-        return
-    expect(live_page.locator(".pricing-error, [role='alert']").first).to_be_visible()
-    assert "configured" in body_text.lower() or "stripe" in body_text.lower()
-
-
 def test_cookie_consent_banner_accepts(site_url: str, live_page: Page) -> None:
     live_page.goto(site_url, wait_until="networkidle")
     accept = live_page.get_by_role("button", name=re.compile("Accept", re.I))
@@ -258,6 +224,6 @@ def test_mobile_landing_readable(site_url: str, browser_context: object) -> None
 
 
 def test_no_console_or_network_errors_on_public_pages(site_url: str, live_page: Page) -> None:
-    for path in ("/", "/pricing", "/privacy", "/terms"):
+    for path in ("/", "/privacy", "/terms"):
         live_page.goto(join_url(site_url, path), wait_until="networkidle")
     _assert_no_fatal_browser_errors(live_page)

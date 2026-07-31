@@ -216,11 +216,6 @@ VIOLAWAKE_CONSOLE_BASE_URL=https://violawake.com
 VIOLAWAKE_CORS_ORIGINS=https://violawake.com,https://www.violawake.com
 VIOLAWAKE_PORT=8000
 
-# Stripe (test or live mode — match across all four)
-VIOLAWAKE_STRIPE_SECRET_KEY=...
-VIOLAWAKE_STRIPE_WEBHOOK_SECRET=...
-VIOLAWAKE_STRIPE_PRICE_DEVELOPER=price_...
-VIOLAWAKE_STRIPE_PRICE_BUSINESS=price_...
 
 # Email (Resend) — leave unset for auto-verify dev fallback
 VIOLAWAKE_RESEND_API_KEY=...
@@ -236,7 +231,7 @@ VIOLAWAKE_ALGORITHM=HS256
 VIOLAWAKE_ACCESS_TOKEN_EXPIRE_HOURS=24
 ```
 
-If a key is missing, the backend either no-ops the feature gracefully (Stripe → 503 with "Billing features require a configured Stripe secret key"; Resend → silently auto-verifies users) or fails to start (DB URL, secret key). Check container logs with `docker logs wakeword-backend-1` if the healthcheck fails.
+If a key is missing, the backend either no-ops the feature gracefully (Resend → silently auto-verifies users) or fails to start (DB URL, secret key). Check container logs with `docker logs wakeword-backend-1` if the healthcheck fails.
 
 ### Corpus
 

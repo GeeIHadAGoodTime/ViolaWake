@@ -17,8 +17,6 @@ import DashboardPage from "./pages/Dashboard";
 import RecordPage from "./pages/Record";
 import AddSamplesPage from "./pages/AddSamples";
 import TrainingStatusPage from "./pages/TrainingStatus";
-import PricingPage from "./pages/Pricing";
-import BillingPage from "./pages/Billing";
 import ModelPerformancePage from "./pages/ModelPerformance";
 import PrivacyPage from "./pages/Privacy";
 import TermsPage from "./pages/Terms.tsx";
@@ -42,7 +40,6 @@ export default function App() {
               <Routes>
                 {/* Public pages */}
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/privacy" element={<PrivacyPage />} />
                 <Route path="/terms" element={<TermsPage />} />
                 <Route path="/contact" element={<ContactPage />} />
@@ -82,14 +79,6 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <TrainingStatusPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/billing"
-                  element={
-                    <ProtectedRoute>
-                      <BillingPage />
                     </ProtectedRoute>
                   }
                 />

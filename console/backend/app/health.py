@@ -187,19 +187,10 @@ def _check_storage() -> dict[str, Any]:
     }
 
 
-def _check_billing() -> dict[str, Any]:
-    configured = bool(settings.stripe_secret_key)
-    return {
-        "status": HEALTH_STATUS_OK if configured else HEALTH_STATUS_DEGRADED,
-        "configured": configured,
-    }
-
-
 async def build_health_payload(app: Any) -> dict[str, Any]:
     database = await _check_database()
     training_queue = await _check_training_queue()
     storage = _check_storage()
-    billing = _check_billing()
 
     startup_complete = bool(getattr(app.state, "startup_complete", False))
     ready = startup_complete and database["status"] == HEALTH_STATUS_OK
@@ -208,7 +199,6 @@ async def build_health_payload(app: Any) -> dict[str, Any]:
         database["status"],
         training_queue["status"],
         storage["status"],
-        billing["status"],
     )
     if not ready:
         status_value = HEALTH_STATUS_ERROR
@@ -223,7 +213,6 @@ async def build_health_payload(app: Any) -> dict[str, Any]:
             "database": database,
             "training_queue": training_queue,
             "storage": storage,
-            "billing": billing,
         },
         "recent_errors": ERROR_TRACKER.snapshot(),
     }

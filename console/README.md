@@ -153,16 +153,6 @@ Examples:
 | POST | `/api/jobs/resume` | JWT | Resume paused queue after circuit breaker |
 | GET | `/api/jobs/circuit-breaker/state` | JWT | Get circuit breaker state |
 
-### Billing
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/billing/checkout` | JWT | Create Stripe checkout session |
-| POST | `/api/billing/webhook` | Stripe | Handle Stripe webhook events |
-| GET | `/api/billing/subscription` | JWT | Get subscription and usage |
-| POST | `/api/billing/portal` | JWT | Create Stripe billing portal session |
-| GET | `/api/billing/usage` | JWT | Get current month's usage vs limit |
-
 ### Teams
 
 | Method | Endpoint | Auth | Description |

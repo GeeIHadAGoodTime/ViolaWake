@@ -36,11 +36,6 @@ def run():
         page.evaluate("window.scrollTo(0, 2100)")
         page.wait_for_timeout(500)
         page.screenshot(path=str(OUT / "04_landing_stats.png"), full_page=False)
-        # Scroll to pricing preview
-        page.evaluate("window.scrollTo(0, 2800)")
-        page.wait_for_timeout(500)
-        page.screenshot(path=str(OUT / "05_landing_pricing_preview.png"), full_page=False)
-
         # 2. Register page
         page.goto(f"{FRONTEND}/register")
         page.wait_for_timeout(1000)
@@ -51,15 +46,7 @@ def run():
         page.wait_for_timeout(1000)
         page.screenshot(path=str(OUT / "07_login.png"), full_page=False)
 
-        # 4. Pricing page
-        page.goto(f"{FRONTEND}/pricing")
-        page.wait_for_timeout(1000)
-        page.screenshot(path=str(OUT / "08_pricing_top.png"), full_page=False)
-        page.evaluate("window.scrollTo(0, 600)")
-        page.wait_for_timeout(500)
-        page.screenshot(path=str(OUT / "09_pricing_faq.png"), full_page=False)
-
-        # 5. Register a real user and go to dashboard
+        # 4. Register a real user and go to dashboard
         email = f"audit_{int(time.time())}@violawake.dev"
         import requests
         resp = requests.post(

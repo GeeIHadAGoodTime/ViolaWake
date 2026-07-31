@@ -9,7 +9,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -25,7 +24,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -41,7 +39,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -57,7 +54,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -73,7 +69,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -89,7 +84,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -105,7 +99,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -121,7 +114,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams
@@ -137,7 +129,6 @@ Disallow: /reset-password
 Disallow: /dashboard
 Disallow: /record
 Disallow: /training
-Disallow: /billing
 Disallow: /model
 Disallow: /account
 Disallow: /teams

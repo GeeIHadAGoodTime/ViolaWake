@@ -11,9 +11,6 @@ import type {
   Model,
   ModelConfig,
   ModelPerformanceResponse,
-  SubscriptionResponse,
-  UsageResponse,
-  BillingPortalResponse,
   MessageResponse,
   Team,
   TeamListItem,
@@ -418,37 +415,6 @@ export async function deleteModel(modelId: number): Promise<void> {
   await request<void>(`/models/${modelId}`, {
     method: "DELETE",
   });
-}
-
-// --- Billing ---
-
-export interface CheckoutResponse {
-  checkout_url: string;
-}
-
-export async function createCheckout(
-  tier: string,
-): Promise<CheckoutResponse> {
-  const response = await request<CheckoutResponse>("/billing/checkout", {
-    method: "POST",
-    body: JSON.stringify({ tier }),
-  });
-  trackEvent("checkout_started", { tier });
-  return response;
-}
-
-export async function getSubscription(): Promise<SubscriptionResponse> {
-  return request<SubscriptionResponse>("/billing/subscription");
-}
-
-export async function createBillingPortal(): Promise<BillingPortalResponse> {
-  return request<BillingPortalResponse>("/billing/portal", {
-    method: "POST",
-  });
-}
-
-export async function getUsage(): Promise<UsageResponse> {
-  return request<UsageResponse>("/billing/usage");
 }
 
 // --- Teams ---

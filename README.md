@@ -806,7 +806,7 @@ print(optimal["threshold"], optimal["eer"])
 
 ## Web Console (Browser-Based Training)
 
-ViolaWake also ships a full browser-based alternative to the CLI training flow. The Console lives in [`console/`](console/) and pairs a React+Vite SPA with a FastAPI backend for account management, recording, training, billing, and model downloads.
+ViolaWake also ships a full browser-based alternative to the CLI training flow. The Console lives in [`console/`](console/) and pairs a React+Vite SPA with a FastAPI backend for account management, recording, training, and model downloads. The Console is a free service.
 
 ### Workflow
 
@@ -849,7 +849,6 @@ This uses [`console/docker-compose.yml`](console/docker-compose.yml) to start th
 | Database | SQLite by default (SQLAlchemy async) |
 | Storage | Local filesystem by default for recordings and models |
 | Training | Local persistent job queue, CPU training |
-| Billing | Stripe checkout / portal / usage tracking when `VIOLAWAKE_STRIPE_SECRET_KEY` is configured |
 | Email | Resend-backed transactional email when `VIOLAWAKE_RESEND_API_KEY` is configured |
 
 The current reference deployment is self-hosted and local-first. Optional hooks exist for external databases and object storage, but the shipped default is local JWT auth + SQLite + filesystem storage + CPU training.
@@ -860,7 +859,6 @@ The current reference deployment is self-hosted and local-first. Optional hooks 
 - Browser recording and WAV upload validation / normalization for wake-word samples
 - Queued server-side training with live SSE progress streaming, cancellation, and resume support
 - Dashboard model management: list, inspect metrics, view performance, download `.onnx`, and delete models
-- Pricing and billing pages for Free / Developer / Business tiers with Stripe checkout and billing portal integration
 - Public landing, privacy policy, and terms of service pages
 
 See [`console/README.md`](console/README.md) for the full Console API, test commands, and deployment details.

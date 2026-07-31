@@ -1554,56 +1554,7 @@ a:hover {
   line-height: 1.6;
 }
 
-/* --- Pricing Preview (Landing) --- */
-.pricing-preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.pricing-preview-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2rem;
-  text-align: center;
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-
-.pricing-preview-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.pricing-preview-popular {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.pricing-preview-card h3 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-}
-
-.pricing-preview-price {
-  font-size: 2.5rem;
-  font-weight: 800;
-  margin-bottom: 0.5rem;
-}
-
-.pricing-preview-price span {
-  font-size: 1rem;
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-.pricing-preview-desc {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
-
+/* --- Free CTA (Landing) --- */
 .pricing-preview-cta {
   text-align: center;
   margin-top: 1rem;
@@ -1659,225 +1610,6 @@ a:hover {
   border-top: 1px solid var(--border);
   font-size: 0.85rem;
   color: var(--text-secondary);
-}
-
-/* ===== Pricing Page ===== */
-.pricing-page {
-  animation: fadeIn 0.3s ease;
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.pricing-header {
-  text-align: center;
-  margin-bottom: 3rem;
-}
-
-.pricing-header-sub {
-  color: var(--text-secondary);
-  font-size: 1.1rem;
-  margin-top: 0.5rem;
-  max-width: 520px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* --- Pricing Cards Grid --- */
-.pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
-  margin-bottom: 4rem;
-}
-
-.pricing-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-
-.pricing-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
-}
-
-.pricing-card-popular {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 4px 20px rgba(108, 92, 231, 0.2);
-}
-
-.pricing-card-selected {
-  border-color: var(--success);
-  box-shadow: 0 0 0 1px var(--success), 0 6px 24px rgba(0, 206, 201, 0.18);
-}
-
-.pricing-popular-badge {
-  position: absolute;
-  top: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--accent);
-  color: #fff;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  padding: 0.25rem 1rem;
-  border-radius: 20px;
-}
-
-.pricing-card-name {
-  font-size: 1.1rem;
-  font-weight: 700;
-  margin-bottom: 0.75rem;
-}
-
-.pricing-card-price {
-  margin-bottom: 0.5rem;
-}
-
-.pricing-amount {
-  font-size: 2.5rem;
-  font-weight: 800;
-}
-
-.pricing-period {
-  font-size: 1rem;
-  color: var(--text-secondary);
-}
-
-.pricing-card-desc {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-bottom: 1.5rem;
-  line-height: 1.5;
-}
-
-.pricing-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 1.5rem;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.pricing-feature {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  font-size: 0.9rem;
-  color: var(--text-primary);
-}
-
-.pricing-feature-excluded {
-  color: var(--text-secondary);
-  text-decoration: line-through;
-  text-decoration-thickness: 1px;
-  text-decoration-color: rgba(160, 160, 176, 0.7);
-}
-
-.pricing-feature-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  color: var(--success);
-}
-
-.pricing-feature-excluded .pricing-feature-icon {
-  color: var(--text-secondary);
-}
-
-.pricing-selection-banner {
-  max-width: 420px;
-  margin: 0 auto 1.5rem;
-  padding: 0.875rem 1rem;
-  background: rgba(0, 206, 201, 0.12);
-  border: 1px solid rgba(0, 206, 201, 0.3);
-  border-radius: var(--radius);
-  color: var(--success);
-  text-align: center;
-  font-weight: 600;
-}
-
-/* --- FAQ Section --- */
-.pricing-faq {
-  max-width: 700px;
-  margin: 0 auto 3rem;
-}
-
-.pricing-faq .section-title {
-  margin-bottom: 2rem;
-}
-
-.faq-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.faq-item {
-  border-bottom: 1px solid var(--border);
-}
-
-.faq-question {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 1rem;
-  font-weight: 600;
-  text-align: left;
-  padding: 1.25rem 0;
-  cursor: pointer;
-  transition: color var(--transition);
-}
-
-.faq-question:hover {
-  color: var(--accent);
-}
-
-.faq-chevron {
-  display: inline-flex;
-  color: var(--text-secondary);
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-}
-
-.faq-item-open .faq-chevron {
-  transform: rotate(180deg);
-}
-
-.faq-answer {
-  padding: 0 0 1.25rem;
-  animation: slideDown 0.2s ease;
-}
-
-.faq-answer p {
-  color: var(--text-secondary);
-  font-size: 0.95rem;
-  line-height: 1.7;
-}
-
-/* --- Bottom CTA --- */
-.pricing-bottom-cta {
-  text-align: center;
-  padding: 3rem 0;
-  border-top: 1px solid var(--border);
-}
-
-.pricing-bottom-cta p {
-  color: var(--text-secondary);
-  font-size: 1.05rem;
-  margin-bottom: 1.25rem;
 }
 
 /* ===== Legal Pages (Privacy, Terms) ===== */
@@ -1970,7 +1702,7 @@ a:hover {
   text-underline-offset: 0.15em;
 }
 
-/* ===== Landing / Pricing Responsive ===== */
+/* ===== Landing Responsive ===== */
 @media (max-width: 1024px) {
   .hero {
     grid-template-columns: 1fr;
@@ -1987,10 +1719,6 @@ a:hover {
   .hero-actions {
     justify-content: center;
   }
-
-  .pricing-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 768px) {
@@ -2006,16 +1734,6 @@ a:hover {
   .proof-stats {
     grid-template-columns: repeat(2, 1fr);
     gap: 1.5rem;
-  }
-
-  .pricing-preview-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
-  .pricing-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
   }
 
   .footer-links {
@@ -2476,31 +2194,6 @@ a:hover {
   background: rgba(126, 108, 255, 0.06);
   border-radius: 4px;
   margin: 0;
-}
-
-/* ─────────── Dashboard upgrade banner ─────────── */
-.dashboard-upgrade-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  background: linear-gradient(
-    135deg,
-    rgba(126, 108, 255, 0.12),
-    rgba(126, 108, 255, 0.04)
-  );
-  border: 1px solid rgba(126, 108, 255, 0.3);
-  border-radius: 0.75rem;
-  padding: 1rem 1.25rem;
-  margin: 1rem 0 1.5rem;
-  font-size: 0.95rem;
-}
-
-.dashboard-upgrade-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 /* ─────────── Global app footer ─────────── */

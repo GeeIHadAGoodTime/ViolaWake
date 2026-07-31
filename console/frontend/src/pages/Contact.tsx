@@ -1,5 +1,3 @@
-import { Link } from "react-router-dom";
-
 export default function ContactPage() {
   return (
     <div className="contact-page">
@@ -72,16 +70,6 @@ export default function ContactPage() {
               file an issue
             </a>{" "}
             for SDK bugs or feature requests.
-          </li>
-          <li>
-            <strong>Pricing</strong> —{" "}
-            <Link to="/pricing">see plans</Link> if you&apos;re weighing
-            Free vs Developer vs Business.
-          </li>
-          <li>
-            <strong>Account &amp; billing</strong> —{" "}
-            <Link to="/billing">manage your subscription</Link> from the
-            console (logged-in users).
           </li>
         </ul>
       </div>

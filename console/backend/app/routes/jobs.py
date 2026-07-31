@@ -15,7 +15,7 @@ from app.database import get_db
 from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
-from app.routes.billing import _current_period_start, check_training_quota, record_usage
+from app.quota import _current_period_start, check_training_quota, record_usage
 from app.schemas import (
     JobCircuitBreakerResponse,
     JobResponse,
@@ -44,8 +44,8 @@ async def _service_or_quota_user_with_rate_key(
 ) -> User:
     """Privileged service key OR end-user with quota check.
 
-    Service-key callers (Viola backend) bypass per-user billing quotas:
-    upstream Viola handles its own per-tenant billing. End-user callers go
+    Service-key callers (Viola backend) bypass per-user training quotas:
+    upstream Viola handles its own per-tenant metering. End-user callers go
     through the standard ``check_training_quota`` path.
 
     The rate-limit key is the caller's PARTITION, not the account. Keyed on

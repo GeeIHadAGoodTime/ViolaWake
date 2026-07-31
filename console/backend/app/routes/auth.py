@@ -469,23 +469,10 @@ async def delete_account(
     now = datetime.now(timezone.utc)
     scheduled_hard_delete_at = now + timedelta(days=30)
 
-    # Delete the Stripe customer before scrubbing local identity fields.
     sub_result = await db.execute(
         select(Subscription).where(Subscription.user_id == current_user.id)
     )
     subscription = sub_result.scalar_one_or_none()
-    if subscription and subscription.stripe_customer_id and settings.billing_enabled:
-        try:
-            import stripe
-            stripe.api_key = settings.stripe_secret_key
-            stripe.Customer.delete(subscription.stripe_customer_id)
-        except Exception:
-            logger.warning(
-                "Failed to cancel Stripe subscription %s for user %s — proceeding with deletion",
-                subscription.stripe_customer_id,
-                current_user.id,
-            )
-
     if subscription is not None:
         subscription.tier = "free"
         subscription.status = "canceled"

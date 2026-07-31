@@ -110,7 +110,7 @@ gates:
     contract: Live backend proof scripts must use backend/OpenAPI-backed routes and request field names.
     detector: tests/live/test_live_oracle_contract.py
     own_tests:
-      - tests/live/test_live_oracle_contract.py::test_live_billing_oracle_uses_documented_checkout_route
+      - tests/live/test_live_oracle_contract.py::test_live_oracle_probes_no_removed_billing_routes
       - tests/live/test_live_oracle_contract.py::test_full_pipeline_download_token_uses_resource_id
 
   - gate_id: frontend-api-url-baked

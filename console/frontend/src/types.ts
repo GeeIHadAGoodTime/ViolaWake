@@ -132,26 +132,6 @@ export interface ModelPerformanceResponse {
   evaluation_data: Record<string, unknown>;
 }
 
-export interface UsageResponse {
-  models_used: number;
-  models_limit: number | null;
-  period_start: string;
-  period_end: string;
-}
-
-export interface SubscriptionResponse {
-  tier: string;
-  status: string;
-  current_period_end: string;
-  trial_active: boolean;
-  trial_end: string | null;
-  usage: UsageResponse;
-}
-
-export interface BillingPortalResponse {
-  url: string;
-}
-
 // ── Teams ──────────────────────────────────────────────────────────────────
 
 export type TeamMemberRole = "owner" | "admin" | "member";

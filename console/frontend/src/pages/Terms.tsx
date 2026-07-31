@@ -5,7 +5,7 @@ export default function TermsPage() {
     <div className="legal-page">
       <div className="legal-content">
         <h1 className="legal-title">Terms of Service</h1>
-        <p className="legal-updated">Last updated: May 7, 2026</p>
+        <p className="legal-updated">Last updated: July 31, 2026</p>
 
         <section className="legal-section">
           <h2>1. Service Description</h2>
@@ -92,51 +92,20 @@ export default function TermsPage() {
           <h3>4.3 The ViolaWake Console</h3>
           <p>
             The Console application, backend service, and related proprietary
-            code remain the property of ViolaWake. Your subscription grants you
+            code remain the property of ViolaWake. Your account grants you
             a non-exclusive, non-transferable right to access and use the
-            Console during the term of your subscription.
+            Console.
           </p>
         </section>
 
         <section className="legal-section">
-          <h2>5. Payments and Billing</h2>
-
-          <h3>5.1 Free Tier</h3>
+          <h2>5. Free Service and Usage Limits</h2>
           <p>
-            The Free tier allows up to 3 model training jobs per calendar month
-            at no charge.
-          </p>
-
-          <h3>5.2 Paid Subscriptions</h3>
-          <p>
-            Developer and Business subscriptions are billed through Stripe on a
-            recurring basis until cancelled. We do not store full card numbers
-            or CVV values.
-          </p>
-
-          <h3>5.3 Stripe Checkout</h3>
-          <p>
-            When you start or manage a paid subscription, we share the
-            information needed to create and manage the Stripe Checkout or
-            billing session, including your email address and any billing address
-            collected by Stripe Checkout. Stripe&apos;s privacy policy is
-            available at{" "}
-            <a
-              href="https://stripe.com/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              stripe.com/privacy
-            </a>
-            .
-          </p>
-
-          <h3>5.4 Refunds</h3>
-          <p>
-            If a service problem on our side materially prevents you from using
-            a paid allocation, contact{" "}
-            <a href="mailto:billing@violawake.com">billing@violawake.com</a>.
-            Credits or refunds are provided at our discretion.
+            The Console is provided free of charge. To keep training capacity
+            available for everyone, accounts are limited to 3 model training
+            jobs per calendar month. The limit resets at the start of each
+            month. We may adjust usage limits over time to protect service
+            availability.
           </p>
         </section>
 
@@ -144,7 +113,7 @@ export default function TermsPage() {
           <h2>6. Email Service</h2>
           <p>
             We use Resend to send transactional emails on our behalf, including
-            account verification, password reset, billing, and training status
+            account verification, password reset, and training status
             messages. Resend&apos;s privacy policy is available at{" "}
             <a
               href="https://resend.com/legal/privacy-policy"
@@ -173,8 +142,7 @@ export default function TermsPage() {
             <li>
               You can delete your account at any time from the Account Settings
               page. Account deletion hard-deletes your user account, recordings,
-              and trained models and cancels your active Stripe subscription
-              within 24 hours.
+              and trained models within 24 hours.
             </li>
           </ul>
         </section>
@@ -200,8 +168,7 @@ export default function TermsPage() {
           </p>
           <p>
             OUR TOTAL LIABILITY FOR ANY CLAIM ARISING FROM OR RELATED TO THESE
-            TERMS OR THE SERVICE WILL NOT EXCEED THE AMOUNT YOU PAID US IN THE
-            12 MONTHS BEFORE THE CLAIM, OR $100, WHICHEVER IS GREATER.
+            TERMS OR THE SERVICE WILL NOT EXCEED $100.
           </p>
         </section>
 
@@ -237,8 +204,7 @@ export default function TermsPage() {
           <p>
             When an account is deleted, access to the Console ends and the
             user account, recordings, and trained models we still store for that
-            account are hard-deleted within 24 hours. Any active Stripe
-            subscription is cancelled as part of the same deletion workflow.
+            account are hard-deleted within 24 hours.
             Models you already downloaded remain yours.
           </p>
         </section>
