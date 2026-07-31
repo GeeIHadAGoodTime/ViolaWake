@@ -1,0 +1,21 @@
+# Reconciles the running backend toward origin/master every 10 minutes.
+#
+# Ten minutes is the worst-case delay between a merge and it serving customers,
+# replacing "whenever a human remembers to SSH in" (which measured, on
+# 2026-07-31, as four merged backend fixes with no automated path to the box and
+# a customer-facing billing fix still not serving two hours after it merged).
+#
+# With no drift a tick is a couple of cheap git/docker inspect calls, so the
+# frequency costs effectively nothing.
+[Unit]
+Description=Reconcile the ViolaWake backend toward origin/master every 10 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=violawake-deploy.service
+
+[Install]
+WantedBy=timers.target

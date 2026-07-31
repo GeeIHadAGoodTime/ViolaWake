@@ -11,9 +11,9 @@ This is the **canonical** post-launch status. Do not add running notes to `LAUNC
 | Layer | Status | Where | Last deploy |
 |---|---|---|---|
 | Frontend | ✅ live | Cloudflare Pages, project `violawake`, `violawake.com` | 2026-07-03 (commit `c85977a`, deploy `5b2de9f4`: bug-report button on every page + canonical `/app/` SPA rewrite target fixing the /verify-email & /reset-password deep-link 308 strip) |
-| Backend | ✅ live | Local Docker via Cloudflare Tunnel `violawake-api`, `api.violawake.com` | 2026-07-03 (image rebuilt from commit `4fb977b`: server-side GET /api/auth/verify-email + POST /api/public/bug-report; `VIOLAWAKE_SENTRY_DSN` wired to sentry.io project `viola-voice-assistant/violawake`) |
-| Postgres | ✅ live | Local Docker `wakeword-postgres-1`, internal to `wakeword_default` network | 11+ days uptime |
-| Cloudflare Tunnel | ✅ live | Container `wakeword-tunnel-1`, tunnel UUID `7dbef1da-...` | 11+ days uptime |
+| Backend | ✅ live | `wakeword-backend-1` on the Hetzner box `167.233.233.33`, checkout `/opt/viola/Wakeword`, behind Cloudflare Tunnel `violawake-api-server` → `api.violawake.com` | **Automatic since 2026-07-31**: `violawake-deploy.timer` reconciles the container toward `origin/master` every 10 min (`scripts/deploy_backend.py`). The deployed commit is readable from the running image: `docker image inspect $(docker inspect wakeword-backend-1 --format '{{.Image}}') --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'` |
+| Postgres | ✅ live | `wakeword-postgres-1` on the same box, internal to the `wakeword_default` network | volume `pgdata`, survives recreations |
+| Cloudflare Tunnel | ✅ live | Container `cloudflared-wake-server`, tunnel `violawake-api-server` `a4961724-2b7b-49a1-8711-e088245be4c4` | The old `violawake-api` tunnel `7dbef1da-…` was deleted in the #326 estate cleanup (commit `06b35f8`) — it had no DNS route |
 | SDK on PyPI | ✅ live | `violawake` v0.2.4 | 2026-05-07 (manually published via twine — `release.yml` had a chicken-and-egg bug where `pypi-publish.needs: [..., github-release]` and `github-release` 404'd on `fetch_release_models.py`, blocking PyPI even for valid wheels. Both fixed in same commit.) |
 | Support inbox | ✅ live | Cloudflare Worker `violawake-agentic-inbox`, `support-inbox.violawake.com` (Access-protected); R2 `violawake-agentic-inbox`; `hello@violawake.com` Email Routing → worker | 2026-07-03 (version `189b07e1`) |
 
@@ -72,12 +72,14 @@ with NOVVIOLA). Source vendored at `infra/agentic-inbox/`; founder-side ops skil
 
 ## NOT verified (and what would verify it)
 
-- ❌ **API tunnel currently healthy.** Read-only audit on 2026-06-03 found
-  Cloudflare Tunnel `violawake-api`
-  (`7dbef1da-74e3-4d7f-bba9-aad4a3e72150`) reporting `down`, while
-  `https://api.violawake.com/api/health` and `/openapi.json` returned HTTP
-  530. Do not mark the backend live again until the tunnel is reconnected and
-  `/api/health` returns HTTP 200 from outside Docker.
+- ✅ **API tunnel healthy** (was ❌ on 2026-06-03, when tunnel `violawake-api`
+  `7dbef1da-…` reported `down` and the API returned HTTP 530). Re-measured
+  2026-07-31: `https://api.violawake.com/api/health` returns HTTP 200 from
+  outside Docker, served through the *replacement* tunnel
+  `violawake-api-server` `a4961724-…` (container `cloudflared-wake-server`).
+  The `7dbef1da` tunnel that was down no longer exists — it was deleted in the
+  #326 Cloudflare estate cleanup. Re-verify with
+  `curl -sS https://api.violawake.com/api/health`.
 - ❌ **Nightly R2 backups are current.** Read-only R2 listing on 2026-06-03
   found latest Postgres/app-data backup objects dated 2026-05-10. Verify the
   Windows scheduled task, run `scripts/backup_to_r2_wrangler.sh`, then run
