@@ -384,6 +384,92 @@ def test_live_endpoint_not_answering_rolls_back(tmp_path):
     assert "did not return 200" in deployer.report.reason
 
 
+def test_health_check_identifies_as_a_browser(monkeypatch):
+    """Our own edge must not be what fails our own verification.
+
+    Measured on the deploy host 2026-07-31: `curl` -> 200 and
+    `urllib.request.urlopen` -> 403 against the same URL in the same second,
+    because Cloudflare's WAF rejects the default `Python-urllib/3.x` agent.
+    The first live run rolled a perfectly good deploy back because of it.
+    """
+    captured = {}
+
+    class FakeResponse:
+        status = 200
+
+        def read(self, _n=None):
+            return b'{"status":"ok"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(request, timeout=None):
+        captured["headers"] = dict(request.headers)
+        captured["url"] = request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(deploy_backend.urllib.request, "urlopen", fake_urlopen)
+    status, body = deploy_backend._real_http_get("https://api.violawake.com/api/health", 5)
+
+    assert status == 200
+    agent = captured["headers"].get("User-agent") or captured["headers"].get("User-Agent")
+    assert agent, "the health check must send an explicit User-Agent"
+    assert "urllib" not in agent.lower() and "python" not in agent.lower(), (
+        f"{agent!r} is the agent Cloudflare 403s"
+    )
+    assert agent.startswith("Mozilla/")
+
+
+def test_a_standing_edge_refusal_fails_fast_instead_of_waiting_out_the_timeout(tmp_path):
+    """403 will not become 200 by waiting; roll back in seconds, not minutes."""
+    calls = {"n": 0}
+
+    def counting_http(url, timeout=20):
+        calls["n"] += 1
+        return 403, ""
+
+    cfg = deploy_backend.DeployConfig(
+        repo=REPO_ROOT,
+        state_dir=tmp_path / "state",
+        alert_sink=tmp_path / "alerts.jsonl",
+        health_timeout_s=420,
+        poll_interval_s=0.0,
+    )
+    runner = FakeRunner()
+    deployer = deploy_backend.BackendDeployer(
+        cfg, runner=runner, http_get=counting_http, free_gb=lambda p: 100.0, sleep=lambda s: None,
+    )
+    assert deployer.deploy() in (2, 3)
+    assert calls["n"] == deploy_backend.NON_RETRYABLE_ATTEMPTS
+    assert "standing refusal" in deployer.report.reason
+
+
+def test_a_warming_service_is_still_given_the_full_timeout(tmp_path):
+    """A 5xx while the app boots must NOT fail fast -- only standing refusals do."""
+    calls = {"n": 0}
+
+    def flaky_http(url, timeout=20):
+        calls["n"] += 1
+        return (200, "ok") if calls["n"] > 5 else (502, "bad gateway")
+
+    cfg = deploy_backend.DeployConfig(
+        repo=REPO_ROOT,
+        state_dir=tmp_path / "state",
+        alert_sink=tmp_path / "alerts.jsonl",
+        health_timeout_s=60,
+        poll_interval_s=0.0,
+    )
+    runner = FakeRunner()
+    deployer = deploy_backend.BackendDeployer(
+        cfg, runner=runner, http_get=flaky_http, free_gb=lambda p: 100.0, sleep=lambda s: None,
+    )
+    assert deployer.deploy() == 0
+    assert deployer.report.outcome == "deployed"
+
+
 def test_build_failure_never_recreates_the_container(tmp_path):
     deployer, runner = make_deployer(
         tmp_path, overrides={"build backend": (1, "ERROR: failed to solve")}

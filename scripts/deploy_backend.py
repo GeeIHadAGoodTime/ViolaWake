@@ -104,6 +104,19 @@ DEFAULT_BUILD_TIMEOUT_S = 3600
 REVISION_LABEL = "org.opencontainers.image.revision"
 ROLLBACK_TAG = "rollback"
 
+# See _real_http_get: the public health check must look like a browser or
+# Cloudflare's WAF answers it 403 before it reaches us.
+HEALTH_CHECK_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
+
+# Statuses that will not change by waiting. A 403/401 from the edge is a
+# standing refusal, not a service still warming up, so retrying it for the full
+# health timeout only delays the rollback.
+NON_RETRYABLE_HTTP = frozenset({401, 403, 404, 405})
+NON_RETRYABLE_ATTEMPTS = 3
+
 ALERT_SOURCE = "scripts/deploy_backend.py"
 ALERT_BUSINESS = "violawake"
 ALERT_STREAM = "violawake-deploy"
@@ -163,8 +176,24 @@ def _real_runner(cmd: Sequence[str], cwd: Path | None = None, timeout: int = 300
 
 
 def _real_http_get(url: str, timeout: int = 20) -> tuple[int, str]:
+    """GET the public health URL the way a customer's browser would.
+
+    The User-Agent is not cosmetic. Measured on the deploy host 2026-07-31:
+    `curl https://api.violawake.com/api/health` returned **200** while
+    `urllib.request.urlopen(...)` on the same host, same second, returned
+    **403** -- Cloudflare's WAF rejects the default `Python-urllib/3.x` agent
+    before the request ever reaches our tunnel. The first live run of this
+    reconciler deployed correctly (built, preflighted, recreated, healthy,
+    correct revision label) and then rolled itself back because our own edge
+    refused our own verification. A verification that our own infrastructure
+    blocks is not a verification.
+    """
+    request = urllib.request.Request(  # noqa: S310 - fixed https URL
+        url,
+        headers={"User-Agent": HEALTH_CHECK_USER_AGENT, "Accept": "application/json, */*"},
+    )
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:  # noqa: S310 - fixed https URL
+        with urllib.request.urlopen(request, timeout=timeout) as resp:  # noqa: S310
             return resp.status, resp.read(4096).decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         return exc.code, ""
@@ -555,11 +584,17 @@ class BackendDeployer:
 
     def verify_live_endpoint(self) -> None:
         status, body = 0, ""
-        for _ in range(self._poll_attempts()):
+        attempts = self._poll_attempts()
+        for attempt in range(attempts):
             status, body = self.http_get(self.cfg.health_url, 20)
             if status == 200:
                 self.report.phase("live-endpoint", True, f"{self.cfg.health_url} 200")
                 return
+            if status in NON_RETRYABLE_HTTP and attempt + 1 >= NON_RETRYABLE_ATTEMPTS:
+                raise DeployError(
+                    f"{self.cfg.health_url} answered {status} on {NON_RETRYABLE_ATTEMPTS} "
+                    "consecutive attempts; that is a standing refusal, not a warming service"
+                )
             self.sleep(self.cfg.poll_interval_s)
         raise DeployError(
             f"{self.cfg.health_url} did not return 200 within {self.cfg.health_timeout_s}s "
