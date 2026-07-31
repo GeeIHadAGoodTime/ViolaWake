@@ -495,6 +495,144 @@ def test_import_preflight_failure_never_recreates_the_container(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+#  Host housekeeping the reconciler creates for itself
+# --------------------------------------------------------------------------- #
+
+
+def test_a_stale_recreate_backup_is_cleared_before_recreating(tmp_path):
+    """Compose's rename-backup survives an interrupted recreate; ours rolls back.
+
+    Observed live 2026-07-31 23:19 UTC: `Conflict. The container name
+    "/04d545944950_wakeword-backend-1" is already in use` -- a failed deploy
+    caused entirely by the previous deploy's rollback.
+    """
+    stale = "abc123\t04d545944950_wakeword-backend-1\texited"
+    deployer, runner = make_deployer(
+        tmp_path, overrides={"docker ps -a": (0, stale)}
+    )
+    assert deployer.deploy() == 0
+    assert runner.ran("docker rm -f abc123")
+    rm_index = next(i for i, c in enumerate(runner.calls) if "docker rm -f abc123" in c)
+    up_index = next(i for i, c in enumerate(runner.calls) if "up -d backend" in c)
+    assert rm_index < up_index, "the leftover must be gone BEFORE compose tries the name"
+
+
+def test_a_running_recreate_backup_is_never_forced(tmp_path):
+    """A running backup means somebody else's recreate is in flight."""
+    running = "abc123\t04d545944950_wakeword-backend-1\trunning"
+    deployer, runner = make_deployer(
+        tmp_path, overrides={"docker ps -a": (0, running)}
+    )
+    assert deployer.deploy() in (2, 3)
+    assert not runner.ran("docker rm -f")
+    assert "in flight" in deployer.report.reason
+
+
+def test_the_live_container_is_never_mistaken_for_a_backup(tmp_path):
+    """`wakeword-backend-1` itself must never match the backup shape."""
+    listing = "live1\twakeword-backend-1\trunning\nold1\tsome-other-container\texited"
+    deployer, runner = make_deployer(
+        tmp_path, overrides={"docker ps -a": (0, listing)}
+    )
+    assert deployer.deploy() == 0
+    assert not runner.ran("docker rm -f live1")
+    assert not runner.ran("docker rm -f old1")
+
+
+def test_the_generation_two_deploys_back_is_reclaimed_after_success(tmp_path):
+    """Each build costs GiB on a shared host; without this it walks into the floor."""
+    grandparent = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+    class PruneRunner(FakeRunner):
+        def __call__(self, cmd, cwd=None, timeout=300, env=None):
+            joined = " ".join(str(c) for c in cmd)
+            if "image inspect" in joined and "{{.Id}}" in joined:
+                self.calls.append(joined)
+                if ":rollback" in joined and not self._pinned:
+                    self._pinned = True
+                    return deploy_backend.CommandResult(0, grandparent, "")
+                return deploy_backend.CommandResult(0, IMAGE_ID, "")
+            return super().__call__(cmd, cwd=cwd, timeout=timeout, env=env)
+
+        _pinned = False
+
+    cfg = deploy_backend.DeployConfig(
+        repo=REPO_ROOT, state_dir=tmp_path / "state", alert_sink=tmp_path / "alerts.jsonl",
+        health_timeout_s=10, poll_interval_s=0.0,
+    )
+    runner = PruneRunner()
+    deployer = deploy_backend.BackendDeployer(
+        cfg, runner=runner, http_get=lambda u, t=20: (200, "ok"),
+        free_gb=lambda p: 100.0, sleep=lambda s: None,
+    )
+    assert deployer.deploy() == 0
+    assert runner.ran(f"docker rmi {grandparent}")
+
+
+def test_nothing_is_reclaimed_when_the_deploy_failed(tmp_path):
+    """A failed deploy still needs its rollback targets."""
+    deployer, runner = make_deployer(tmp_path, http=(502, "bad gateway"))
+    assert deployer.deploy() in (2, 3)
+    assert not runner.ran("docker rmi")
+
+
+def test_pruning_never_removes_the_serving_or_rollback_image(tmp_path):
+    """The only ID eligible for reclaim is one THIS run displaced.
+
+    On a first deploy there is no prior `:rollback`, so nothing was displaced
+    and nothing may be removed. Reclaiming "whatever looks unused" on a host
+    shared with other production stacks is how a cleanup becomes an incident.
+    """
+    deployer, runner = make_deployer(tmp_path)
+    assert deployer.deploy() == 0
+    assert deployer._superseded_image_id is None
+    assert not runner.ran("docker rmi"), "nothing was displaced, so nothing may be reclaimed"
+    assert not runner.ran(f"docker rmi {IMAGE_ID}")
+
+
+def test_a_failed_prune_does_not_fail_a_good_deploy(tmp_path):
+    grandparent = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+
+    class StubbornRunner(FakeRunner):
+        def __call__(self, cmd, cwd=None, timeout=300, env=None):
+            joined = " ".join(str(c) for c in cmd)
+            if "image inspect" in joined and "{{.Id}}" in joined:
+                self.calls.append(joined)
+                if ":rollback" in joined and not self._pinned:
+                    self._pinned = True
+                    return deploy_backend.CommandResult(0, grandparent, "")
+                return deploy_backend.CommandResult(0, IMAGE_ID, "")
+            if joined.startswith("docker rmi"):
+                self.calls.append(joined)
+                return deploy_backend.CommandResult(1, "", "image is being used by stopped container")
+            return super().__call__(cmd, cwd=cwd, timeout=timeout, env=env)
+
+        _pinned = False
+
+    cfg = deploy_backend.DeployConfig(
+        repo=REPO_ROOT, state_dir=tmp_path / "state", alert_sink=tmp_path / "alerts.jsonl",
+        health_timeout_s=10, poll_interval_s=0.0,
+    )
+    runner = StubbornRunner()
+    deployer = deploy_backend.BackendDeployer(
+        cfg, runner=runner, http_get=lambda u, t=20: (200, "ok"),
+        free_gb=lambda p: 100.0, sleep=lambda s: None,
+    )
+    assert deployer.deploy() == 0
+    assert deployer.report.outcome == "deployed"
+    assert alerts_written(tmp_path) == []
+
+
+def test_only_one_image_generation_is_tag_pinned(tmp_path):
+    """Per-commit tags would pin every image forever and leak the disk away."""
+    deployer, runner = make_deployer(tmp_path)
+    deployer.deploy()
+    tags = [c for c in runner.calls if c.startswith("docker tag")]
+    assert tags, "the previous image must be pinned before the build"
+    assert all(":rollback" in c or ":latest" in c for c in tags), tags
+
+
+# --------------------------------------------------------------------------- #
 #  Drift never rots silently
 # --------------------------------------------------------------------------- #
 

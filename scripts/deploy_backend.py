@@ -285,6 +285,9 @@ class BackendDeployer:
         # Whether this run has already recreated the live container. Decides
         # whether a rollback may touch it (see rollback()).
         self._recreated = False
+        # The image generation displaced by this run's rollback point; reclaimed
+        # only after the deploy is proven good (see prune_superseded_image()).
+        self._superseded_image_id: str | None = None
 
     # ---------------------------------------------------------------- helpers
 
@@ -487,17 +490,91 @@ class BackendDeployer:
         Without this the old image becomes dangling the moment the build
         retags ``:latest``, and any prune between build and rollback would
         delete the only thing we could roll back to.
+
+        Exactly ONE generation is pinned. Tagging every deployed commit under
+        its own tag would read nicely and leak ~2 GiB of disk per deploy, which
+        on a shared host walks straight into this script's own disk floor and
+        stops all future deploys. The image's revision label already says what
+        each image is; the journal already says when it ran.
         """
         if not image_id:
             self.report.phase("rollback-point", False, "no running image to pin")
             return False
+        # Remember the generation we are about to displace so it can be
+        # reclaimed after a SUCCESSFUL deploy (never before -- until then it is
+        # still a rollback target).
+        self._superseded_image_id = self.image_id_of(f"{self.cfg.image}:{ROLLBACK_TAG}")
         res = self._docker("tag", image_id, f"{self.cfg.image}:{ROLLBACK_TAG}")
         if not res.ok:
             raise DeployError(f"could not tag the rollback point: {res.stderr.strip()}")
-        if previous_sha:
-            self._docker("tag", image_id, f"{self.cfg.image}:{previous_sha[:12]}")
         self.report.phase("rollback-point", True, f"{self.cfg.image}:{ROLLBACK_TAG} -> {image_id[:19]}")
         return True
+
+    def image_id_of(self, ref: str) -> str | None:
+        res = self._docker("image", "inspect", ref, "--format", "{{.Id}}")
+        return res.out if res.ok and res.out else None
+
+    def clear_stale_recreate_backups(self) -> None:
+        """Remove a leftover rename-backup container before recreating.
+
+        Compose recreates a service by renaming the old container to
+        ``<hash>_<name>``, creating the new one, then deleting the old. If a
+        recreate is interrupted -- and this script interrupts recreates, that
+        is what a rollback IS -- the renamed container survives and the NEXT
+        recreate dies with `Conflict. The container name
+        "/<hash>_wakeword-backend-1" is already in use`. Observed live on
+        2026-07-31 at 23:19 UTC after three back-to-back recreates.
+
+        Only stopped backups are removed, and only ones whose name is exactly
+        our container's rename shape. A RUNNING one means a recreate is in
+        flight right now, which is a refusal, not something to force.
+        """
+        res = self._docker(
+            "ps", "-a", "--format", "{{.ID}}\t{{.Names}}\t{{.State}}",
+            "--filter", f"name=_{self.cfg.container}",
+        )
+        if not res.ok:
+            raise DeployError(f"could not list containers: {res.stderr.strip()}")
+        removed = []
+        for line in res.out.splitlines():
+            parts = line.split("\t")
+            if len(parts) != 3:
+                continue
+            cid, name, state = (p.strip() for p in parts)
+            if name == self.cfg.container or not name.endswith("_" + self.cfg.container):
+                continue
+            if state == "running":
+                raise DeployError(
+                    f"container {name} is RUNNING -- another recreate of "
+                    f"{self.cfg.container} is in flight; refusing to race it"
+                )
+            rm = self._docker("rm", "-f", cid)
+            if not rm.ok:
+                raise DeployError(f"could not remove stale recreate backup {name}: {rm.stderr.strip()}")
+            removed.append(name)
+        self.report.phase(
+            "stale-recreate-backups", True,
+            ", ".join(removed) if removed else "none",
+        )
+
+    def prune_superseded_image(self) -> None:
+        """Reclaim the generation two deploys back, after a proven-good deploy.
+
+        Keeps exactly two images: what is serving and what we would roll back
+        to. Removal is by explicit ID -- never a blanket `docker image prune`,
+        which on this shared host would reach into other projects' images.
+        Failure here is logged, never fatal: a deploy that worked must not be
+        reported as failed because a cleanup did not.
+        """
+        stale = self._superseded_image_id
+        if not stale:
+            return
+        keep = {self.image_id_of(f"{self.cfg.image}:latest"), self.image_id_of(f"{self.cfg.image}:{ROLLBACK_TAG}")}
+        if stale in keep:
+            return
+        res = self._docker("rmi", stale)
+        detail = f"{stale[:19]} reclaimed" if res.ok else f"{stale[:19]} still in use"
+        self.report.phase("prune-superseded", res.ok, detail)
 
     def build(self, target_sha: str) -> None:
         res = self._compose(
@@ -767,6 +844,7 @@ class BackendDeployer:
             self.fast_forward(target_sha)
             self.build(target_sha)
             self.import_preflight()
+            self.clear_stale_recreate_backups()
             self.recreate()
             self.wait_for_container_health()
             self.verify_serving_revision(target_sha)
@@ -795,6 +873,7 @@ class BackendDeployer:
 
         self.report.outcome = "deployed"
         self.report.reason = f"{(deployed_sha or 'unknown')[:12]} -> {target_sha[:12]}"
+        self.prune_superseded_image()
         self.clear_drift_marker()
         self._log(f"deployed {target_sha[:12]}")
         self.journal()
