@@ -346,3 +346,6 @@ gates:
       - tests/unit/test_deploy_backend.py::test_build_failure_never_recreates_the_container
       - tests/unit/test_deploy_backend.py::test_import_preflight_failure_never_recreates_the_container
       - tests/unit/test_deploy_backend.py::test_persistent_undeployed_drift_pages
+      - tests/unit/test_deploy_backend.py::test_health_check_identifies_as_a_browser
+      - tests/unit/test_deploy_backend.py::test_a_standing_edge_refusal_fails_fast_instead_of_waiting_out_the_timeout
+      - tests/unit/test_deploy_backend.py::test_a_warming_service_is_still_given_the_full_timeout

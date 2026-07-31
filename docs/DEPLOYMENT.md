@@ -92,6 +92,12 @@ Host-specific settings live in `/etc/violawake-deploy.env` (off-VCS), notably `V
 | Free disk under 15 GiB | Refused, paged | Reclaim space (`docker system df`), then let the next tick run |
 | Deploy checkout dirty or diverged | Refused, paged | Resolve it by hand on the box — the reconciler never force-moves a checkout it did not make |
 
+**Probing `api.violawake.com` from the box needs a browser User-Agent.** Cloudflare's WAF answers
+the default `Python-urllib/3.x` agent with **403** while `curl` from the same host gets 200 — the
+first live reconciler run deployed correctly and then rolled itself back over exactly this. The
+reconciler now sends a browser agent (`HEALTH_CHECK_USER_AGENT`); any ad-hoc probe script you write
+against the public API needs to do the same, or you will diagnose a healthy service as down.
+
 ### Manual deploy (hotfix, or when the timer is off)
 
 Same script, run directly; there is no separate hand-written sequence to keep in sync any more:
