@@ -239,8 +239,10 @@ async def _resolve_download_user(
             # Privileged backend integration: a matching service key
             # authenticates as the synthetic Viola Service user. Lets the
             # Viola backend download models it submitted on behalf of its
-            # own per-tenant users (per-Viola-tenant isolation enforced
-            # upstream).
+            # own users. Model access is still account-scoped here; the
+            # upstream caller binds a model to one of its users before
+            # exposing it (see `app.tenancy` for the controls that are
+            # tenant-scoped on this side).
             creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=bearer)
             if _credentials_match_service_key(creds):
                 return await _get_or_create_service_user(db)

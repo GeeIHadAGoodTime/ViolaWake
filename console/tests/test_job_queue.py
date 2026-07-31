@@ -24,6 +24,7 @@ try:
         JobStatus,
         QueueFullError,
     )
+    from app.tenancy import QueuePartition
 
     HAS_BACKEND = True
 except ImportError:
@@ -59,9 +60,9 @@ def _run_test(tmp_path, coro_fn, *, no_worker=False, **queue_kwargs):
         loop.close()
 
 
-async def _submit(q, user_id=1, wake_word="test"):
+async def _submit(q, user_id=1, wake_word="test", tenant_key=""):
     return await q.submit_job(
-        user_id=user_id,
+        partition=QueuePartition(user_id=user_id, tenant_key=tenant_key),
         wake_word=wake_word,
         recording_ids=[1, 2, 3, 4, 5],
         epochs=10,
@@ -272,7 +273,7 @@ class TestCircuitBreaker:
 
     def test_record_failure_increments(self, tmp_path):
         async def _test(q):
-            await q._record_failure(1, "test error")
+            await q._record_failure(QueuePartition.for_account(1), "test error")
             breaker = await q.get_circuit_breaker(1)
             assert breaker.consecutive_failures == 1
             assert breaker.paused is False
@@ -282,7 +283,7 @@ class TestCircuitBreaker:
     def test_three_failures_pauses_user(self, tmp_path):
         async def _test(q):
             for i in range(3):
-                await q._record_failure(1, f"error {i}")
+                await q._record_failure(QueuePartition.for_account(1), f"error {i}")
             breaker = await q.get_circuit_breaker(1)
             assert breaker.consecutive_failures == 3
             assert breaker.paused is True
@@ -292,7 +293,7 @@ class TestCircuitBreaker:
     def test_resume_clears_breaker(self, tmp_path):
         async def _test(q):
             for i in range(3):
-                await q._record_failure(1, f"error {i}")
+                await q._record_failure(QueuePartition.for_account(1), f"error {i}")
             await q.resume_user(1)
             breaker = await q.get_circuit_breaker(1)
             assert breaker.consecutive_failures == 0
@@ -302,8 +303,8 @@ class TestCircuitBreaker:
 
     def test_success_resets_breaker(self, tmp_path):
         async def _test(q):
-            await q._record_failure(1, "error")
-            await q._record_success(1)
+            await q._record_failure(QueuePartition.for_account(1), "error")
+            await q._record_success(QueuePartition.for_account(1))
             breaker = await q.get_circuit_breaker(1)
             assert breaker.consecutive_failures == 0
             assert breaker.paused is False
@@ -394,7 +395,7 @@ class TestPriorityConstants:
 
 async def _submit_with_priority(q, user_id=1, wake_word="test", priority=0):
     return await q.submit_job(
-        user_id=user_id,
+        partition=QueuePartition.for_account(user_id),
         wake_word=wake_word,
         recording_ids=[1, 2, 3, 4, 5],
         epochs=10,

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 import bcrypt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -19,6 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models import Team, TeamMember, User
+from app.tenancy import (
+    SERVICE_TENANT_HEADER,
+    MissingServiceTenantError,
+    QueuePartition,
+    normalize_service_tenant_key,
+)
 
 security = HTTPBearer()
 
@@ -393,8 +399,11 @@ async def _get_or_create_service_user(db: AsyncSession) -> User:
     """Look up (or create on first use) the synthetic Viola service user.
 
     The service user owns every recording / training job submitted via the
-    service-key path. Per-Viola-tenant isolation is enforced upstream by Viola
-    (e.g., model paths under `<user_id>__<slug>.onnx`).
+    service-key path -- so it is an ACCOUNT shared by the caller's whole user
+    base, never an identity for any one of them. Anything that must apply to
+    one upstream user at a time is keyed on the request's queue partition
+    instead (:func:`resolve_queue_partition`, ``app.tenancy``), because keying
+    it on this account makes it apply to all of them at once.
     """
     global _SERVICE_USER_ID_CACHE
 
@@ -474,6 +483,38 @@ def is_service_user(user: User) -> bool:
         return False
     actual = (user.email or "").strip().lower()
     return actual == expected
+
+
+def resolve_queue_partition(request: Request, user: User) -> QueuePartition:
+    """Return the queue partition the work in *request* belongs to.
+
+    This is the single place the partition is decided, so no route can enqueue
+    or clear work whose scope was inferred somewhere else:
+
+    * An ordinary account is its own partition.
+    * The synthetic service account is NOT: one credential submits work for a
+      whole upstream user base, so the request must name which of that
+      caller's users it is acting for. A service-key request that names no
+      usable tenant is refused (400) rather than folded into a shared
+      partition -- folding it in is what makes one upstream user's three
+      failures pause training for every other upstream user, and what makes
+      one upstream user's queue consume the pending-job cap of the rest.
+
+    The refusal is deliberately loud and one-directional: it can only ever
+    reject a caller that is already misconfigured for multi-tenant use, and
+    never downgrades an isolated request into a shared one.
+    """
+    if not is_service_user(user):
+        return QueuePartition.for_account(user.id)
+
+    try:
+        tenant_key = normalize_service_tenant_key(request.headers.get(SERVICE_TENANT_HEADER))
+    except MissingServiceTenantError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    return QueuePartition(user_id=user.id, tenant_key=tenant_key)
 
 
 def make_get_team_member(required_roles: list[str] | None = None):

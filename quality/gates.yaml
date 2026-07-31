@@ -294,3 +294,23 @@ gates:
       - tests/unit/test_quality_gate_tts_outage.py::test_the_bare_pre_fix_call_shape_is_gone
       - tests/unit/test_quality_gate_tts_outage.py::test_fp_rate_logic_itself_is_untouched_and_still_fails_closed_on_empty
       - tests/unit/test_quality_gate_tts_outage.py::test_outage_guard_only_fires_on_total_failure_not_on_a_bad_model
+
+  - gate_id: service-tenant-partitions-per-user-controls
+    contract: Work arriving under the shared service-key account must be partitioned by the tenant key its caller presents, so the training circuit breaker, the PER_USER_MAX_PENDING cap, the failure-backoff timer, the per-user rate-limit buckets (TRAINING_SUBMIT_LIMIT, RECORDING_UPLOAD_LIMIT) and job ownership each apply to ONE upstream user instead of that caller's whole install base; a service-key request naming no usable tenant is refused rather than folded into the shared partition, and upgrading a pre-tenant database moves nobody (an account keeps its pause verbatim under the empty tenant key). Proven against master 06b35f8 with the real shared service account (prod user 47): all three isolation properties failed.
+    detector: console/tests/test_service_tenant_isolation.py
+    own_tests:
+      - console/tests/test_service_tenant_isolation.py::TestCircuitBreakerIsolation::test_one_tenants_failures_do_not_pause_another
+      - console/tests/test_service_tenant_isolation.py::TestCircuitBreakerIsolation::test_a_paused_tenant_does_not_strand_another_tenants_job
+      - console/tests/test_service_tenant_isolation.py::TestCircuitBreakerIsolation::test_backoff_timer_is_per_tenant
+      - console/tests/test_service_tenant_isolation.py::TestCircuitBreakerIsolation::test_resume_releases_only_the_asking_tenant
+      - console/tests/test_service_tenant_isolation.py::TestPendingCapIsolation::test_one_tenant_cannot_consume_another_tenants_cap
+      - console/tests/test_service_tenant_isolation.py::TestPendingCapIsolation::test_listing_is_scoped_to_the_tenant
+      - console/tests/test_service_tenant_isolation.py::TestRateLimitIsolation::test_two_tenants_get_two_rate_limit_buckets
+      - console/tests/test_service_tenant_isolation.py::TestRateLimitIsolation::test_an_ordinary_account_keeps_its_existing_key
+      - console/tests/test_service_tenant_isolation.py::TestJobOwnership::test_a_tenant_cannot_open_another_tenants_job
+      - console/tests/test_service_tenant_isolation.py::TestPartitionBoundary::test_a_service_call_without_a_tenant_is_refused
+      - console/tests/test_service_tenant_isolation.py::TestPartitionBoundary::test_a_malformed_tenant_is_refused_not_coerced
+      - console/tests/test_service_tenant_isolation.py::TestPartitionBoundary::test_an_ordinary_account_is_its_own_partition
+      - console/tests/test_service_tenant_isolation.py::TestPartitionBoundary::test_submission_offers_no_bare_account_form
+      - console/tests/test_service_tenant_isolation.py::TestMigrationFromPreTenantDatabase::test_existing_rows_keep_their_state_and_gain_partitioning
+      - console/tests/test_service_tenant_isolation.py::TestMigrationFromPreTenantDatabase::test_migration_is_idempotent

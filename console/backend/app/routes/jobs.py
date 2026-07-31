@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import (
     get_service_or_verified_user,
-    get_verified_user,
     is_service_user,
+    resolve_queue_partition,
 )
 from app.database import get_db
 from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
@@ -23,6 +23,7 @@ from app.schemas import (
     JobSubmitResponse,
     MessageResponse,
 )
+from app.tenancy import QueuePartition
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -46,9 +47,13 @@ async def _service_or_quota_user_with_rate_key(
     Service-key callers (Viola backend) bypass per-user billing quotas:
     upstream Viola handles its own per-tenant billing. End-user callers go
     through the standard ``check_training_quota`` path.
+
+    The rate-limit key is the caller's PARTITION, not the account. Keyed on
+    the account, ``TRAINING_SUBMIT_LIMIT`` (5/hour) would be five trainings
+    per hour for the service caller's entire install base.
     """
     if is_service_user(candidate_user):
-        set_rate_limit_user(request, candidate_user.id)
+        set_rate_limit_user(request, resolve_queue_partition(request, candidate_user))
         return candidate_user
     # Mirror check_training_quota inline so we can reuse the already-resolved
     # User and avoid double DB lookups.
@@ -118,14 +123,15 @@ async def submit_training_job(
     body: JobSubmitRequest,
     current_user: User,
     db: AsyncSession,
+    partition: QueuePartition,
 ) -> JobSubmitResponse:
-    """Validate and enqueue a training job."""
+    """Validate and enqueue a training job in *partition*."""
     wake_word, recording_ids, epochs = await validate_training_request(body, current_user, db)
     queue = await init_job_queue()
 
     try:
         job_id = await queue.submit_job(
-            user_id=current_user.id,
+            partition=partition,
             wake_word=wake_word,
             recording_ids=recording_ids,
             epochs=epochs,
@@ -145,10 +151,15 @@ async def submit_training_job(
     return JobSubmitResponse(job_id=job_id, status="queued")
 
 
-async def get_owned_job_or_404(job_id: int, current_user: User) -> Job:
-    """Return an owned job or raise 404."""
+async def get_owned_job_or_404(job_id: int, partition: QueuePartition) -> Job:
+    """Return a job owned by *partition* or raise 404.
+
+    Ownership is the whole partition, not just the account. On the service
+    path every upstream user's job sits under one account, so an account-only
+    check would let any one of them read or cancel any other's training job.
+    """
     job = await (await init_job_queue()).get_job(job_id)
-    if job is None or job.user_id != current_user.id:
+    if job is None or job.partition != partition:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Training job not found")
     return job
 
@@ -162,33 +173,47 @@ async def create_job(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobSubmitResponse:
     """Submit a new training job."""
-    return await submit_training_job(body, current_user, db)
+    partition = resolve_queue_partition(request, current_user)
+    return await submit_training_job(body, current_user, db, partition)
 
 
 @router.get("", response_model=list[JobResponse])
 async def list_jobs(
-    current_user: Annotated[User, Depends(get_verified_user)],
+    request: Request,
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> list[JobResponse]:
-    """List the current user's training jobs."""
-    jobs = await (await init_job_queue()).list_jobs(current_user.id)
+    """List the caller's training jobs."""
+    partition = resolve_queue_partition(request, current_user)
+    jobs = await (await init_job_queue()).list_jobs(partition)
     return [serialize_job(job) for job in jobs]
 
 
 @router.post("/resume", response_model=MessageResponse)
 async def resume_jobs(
-    current_user: Annotated[User, Depends(get_verified_user)],
+    request: Request,
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> MessageResponse:
-    """Manually resume a user's paused queue after circuit breaker activation."""
-    await (await init_job_queue()).resume_user(current_user.id)
+    """Manually resume the caller's paused queue after a breaker trip.
+
+    Reachable from the service path too, which is the point: a service-key
+    caller could previously neither trip its own breaker in isolation nor
+    clear it, because this endpoint demanded an end-user JWT it has no way to
+    present. That is how one paused queue stranded pending work for 27h+ with
+    no API able to release it. It now resumes exactly the caller's partition.
+    """
+    partition = resolve_queue_partition(request, current_user)
+    await (await init_job_queue()).resume_user(partition)
     return MessageResponse(message="Training queue resumed")
 
 
 @router.get("/circuit-breaker/state", response_model=JobCircuitBreakerResponse)
 async def get_circuit_breaker_state(
-    current_user: Annotated[User, Depends(get_verified_user)],
+    request: Request,
+    current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> JobCircuitBreakerResponse:
-    """Return the current user's circuit breaker state."""
-    breaker = await (await init_job_queue()).get_circuit_breaker(current_user.id)
+    """Return the caller's circuit breaker state."""
+    partition = resolve_queue_partition(request, current_user)
+    breaker = await (await init_job_queue()).get_circuit_breaker(partition)
     return JobCircuitBreakerResponse(
         consecutive_failures=breaker.consecutive_failures,
         paused=breaker.paused,
@@ -200,21 +225,23 @@ async def get_circuit_breaker_state(
 
 @router.get("/{job_id}", response_model=JobResponse)
 async def get_job(
+    request: Request,
     job_id: int,
     current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> JobResponse:
     """Return one training job."""
-    job = await get_owned_job_or_404(job_id, current_user)
+    job = await get_owned_job_or_404(job_id, resolve_queue_partition(request, current_user))
     return serialize_job(job)
 
 
 @router.delete("/{job_id}", response_model=MessageResponse)
 async def cancel_job(
+    request: Request,
     job_id: int,
     current_user: Annotated[User, Depends(get_service_or_verified_user)],
 ) -> MessageResponse:
     """Cancel a pending or running training job."""
-    await get_owned_job_or_404(job_id, current_user)
+    await get_owned_job_or_404(job_id, resolve_queue_partition(request, current_user))
     cancelled = await (await init_job_queue()).cancel_job(job_id)
     if not cancelled:
         raise HTTPException(

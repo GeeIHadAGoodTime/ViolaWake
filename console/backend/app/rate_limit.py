@@ -10,6 +10,8 @@ from limits import parse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.tenancy import QueuePartition
+
 
 def _client_ip_key(request: Request) -> str:
     """Return the real end-user IP for rate-limit keying.
@@ -65,20 +67,39 @@ def get_public_client_ip(request: Request) -> str:
 # Custom key function for user-scoped limits
 # ---------------------------------------------------------------------------
 def key_by_user(request: Request) -> str:
-    """Return the authenticated user's ID as the rate-limit key.
+    """Return the caller's rate-limit key.
 
     Reads ``request.state.rate_limit_user_id`` which must be set by a
     FastAPI dependency that resolves *before* the route function is called.
     Falls back to client IP if the attribute is missing.
     """
-    user_id: int | None = getattr(request.state, "rate_limit_user_id", None)
+    user_id: int | str | None = getattr(request.state, "rate_limit_user_id", None)
     if user_id is not None:
         return str(user_id)
     return get_remote_address(request)
 
 
-def set_rate_limit_user(request: Request, user_id: int) -> None:
-    """Stash the user id on the request so ``key_by_user`` can read it."""
+def set_rate_limit_user(request: Request, user_id: int | QueuePartition) -> None:
+    """Stash the caller's rate-limit key so ``key_by_user`` can read it.
+
+    Accepts a bare account id (an ordinary account is its own rate-limit
+    bucket, and the key is unchanged from before) or a queue partition.
+
+    The partition form exists because these limits are per-USER limits, and
+    the service-key path puts a whole upstream user base behind one account:
+    keyed on the account, ``TRAINING_SUBMIT_LIMIT`` (5/hour) is five wake-word
+    trainings per hour for that caller's ENTIRE install base, and
+    ``RECORDING_UPLOAD_LIMIT`` is likewise shared, so the next user is 429'd
+    because of strangers. Same defect as the shared circuit breaker and the
+    shared pending-job cap, one layer up.
+    """
+    if isinstance(user_id, QueuePartition):
+        request.state.rate_limit_user_id = (
+            f"{user_id.user_id}:{user_id.tenant_key}"
+            if user_id.is_service_tenant
+            else user_id.user_id
+        )
+        return
     request.state.rate_limit_user_id = user_id
 
 

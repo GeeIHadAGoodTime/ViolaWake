@@ -31,6 +31,17 @@ try:
 except ImportError:
     HAS_FASTAPI = False
 
+import sys as _sys
+
+_BACKEND_DIR = str(Path(__file__).resolve().parents[1] / "backend")
+if _BACKEND_DIR not in _sys.path:
+    _sys.path.insert(0, _BACKEND_DIR)
+
+try:
+    from app.tenancy import SERVICE_TENANT_HEADER
+except ImportError:  # pragma: no cover - mirrors the HAS_FASTAPI guard above
+    SERVICE_TENANT_HEADER = "X-Viola-Tenant"
+
 pytestmark = pytest.mark.skipif(not HAS_FASTAPI, reason="fastapi not installed")
 
 
@@ -817,12 +828,51 @@ class TestTraining:
         ):
             resp = client.delete(
                 "/api/jobs/54",
-                headers={"Authorization": "Bearer svc-test-key"},
+                headers={
+                    "Authorization": "Bearer svc-test-key",
+                    # The service key alone names an account shared by the
+                    # caller's whole user base; the tenant header is what says
+                    # WHICH of its users this call belongs to.
+                    SERVICE_TENANT_HEADER: "a1b2c3d4e5f60718",
+                },
             )
 
         assert resp.status_code == 200, resp.text
         assert resp.json()["message"] == "Training job cancellation requested"
         queue.cancel_job.assert_awaited_once_with(54)
+
+    def test_service_key_without_tenant_is_refused(self, client, monkeypatch) -> None:
+        """A service-key call that names no tenant must not reach the queue.
+
+        Without this refusal the call lands in the shared partition, where one
+        upstream user's failures pause every other upstream user's training
+        and one upstream user's queue consumes the pending cap of the rest.
+        """
+        import sys
+
+        backend_dir = str(Path(__file__).resolve().parents[1] / "backend")
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
+
+        from app.auth import reset_service_user_cache
+        from app.config import settings
+
+        reset_service_user_cache()
+        monkeypatch.setattr(settings, "service_key", "svc-test-key")
+
+        queue = SimpleNamespace(cancel_job=AsyncMock(return_value=True))
+        with (
+            patch("app.routes.jobs.get_owned_job_or_404", new=AsyncMock(return_value=SimpleNamespace(id=54))),
+            patch("app.routes.jobs.init_job_queue", new=AsyncMock(return_value=queue)),
+        ):
+            resp = client.delete(
+                "/api/jobs/54",
+                headers={"Authorization": "Bearer svc-test-key"},
+            )
+
+        assert resp.status_code == 400, resp.text
+        assert SERVICE_TENANT_HEADER in resp.json()["detail"]
+        queue.cancel_job.assert_not_awaited()
 
     def test_start_no_auth(self, client) -> None:
         resp = client.post(

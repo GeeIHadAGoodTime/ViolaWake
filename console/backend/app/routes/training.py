@@ -9,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
-from app.auth import decode_download_token, decode_token, get_verified_user
+from app.auth import (
+    decode_download_token,
+    decode_token,
+    get_verified_user,
+    resolve_queue_partition,
+)
 from app.database import get_db
 from app.job_queue import TooManySubscribersError, init_job_queue
 from app.models import User
@@ -48,17 +53,19 @@ async def start_training(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TrainingStartResponse:
     """Submit a training job through the persistent queue."""
-    job_response = await submit_training_job(body, current_user, db)
+    partition = resolve_queue_partition(request, current_user)
+    job_response = await submit_training_job(body, current_user, db, partition)
     return TrainingStartResponse(job_id=job_response.job_id, status=job_response.status)
 
 
 @router.get("/status/{job_id}", response_model=TrainingStatusResponse)
 async def get_training_status(
+    request: Request,
     job_id: int,
     current_user: Annotated[User, Depends(get_verified_user)],
 ) -> TrainingStatusResponse:
     """Get the current status of a queued training job."""
-    job = await get_owned_job_or_404(job_id, current_user)
+    job = await get_owned_job_or_404(job_id, resolve_queue_partition(request, current_user))
     return TrainingStatusResponse(
         job_id=job.id,
         status=_legacy_status(job.status.value),
@@ -119,7 +126,7 @@ async def stream_training(
 ) -> EventSourceResponse:
     """Stream queued training progress via Server-Sent Events."""
     current_user = await _resolve_sse_user(request, token, db, job_id=job_id)
-    job = await get_owned_job_or_404(job_id, current_user)
+    job = await get_owned_job_or_404(job_id, resolve_queue_partition(request, current_user))
     queue_manager = await init_job_queue()
     active_connection_count = _active_sse_connections.get(current_user.id, 0)
     if active_connection_count >= MAX_SSE_PER_USER:
