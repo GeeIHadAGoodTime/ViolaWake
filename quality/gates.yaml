@@ -349,3 +349,8 @@ gates:
       - tests/unit/test_deploy_backend.py::test_health_check_identifies_as_a_browser
       - tests/unit/test_deploy_backend.py::test_a_standing_edge_refusal_fails_fast_instead_of_waiting_out_the_timeout
       - tests/unit/test_deploy_backend.py::test_a_warming_service_is_still_given_the_full_timeout
+      - tests/unit/test_deploy_backend.py::test_a_stale_recreate_backup_is_cleared_before_recreating
+      - tests/unit/test_deploy_backend.py::test_a_running_recreate_backup_is_never_forced
+      - tests/unit/test_deploy_backend.py::test_the_generation_two_deploys_back_is_reclaimed_after_success
+      - tests/unit/test_deploy_backend.py::test_pruning_never_removes_the_serving_or_rollback_image
+      - tests/unit/test_deploy_backend.py::test_only_one_image_generation_is_tag_pinned
