@@ -14,7 +14,14 @@ paused-submit guard, no failure email, no in-product pause channel) and GREEN on
 fix. Together they pin the seven properties the ticket's acceptance oracle names:
 
 1. a job the queue never ran leaves the usage count unchanged -- both the paused-queue
-   strand and a ``SharedInfrastructureUnavailableError`` failure;
+   strand and a ``SharedInfrastructureUnavailableError`` failure. The paused-queue half
+   shipped in two parts: PR #36 refused a NEW submit to an already-paused account, and
+   GeeIHadAGoodTime/Viola#4435 (the tests from
+   ``test_a_sibling_pending_job_is_abandoned_and_refunded_when_its_partition_pauses``
+   onward, below) closes the other half -- a job already charged and PENDING at the
+   instant a SIBLING job's failure trips the pause, which used to strand as "Queued"
+   forever with the attempt spent (reproduced: two charged jobs pending, one genuine
+   failure pauses the account, job2.status stayed PENDING and usage_after stayed 2);
 2. a paused user's submit is refused BEFORE ``record_usage`` fires;
 3. a job is credited at most once, however many paths ask;
 4. the credit lands on the period the charge was made in, so a 07-31 submit failing
@@ -144,12 +151,12 @@ async def _new_queue(tmp_path) -> JobQueue:
     return q
 
 
-async def _insert_pending(q, *, job_id, user_id, wake_word="abigail"):
+async def _insert_pending(q, *, job_id, user_id, wake_word="abigail", tenant_key=""):
     async with q._connect() as conn:
         await conn.execute(
             "INSERT INTO jobs "
-            "(id, user_id, wake_word, status, created_at, recording_ids, epochs, priority) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, user_id, wake_word, status, created_at, recording_ids, epochs, priority, tenant_key) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 job_id,
                 user_id,
@@ -159,6 +166,7 @@ async def _insert_pending(q, *, job_id, user_id, wake_word="abigail"):
                 "[1, 2, 3, 4, 5]",
                 10,
                 0,
+                tenant_key,
             ),
         )
         await conn.commit()
@@ -450,3 +458,252 @@ def test_the_breaker_and_resume_routes_the_frontend_calls_are_registered() -> No
     }
     resume = [route for route in router.routes if route.path == "/api/jobs/resume"]
     assert resume and "POST" in resume[0].methods
+
+
+# =========================================================================== #
+# GeeIHadAGoodTime/Viola#4435 -- the stranded-PENDING half of clause (1).
+#
+# PR #36 refused a NEW submit to an already-paused account (routes/jobs.py),
+# and gave the console a working resume button (TrainingPauseBanner.tsx +
+# api.ts + POST /api/jobs/resume, proven above). What it left open: a job
+# already charged and enqueued BEFORE the pause has nobody to end it.
+# `_fill_queue_from_db` skips a paused partition's rows on every fill, and
+# `_execute_job` returned early without touching status, so such a job sat
+# "Queued" forever with its attempt already spent. Three independent closure
+# points are proven below: the causal moment a sibling's failure trips the
+# pause, the narrow race where a job already reached `_execute_job`, and a
+# restart reconciling anything that predates this fix.
+# =========================================================================== #
+
+def test_a_sibling_pending_job_is_abandoned_and_refunded_when_its_partition_pauses(
+    tmp_path, monkeypatch
+) -> None:
+    async def _test() -> None:
+        user_id = await _make_user()
+        await _set_usage(user_id, JULY, 2)  # both jobs already charged
+
+        q = await _new_queue(tmp_path)
+        partition = QueuePartition(user_id=user_id)
+
+        # Bring the breaker to FAILURE_THRESHOLD - 1 first, exactly as filed,
+        # so job 1's own genuine failure below is the one that trips the pause.
+        for index in range(FAILURE_THRESHOLD - 1):
+            await q._record_failure(partition, f"prior crash {index}")
+        assert (await q.get_circuit_breaker(partition)).paused is False
+
+        # Clear the backoff window the prior failures armed. `_execute_job`
+        # itself also honours `next_attempt_at` (that is what makes an
+        # ordinary retry wait out its backoff) -- this test is proving what
+        # happens when job 1's OWN failure trips the pause, not re-testing
+        # the backoff timer. In production this much wall-clock time has
+        # always already elapsed by the time a real retry reaches the
+        # dispatcher; skipping the wait here is that same passage of time.
+        async with q._connect() as conn:
+            await conn.execute(
+                "UPDATE user_circuit_breakers SET next_attempt_at = NULL "
+                "WHERE user_id = ? AND tenant_key = ?",
+                (partition.user_id, partition.tenant_key),
+            )
+            await conn.commit()
+
+        await _insert_pending(q, job_id=1, user_id=user_id, wake_word="job_one")
+        await q.mark_usage_charged(1, user_id=user_id, period_start=JULY)
+        await _insert_pending(q, job_id=2, user_id=user_id, wake_word="job_two")
+        await q.mark_usage_charged(2, user_id=user_id, period_start=JULY)
+
+        _arm_training_to_raise(monkeypatch, q, tmp_path, RuntimeError("bad recordings"))
+        await q._execute_job(1)
+
+        assert (await q.get_circuit_breaker(partition)).paused is True, (
+            "the third genuine failure must trip the breaker"
+        )
+
+        job1 = await q.get_job(1)
+        job2 = await q.get_job(2)
+        assert job1 is not None and job1.status == JobStatus.FAILED
+        assert job2 is not None and job2.status == JobStatus.FAILED, (
+            "a job already PENDING and charged when its partition paused must not "
+            "stay Queued forever -- it must be ended honestly"
+        )
+        assert job2.error is not None and "did not start" in job2.error.lower()
+
+        # job1 is a GENUINE failure and keeps its charge (the guard stays
+        # narrow); job2 never ran at all and must be credited back. Net: 2
+        # charged, 1 refunded == 1 remaining -- pre-fix this stayed 2.
+        assert await _usage_count(user_id, JULY) == 1, (
+            "job2's never-run charge must be credited back; job1's genuine "
+            "failure keeps its own charge"
+        )
+
+    _call(_test())
+
+
+def test_a_job_that_reaches_execute_job_already_paused_is_abandoned_not_silently_skipped(
+    tmp_path,
+) -> None:
+    """The narrower race: a job dequeued for execution just as its partition
+    pauses (`_execute_job`'s own paused check) must not silently stay PENDING.
+    """
+
+    async def _test() -> None:
+        user_id = await _make_user()
+        await _set_usage(user_id, JULY, 1)
+
+        q = await _new_queue(tmp_path)
+        partition = QueuePartition(user_id=user_id)
+        for index in range(FAILURE_THRESHOLD):
+            await q._record_failure(partition, f"crash {index}")
+        assert (await q.get_circuit_breaker(partition)).paused is True
+
+        # Stands in for a job that already reached the in-memory dispatch
+        # queue before the pause landed: PENDING and charged, with its
+        # partition already paused by the time _execute_job looks it up.
+        await _insert_pending(q, job_id=5, user_id=user_id)
+        await q.mark_usage_charged(5, user_id=user_id, period_start=JULY)
+
+        await q._execute_job(5)
+
+        job = await q.get_job(5)
+        assert job is not None and job.status == JobStatus.FAILED, (
+            "a job that reaches _execute_job with its partition already paused "
+            "must be ended honestly, not silently left PENDING forever"
+        )
+        assert await _usage_count(user_id, JULY) == 0, "its charge must be credited back"
+
+    _call(_test())
+
+
+def test_boot_reconciles_a_preexisting_stranded_job_without_emailing(
+    tmp_path, monkeypatch
+) -> None:
+    """A strand that predates this fix (or survived a restart) is corrected on
+    `start()` -- silently. Contacting an already-affected customer is
+    GeeIHadAGoodTime/Viola#2066's founder-gated call, not something a
+    container restart should trigger on its own.
+    """
+    from unittest.mock import AsyncMock
+
+    async def _test() -> None:
+        user_id = await _make_user()
+        await _set_usage(user_id, JULY, 1)
+
+        q = await _new_queue(tmp_path)
+        partition = QueuePartition(user_id=user_id)
+        # Built directly against the DB: no queue instance has run
+        # _record_failure in this process, standing in for state that
+        # predates this fix entirely.
+        async with q._connect() as conn:
+            await conn.execute(
+                "INSERT INTO user_circuit_breakers "
+                "(user_id, tenant_key, consecutive_failures, paused, pause_reason) "
+                "VALUES (?, ?, ?, 1, ?)",
+                (partition.user_id, partition.tenant_key, FAILURE_THRESHOLD, "grade F"),
+            )
+            await conn.commit()
+        await _insert_pending(q, job_id=11, user_id=user_id)
+        await q.mark_usage_charged(11, user_id=user_id, period_start=JULY)
+
+        sent = AsyncMock(return_value=True)
+
+        class _FakeEmail:
+            enabled = True
+
+            async def send_training_failed(self, **kwargs):
+                return await sent(**kwargs)
+
+        import app.email_service as email_mod
+
+        monkeypatch.setattr(email_mod, "get_email_service", lambda: _FakeEmail())
+
+        await q.start()
+        try:
+            job = await q.get_job(11)
+            assert job is not None and job.status == JobStatus.FAILED, (
+                "a restart must reconcile a job stranded before this process started"
+            )
+            assert await _usage_count(user_id, JULY) == 0, "its charge must be credited back"
+            assert sent.await_count == 0, (
+                "the boot reconciliation pass must not email -- outreach to an "
+                "already-affected customer is GeeIHadAGoodTime/Viola#2066's call"
+            )
+        finally:
+            await q.shutdown()
+
+    _call(_test())
+
+
+def test_abandon_sweep_does_not_touch_a_different_partitions_pending_job(
+    tmp_path, monkeypatch
+) -> None:
+    """One tenant's pause must strand only ITS OWN sibling, never a
+    different tenant's -- the abandon sweep must stay partition-scoped.
+
+    Combines both halves in one reproduction: tenant_a gets a stranded
+    sibling job (job 23, same shape as job 2 in the test above -- RED
+    pre-fix, GREEN post-fix) alongside tenant_b's own unrelated pending job
+    (job 22, which must survive untouched regardless of the fix, proving the
+    sweep's ``WHERE ... AND j.tenant_key = ?`` scoping actually holds).
+    """
+
+    async def _test() -> None:
+        user_id = await _make_user()
+        await _set_usage(user_id, JULY, 3)
+
+        q = await _new_queue(tmp_path)
+        tenant_a = QueuePartition(user_id=user_id, tenant_key="tenant-a")
+        tenant_b = QueuePartition(user_id=user_id, tenant_key="tenant-b")
+
+        for index in range(FAILURE_THRESHOLD - 1):
+            await q._record_failure(tenant_a, f"prior crash {index}")
+        # See the sibling test above: clear the backoff window so
+        # `_execute_job` below actually attempts (and fails) job 21 instead
+        # of returning early on the prior failures' own retry timer.
+        async with q._connect() as conn:
+            await conn.execute(
+                "UPDATE user_circuit_breakers SET next_attempt_at = NULL "
+                "WHERE user_id = ? AND tenant_key = ?",
+                (tenant_a.user_id, tenant_a.tenant_key),
+            )
+            await conn.commit()
+
+        # job 21: about to run and genuinely fail, tripping tenant_a's pause.
+        await _insert_pending(
+            q, job_id=21, user_id=user_id, wake_word="a_job", tenant_key="tenant-a"
+        )
+        await q.mark_usage_charged(21, user_id=user_id, period_start=JULY)
+        # job 23: tenant_a's OWN stranded sibling, charged and PENDING --
+        # about to be orphaned by job 21's pause exactly like job 2 above.
+        await _insert_pending(
+            q, job_id=23, user_id=user_id, wake_word="a_sibling", tenant_key="tenant-a"
+        )
+        await q.mark_usage_charged(23, user_id=user_id, period_start=JULY)
+        # job 22: a DIFFERENT tenant's own pending job. Must survive untouched.
+        await _insert_pending(
+            q, job_id=22, user_id=user_id, wake_word="b_job", tenant_key="tenant-b"
+        )
+        await q.mark_usage_charged(22, user_id=user_id, period_start=JULY)
+
+        _arm_training_to_raise(monkeypatch, q, tmp_path, RuntimeError("bad recordings"))
+        await q._execute_job(21)
+
+        assert (await q.get_circuit_breaker(tenant_a)).paused is True
+        assert (await q.get_circuit_breaker(tenant_b)).paused is False
+
+        job_23 = await q.get_job(23)
+        assert job_23 is not None and job_23.status == JobStatus.FAILED, (
+            "tenant_a's OWN stranded sibling must still be abandoned and refunded"
+        )
+        job_b = await q.get_job(22)
+        assert job_b is not None and job_b.status == JobStatus.PENDING, (
+            "a different tenant on the same account must not be swept by "
+            "another tenant's pause"
+        )
+        # job 21 (genuine failure) keeps its charge; job 23 (stranded
+        # sibling) is credited back; job 22 (a different tenant) is
+        # untouched. 3 charged - 1 refunded == 2 remaining.
+        assert await _usage_count(user_id, JULY) == 2, (
+            "job 23's stranded charge is credited back; job 21 keeps its "
+            "genuine-failure charge and job 22 (a different tenant) is untouched"
+        )
+
+    _call(_test())

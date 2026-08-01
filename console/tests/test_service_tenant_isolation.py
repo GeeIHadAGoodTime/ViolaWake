@@ -424,8 +424,25 @@ class TestRuntimeSnapshotIsPerPartition:
     def test_a_job_stranded_by_its_own_tenants_pause_is_not_called_dispatchable(self, tmp_path):
         async def _test(queue):
             await _submit(queue, TENANT_A)
-            for index in range(FAILURE_THRESHOLD):
-                await queue._record_failure(TENANT_A, f"crash {index}")
+            # Pause TENANT_A's breaker directly rather than through
+            # `_record_failure`. Since GeeIHadAGoodTime/Viola#4435 that path
+            # immediately abandons the partition's own stranded PENDING jobs
+            # (the fix, covered by its own tests in
+            # test_infra_fault_does_not_charge_attempt.py) -- it would end
+            # this very job before this test could observe it as
+            # PENDING. Reconstructing the row directly reproduces the state
+            # the health snapshot must still handle defensively regardless of
+            # how it arises (a race, a migration, a restart before the boot
+            # reconciliation pass runs): a PENDING job sitting behind an
+            # already-paused breaker.
+            async with queue._connect() as conn:
+                await conn.execute(
+                    "INSERT INTO user_circuit_breakers "
+                    "(user_id, tenant_key, consecutive_failures, paused, pause_reason) "
+                    "VALUES (?, ?, ?, 1, ?)",
+                    (TENANT_A.user_id, TENANT_A.tenant_key, FAILURE_THRESHOLD, "crash"),
+                )
+                await conn.commit()
             assert (await queue.get_circuit_breaker(TENANT_A)).paused is True
             # A second, healthy tenant on the same account -- the row that used
             # to make the paused tenant's job look runnable.

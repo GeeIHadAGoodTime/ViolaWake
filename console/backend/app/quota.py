@@ -132,12 +132,13 @@ async def refund_usage(
     user_id: int,
     period_start: datetime,
     action: str = "training_job",
-) -> None:
+) -> bool:
     """Credit back one previously-charged attempt for a SPECIFIC usage period.
 
     Charge-at-submit (``record_usage`` above) is a deliberate premise -- a
     submission consumes training compute -- but it breaks when a job dies on
-    OUR infrastructure before it consumes that compute (#4207). The refund is
+    OUR infrastructure before it consumes that compute (#4207), or never
+    consumed it at all because it could never dispatch (#4435). The refund is
     the exception to the rule, and it must be exact in two ways:
 
     * **Period-correct.** The credit lands on ``period_start`` -- the period the
@@ -156,8 +157,12 @@ async def refund_usage(
     unconditionally when it matches, so calling it twice for one charge would
     over-credit. It is deliberately the narrow arithmetic primitive; the job
     queue owns the once-only claim.
+
+    Returns whether a counter actually moved, so a caller that tells the
+    customer "this attempt was credited back" can know that is true rather
+    than assuming it from the absence of an exception.
     """
-    await db.execute(
+    result = await db.execute(
         update(UsageRecord)
         .where(
             UsageRecord.user_id == user_id,
@@ -168,6 +173,7 @@ async def refund_usage(
         .values(count=UsageRecord.count - 1)
     )
     await db.flush()
+    return bool(result.rowcount)
 
 
 # ---------------------------------------------------------------------------
