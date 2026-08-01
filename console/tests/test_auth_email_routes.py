@@ -152,6 +152,34 @@ async def test_register_sends_verification_email(
 
 
 @pytest.mark.asyncio
+async def test_register_stays_unverified_when_verification_email_fails(
+    fake_db: FakeSession,
+    fake_request,
+    fake_email_service: FakeEmailService,
+) -> None:
+    """A failed verification send must NEVER mint a verified account.
+
+    Resend rejects undeliverable domains outright, so the old auto-verify
+    fallback let anyone bypass email verification by registering with an
+    address that cannot receive mail (observed live 2026-08-01, user 173).
+    """
+    async def failing_send(to: str, token: str, name: str) -> bool:
+        return False
+
+    fake_email_service.send_verification_email = failing_send
+    email = f"failsend_{time.time_ns()}@example.com"
+
+    response = await auth_routes.register(
+        fake_request,
+        RegisterRequest(email=email, password="TestPass123!", name="Fail Send"),
+        fake_db,
+    )
+
+    assert response.user.email_verified is False
+    assert fake_db.users_by_email[email].email_verified is False
+
+
+@pytest.mark.asyncio
 async def test_verify_email_marks_user_verified_and_sends_welcome(
     fake_db: FakeSession,
     fake_request,
