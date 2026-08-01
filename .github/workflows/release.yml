@@ -215,11 +215,36 @@ jobs:
           name: dist-artifacts
           path: dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        # Uses OIDC trusted publishing — no API token needed if configured
-        # in PyPI project settings. See:
+      - name: Publish to PyPI (trusted publisher / OIDC)
+        id: pypi-publish-oidc
+        # Never let a red OIDC attempt fail the job outright — the token
+        # fallback below is what actually has to land the release. See:
         # https://docs.pypi.org/trusted-publishers/
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Uses OIDC trusted publishing — no API token needed once a trusted
+        # publisher is registered in PyPI project settings (pypi.org ->
+        # violawake -> "Publishing") for repo GeeIHadAGoodTime/ViolaWake,
+        # workflow release.yml, environment pypi.
+
+      - name: Publish to PyPI (API token fallback)
+        # v0.2.9 (2026-06-04, run 26957961171) and v0.2.10 (2026-07-31, run
+        # 30672702094) both failed the OIDC step above with PyPI's
+        # `invalid-publisher` claim — no trusted publisher was registered
+        # for this repo/workflow/environment, so every release to date
+        # actually landed via a manual `twine upload` stopgap. This step
+        # makes the release land automatically regardless of whether OIDC
+        # trusted publishing is configured or PyPI rejects the claim for
+        # any reason. PEP 740 attestations require Trusted Publishing, so
+        # they're disabled here — the OIDC step above still produces them
+        # when it succeeds. `skip-existing` guards a retry after the OIDC
+        # step failed mid-upload rather than before any upload.
+        if: steps.pypi-publish-oidc.outcome == 'failure'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
+          skip-existing: true
 
   # ──────────────────────────────────────────────
   # Job 5: Update model registry SHA-256s in docs
