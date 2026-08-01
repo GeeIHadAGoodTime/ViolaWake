@@ -175,6 +175,21 @@ def hash_remote_asset(url: str) -> tuple[str, int]:
 
 
 def resolve_asset_info(version: str, models_dir: Path, specs: OrderedDict[str, Any]) -> dict[str, AssetInfo]:
+    """Resolve fresh (filename, sha256, size) for models actually shipped in this release.
+
+    Not every model in ``MODEL_REGISTRY`` ships a new asset with every release —
+    most releases (metadata-only fixes, non-model features) ship none at all, and
+    some entries (``oww_backbone``, the Kokoro TTS models) are never hosted as
+    assets on *this* repo's releases in the first place. A model with no local
+    file and no matching asset on the current release simply keeps its existing
+    pinned registry entry; this function only returns info for models that were
+    genuinely resolved (locally staged, or found among this release's assets).
+
+    v0.2.9 (2026-06-04, run 26957961171) and v0.2.10 (2026-07-31, run
+    30672702094) both hard-failed here with "Could not find release asset
+    'temporal_cnn.onnx'" because this used to raise instead of skip — every
+    metadata-only release broke the "Update model registry" job.
+    """
     asset_info: dict[str, AssetInfo] = {}
     remote_assets: dict[str, dict[str, Any]] | None = None
 
@@ -199,9 +214,11 @@ def resolve_asset_info(version: str, models_dir: Path, specs: OrderedDict[str, A
 
         asset = remote_assets.get(filename)
         if asset is None:
-            raise RuntimeError(
-                f"Could not find release asset '{filename}' in local models or GitHub Release v{version}"
+            print(
+                f"No '{filename}' asset on GitHub Release v{version} for {model_name}; "
+                "not shipped in this release — keeping existing pinned registry entry."
             )
+            continue
 
         browser_download_url = asset.get("browser_download_url")
         if not isinstance(browser_download_url, str):
@@ -220,24 +237,42 @@ def resolve_asset_info(version: str, models_dir: Path, specs: OrderedDict[str, A
 
 
 def quoted(value: str) -> str:
-    return json.dumps(value)
+    # ensure_ascii=False: descriptions use em-dashes; without this every
+    # accented/non-ASCII character gets rewritten as a \uXXXX escape on the
+    # next successful run (still valid Python, just needlessly mangled).
+    return json.dumps(value, ensure_ascii=False)
 
 
 def render_registry_block(version: str, specs: OrderedDict[str, Any], assets: dict[str, AssetInfo]) -> str:
     lines = ["MODEL_REGISTRY: dict[str, ModelSpec] = {\n"]
 
     for model_name, spec in specs.items():
-        asset = assets[model_name]
-        release_url = f"{GITHUB_DOWNLOAD_BASE}/v{version}/{asset.filename}"
+        asset = assets.get(model_name)
+        if asset is not None:
+            # Resolved in this release: point at the new asset and stamp the
+            # new release version.
+            url = f"{GITHUB_DOWNLOAD_BASE}/v{version}/{asset.filename}"
+            sha256 = asset.sha256
+            size_bytes = asset.size_bytes
+            entry_version = version
+        else:
+            # Not shipped in this release — keep the entry exactly as it was
+            # (whatever release it was actually last published in), rather
+            # than stamping every unrelated model with the new tag.
+            url = spec.url
+            sha256 = spec.sha256
+            size_bytes = spec.size_bytes
+            entry_version = spec.version
+
         lines.extend(
             [
                 f"    {quoted(model_name)}: ModelSpec(\n",
                 f"        name={quoted(spec.name)},\n",
-                f"        url={quoted(release_url)},\n",
-                f"        sha256={quoted(asset.sha256)},\n",
-                f"        size_bytes={asset.size_bytes:_},\n",
+                f"        url={quoted(url)},\n",
+                f"        sha256={quoted(sha256)},\n",
+                f"        size_bytes={size_bytes:_},\n",
                 f"        description={quoted(spec.description)},\n",
-                f"        version={quoted(version)},\n",
+                f"        version={quoted(entry_version)},\n",
                 "    ),\n",
             ]
         )
