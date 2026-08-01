@@ -354,3 +354,9 @@ gates:
       - tests/unit/test_deploy_backend.py::test_the_generation_two_deploys_back_is_reclaimed_after_success
       - tests/unit/test_deploy_backend.py::test_pruning_never_removes_the_serving_or_rollback_image
       - tests/unit/test_deploy_backend.py::test_only_one_image_generation_is_tag_pinned
+
+  - gate_id: register-fail-closed-verification
+    contract: A failed verification-email send must never auto-verify the account; registration stays unverified with self-service resend as the recovery path (live bypass observed 2026-08-01 via undeliverable domains).
+    detector: console/tests/test_auth_email_routes.py
+    own_tests:
+      - console/tests/test_auth_email_routes.py::test_register_stays_unverified_when_verification_email_fails

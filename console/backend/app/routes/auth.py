@@ -156,9 +156,17 @@ async def register(
             name=user.name,
         )
         if not sent:
-            logger.warning("Verification email failed — auto-verifying %s", body.email)
-            user.email_verified = True
-            await db.flush()
+            # Fail CLOSED: a failed send must never mint a verified account.
+            # Resend rejects undeliverable domains (e.g. example.com), so
+            # auto-verifying here let anyone bypass email verification by
+            # registering with an address that cannot receive mail. The user
+            # stays unverified and can use the self-service resend button
+            # (#2153) once they have a reachable address.
+            logger.warning(
+                "Verification email failed for %s — user stays unverified "
+                "(self-service resend available)",
+                body.email,
+            )
 
     return _registration_pending_response(body)
 
