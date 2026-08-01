@@ -379,6 +379,11 @@ async def get_verified_user(
 
 _SERVICE_USER_ID_CACHE: int | None = None
 
+# The address the synthetic service account falls back to when the setting is
+# blank. Module-level so minting and recognition cannot drift apart -- see
+# service_user_email().
+DEFAULT_SERVICE_USER_EMAIL = "viola-service@viola.internal"
+
 
 def _credentials_match_service_key(
     credentials: HTTPAuthorizationCredentials | None,
@@ -414,7 +419,7 @@ async def _get_or_create_service_user(db: AsyncSession) -> User:
             return cached_user
         _SERVICE_USER_ID_CACHE = None
 
-    email = (settings.service_user_email or "viola-service@viola.internal").strip().lower()
+    email = service_user_email()
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
     if user is None:
@@ -476,9 +481,26 @@ async def get_service_or_verified_user(
     return user
 
 
+def service_user_email() -> str:
+    """The address of the synthetic service account, defaulted identically everywhere.
+
+    One resolver so the account that :func:`_get_or_create_service_user` mints
+    and the account :func:`is_service_user` recognises can never be two
+    different things. They used to disagree: minting fell back to
+    ``DEFAULT_SERVICE_USER_EMAIL`` when the setting was blank while recognition
+    returned ``False``, so an explicitly empty ``VIOLAWAKE_SERVICE_USER_EMAIL``
+    (with a service key still set) authenticated the shared account and then
+    failed to recognise it -- and an unrecognised service account is not
+    refused by :func:`resolve_queue_partition`, it is folded into the shared
+    ``(id, "")`` partition with no 400. That is fail-OPEN on the one seam whose
+    entire purpose is to fail closed, so both sides now read the same value.
+    """
+    return (settings.service_user_email or DEFAULT_SERVICE_USER_EMAIL).strip().lower()
+
+
 def is_service_user(user: User) -> bool:
     """Return True iff this User is the synthetic Viola service account."""
-    expected = (settings.service_user_email or "").strip().lower()
+    expected = service_user_email()
     if not expected:
         return False
     actual = (user.email or "").strip().lower()

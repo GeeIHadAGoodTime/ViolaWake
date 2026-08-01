@@ -603,6 +603,20 @@ class JobQueue:
         queue (the pre-fix behaviour) flagged the whole backend unhealthy
         forever with no worker able to touch it. ``oldest_dispatchable_pending_age_s``
         rises only when the dispatcher genuinely fails to pick up runnable work.
+
+        The breaker join is on the whole PARTITION, not on ``user_id``. It used
+        to be on ``user_id`` alone, which was correct only while
+        ``user_circuit_breakers`` was keyed ``user_id INTEGER PRIMARY KEY`` --
+        one row per account, so the join was 1:1. Partitioning that key to
+        ``(user_id, tenant_key)`` gave one account many breaker rows, and the
+        account-only join then emitted one row PER BREAKER for every pending
+        job: measured live on 2026-08-01, a single pending job on the service
+        account with three breaker rows reported ``queue_depth=3``, and the
+        job -- genuinely stranded behind its own tenant's pause -- was counted
+        as *dispatchable* through the other tenants' unpaused rows. That is
+        precisely the false wedge signal #1481 removed, re-introduced by the
+        tenant partitioning, so the join has to key on the same pair the
+        dispatcher reads.
         """
         now = _utcnow()
         async with self._connect() as conn:
@@ -616,7 +630,9 @@ class JobQueue:
                 SELECT j.created_at AS created_at, cb.paused AS paused,
                        cb.next_attempt_at AS next_attempt_at
                 FROM jobs j
-                LEFT JOIN user_circuit_breakers cb ON cb.user_id = j.user_id
+                LEFT JOIN user_circuit_breakers cb
+                       ON cb.user_id = j.user_id
+                      AND cb.tenant_key = j.tenant_key
                 WHERE j.status = ?
                 """,
                 (JobStatus.PENDING.value,),
