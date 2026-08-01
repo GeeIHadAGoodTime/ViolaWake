@@ -386,3 +386,135 @@ class TestMigrationFromPreTenantDatabase:
             assert (await queue.get_circuit_breaker(TENANT_A)).paused is False
 
         _run(tmp_path, _test, db_name="idempotent.db")
+
+
+class TestRuntimeSnapshotIsPerPartition:
+    """The health snapshot must count partitions, not multiply by them.
+
+    Partitioning the breaker key gave one account many breaker rows. The
+    snapshot's ``LEFT JOIN ... ON cb.user_id = j.user_id`` was written when
+    that table was keyed ``user_id INTEGER PRIMARY KEY`` (1:1), so after
+    partitioning it emitted one row per breaker for every pending job.
+
+    Measured on production 2026-08-01: one pending job on the service account,
+    three breaker rows, ``queue_depth=3`` -- and the job, genuinely stranded
+    behind its own tenant's pause, was reported *dispatchable* through the
+    other tenants' unpaused rows. ``health.py`` pages ``training_queue`` as
+    ERROR when a dispatchable pending job ages past the wedge threshold with a
+    free slot, so that is a false page on a queue no worker can legally touch
+    -- the exact signal #1481 built this field to stop producing.
+    """
+
+    def test_depth_counts_jobs_not_breaker_rows(self, tmp_path):
+        async def _test(queue):
+            await _submit(queue, TENANT_A)
+            # Give the SAME account breaker rows in other partitions, which is
+            # simply what a multi-tenant service account looks like in use.
+            await queue._record_failure(TENANT_B, "unrelated tenant failed")
+            await queue.resume_user(QueuePartition.for_account(SERVICE_ACCOUNT_ID))
+
+            snapshot = await queue.runtime_snapshot()
+            assert snapshot["queue_depth"] == 1, (
+                "one pending job was counted once per breaker row of its account: "
+                f"queue_depth={snapshot['queue_depth']}"
+            )
+
+        _run(tmp_path, _test, db_name="snapshot_depth.db")
+
+    def test_a_job_stranded_by_its_own_tenants_pause_is_not_called_dispatchable(self, tmp_path):
+        async def _test(queue):
+            await _submit(queue, TENANT_A)
+            for index in range(FAILURE_THRESHOLD):
+                await queue._record_failure(TENANT_A, f"crash {index}")
+            assert (await queue.get_circuit_breaker(TENANT_A)).paused is True
+            # A second, healthy tenant on the same account -- the row that used
+            # to make the paused tenant's job look runnable.
+            await queue.resume_user(TENANT_B)
+
+            snapshot = await queue.runtime_snapshot()
+            assert snapshot["blocked_pending_jobs"] == 1, (
+                f"blocked count multiplied by breaker rows: {snapshot['blocked_pending_jobs']}"
+            )
+            assert snapshot["oldest_dispatchable_pending_age_s"] is None, (
+                "a job the dispatcher will never pick up (its own tenant is paused) "
+                "was reported as dispatchable, which false-pages the queue as wedged "
+                "once it ages past the wedge threshold"
+            )
+
+        _run(tmp_path, _test, db_name="snapshot_stranded.db")
+
+    def test_a_genuinely_dispatchable_job_is_still_reported(self, tmp_path):
+        """The fix must not silence the real wedge signal it protects."""
+        async def _test(queue):
+            await _submit(queue, TENANT_B)
+            for index in range(FAILURE_THRESHOLD):
+                await queue._record_failure(TENANT_A, f"crash {index}")
+
+            snapshot = await queue.runtime_snapshot()
+            assert snapshot["queue_depth"] == 1
+            assert snapshot["blocked_pending_jobs"] == 0
+            assert snapshot["oldest_dispatchable_pending_age_s"] is not None, (
+                "a runnable job stopped being visible to wedge detection"
+            )
+
+        _run(tmp_path, _test, db_name="snapshot_dispatchable.db")
+
+
+class TestServiceAccountRecognitionCannotFailOpen:
+    """Minting the service account and recognising it must use one address.
+
+    ``_get_or_create_service_user`` defaulted a blank setting to
+    ``viola-service@viola.internal``; ``is_service_user`` did not, and returned
+    ``False``. An explicitly empty ``VIOLAWAKE_SERVICE_USER_EMAIL`` with a
+    service key still configured therefore authenticated the shared account and
+    then failed to recognise it -- and an unrecognised service account is not
+    refused by ``resolve_queue_partition``, it silently becomes
+    ``QueuePartition.for_account(id)``. Every upstream user folds back into one
+    partition with no 400: the original defect, restored by a misconfiguration.
+    """
+
+    def test_recognition_survives_a_blank_setting(self, monkeypatch):
+        from app import auth as auth_module
+
+        monkeypatch.setattr(auth_module.settings, "service_user_email", "", raising=False)
+        service_user = SimpleNamespace(
+            id=SERVICE_ACCOUNT_ID, email=auth_module.DEFAULT_SERVICE_USER_EMAIL
+        )
+        assert auth_module.is_service_user(service_user) is True, (
+            "a blank setting made the service account unrecognisable, which folds "
+            "every upstream user back into one shared partition without a refusal"
+        )
+
+    def test_partition_still_refuses_a_tenantless_call_when_setting_is_blank(self, monkeypatch):
+        from app import auth as auth_module
+
+        monkeypatch.setattr(auth_module.settings, "service_user_email", "", raising=False)
+        service_user = SimpleNamespace(
+            id=SERVICE_ACCOUNT_ID, email=auth_module.DEFAULT_SERVICE_USER_EMAIL
+        )
+        request = SimpleNamespace(headers={})
+
+        with pytest.raises(Exception) as caught:
+            auth_module.resolve_queue_partition(request, service_user)
+        assert getattr(caught.value, "status_code", None) == 400, (
+            "with the setting blank the service call was folded into the shared "
+            "account partition instead of being refused"
+        )
+
+    def test_an_ordinary_account_is_still_not_the_service_account(self, monkeypatch):
+        from app import auth as auth_module
+
+        monkeypatch.setattr(auth_module.settings, "service_user_email", "", raising=False)
+        person = SimpleNamespace(id=138, email="someone@example.com")
+        assert auth_module.is_service_user(person) is False
+
+    def test_minting_and_recognition_read_the_same_address(self, monkeypatch):
+        from app import auth as auth_module
+
+        monkeypatch.setattr(
+            auth_module.settings, "service_user_email", "  Ops@Example.COM  ", raising=False
+        )
+        assert auth_module.service_user_email() == "ops@example.com"
+        assert auth_module.is_service_user(
+            SimpleNamespace(id=SERVICE_ACCOUNT_ID, email="OPS@example.com")
+        ) is True
