@@ -57,8 +57,14 @@ ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS = 30.0
 # "wake-word training varies run to run, so the quickest fix is to train again
 # with the same recordings", and FAILURE_THRESHOLD consecutive failures then
 # pause the user's queue with next_attempt_at=None -- a state only `resume_user`
-# clears (CL-20260717-9bc3), which has no frontend caller. The product was
-# routing customers into an account-level lockout by following its own advice.
+# clears (CL-20260717-9bc3). `resume_user` had no frontend caller until #4207
+# added `TrainingPauseBanner.tsx` + `api.ts::resumeTraining()`, wired to
+# `POST /api/jobs/resume` (see `test_a_pause_is_visible_and_clearable` /
+# `test_the_breaker_and_resume_routes_the_frontend_calls_are_registered`), so a
+# paused account can now self-serve resume from the dashboard. What PR #36
+# left open -- a job already PENDING and charged at the instant a SIBLING
+# job's failure trips the pause -- is closed by GeeIHadAGoodTime/Viola#4435:
+# see `_abandon_stranded_pending_jobs`.
 #
 # Matched by class name across the MRO so the backend stays decoupled from the
 # heavy violawake_sdk import, the same technique `app.monitoring` uses.
@@ -77,9 +83,9 @@ def _is_expected_training_outcome(exc: BaseException) -> bool:
 # account). The corpus not being mounted is the archetype: it hits every customer who
 # submits during the outage, and under a single per-user counter one operational gap
 # spends everybody's strike budget three at a time until each account locks with
-# next_attempt_at=NULL -- a state only resume_user clears, and resume_user has no
-# frontend caller, so there is no way out from inside the product. 9 of 57
-# real-customer jobs were this class, and it is half of how user 122 got locked
+# next_attempt_at=NULL -- a state only resume_user clears (self-serve from the
+# dashboard since #4207; see the note above). 9 of 57 real-customer jobs were
+# this class, and it is half of how user 122 got locked
 # (GeeIHadAGoodTime/Viola#2611, ledger C-302).
 #
 # Back-pressure is preserved and the strike is not charged: see
@@ -238,6 +244,17 @@ class JobQueue:
         """Initialize persistence and start the dispatcher loop."""
         await self._initialize_db()
         await self._resume_jobs()
+        # Reconcile any job stranded PENDING behind an already-paused partition
+        # before this process (a restart, a deploy, or a pause that predates
+        # this code -- GeeIHadAGoodTime/Viola#4435). No scope filter: every
+        # paused partition's leftover PENDING rows are covered, not just the
+        # one that most recently tripped. Deliberately silent (no email) --
+        # these strands may be old, and contacting an already-affected
+        # customer is a founder-approved decision (GeeIHadAGoodTime/Viola#2066),
+        # not something a container restart should trigger on its own. The job
+        # state and the quota are still corrected, which is what the customer
+        # is owed from the product side.
+        await self._abandon_stranded_pending_jobs(notify=False)
         self._worker_task = asyncio.create_task(self._worker_loop(), name="job-queue-worker")
         await self._fill_queue_from_db()
         logger.info("Job queue started with max_concurrent=%s", settings.max_concurrent_jobs)
@@ -977,7 +994,18 @@ class JobQueue:
             breaker = await self.get_circuit_breaker(partition)
             now = _utcnow()
             if breaker.paused:
-                logger.warning("Skipping job %s because %s queue is paused", job_id, partition)
+                # This job was already sitting in the in-memory dispatch queue
+                # when its partition paused (a race with `_fill_queue_from_db`,
+                # which stops re-filling a paused partition but cannot recall
+                # what it already handed the worker). A bare return left it
+                # PENDING forever with its attempt still spent -- the narrower
+                # sibling of the `_abandon_stranded_pending_jobs` strand
+                # (GeeIHadAGoodTime/Viola#4435). End it the same honest way.
+                await self._abandon_stranded_job(
+                    job,
+                    "Training did not start: your training queue is paused. "
+                    "Resume training from your dashboard to try again.",
+                )
                 return
             if breaker.next_attempt_at is not None and breaker.next_attempt_at > now:
                 delay = (breaker.next_attempt_at - now).total_seconds()
@@ -1503,6 +1531,17 @@ class JobQueue:
                 partition,
                 consecutive_failures,
             )
+            # The pause just stranded the rest of this partition's queue:
+            # `_fill_queue_from_db` will skip every PENDING row here forever
+            # (until resumed), and each was already charged a training
+            # attempt at submit. Ending them now, at the exact moment they
+            # become undispatchable, is what keeps "Queued" from meaning
+            # "forever" (GeeIHadAGoodTime/Viola#4435). The job whose failure
+            # just paused the account is excluded automatically: its own
+            # status was already flipped to FAILED by `_execute_job`'s
+            # exception handler before this method was called, so it no
+            # longer matches the PENDING filter below.
+            await self._abandon_stranded_pending_jobs(partition)
             return
 
         self._schedule_retry_fill(partition, FAILURE_BACKOFF_SECONDS)
@@ -1562,18 +1601,23 @@ class JobQueue:
         )
         self._schedule_retry_fill(partition, FAILURE_BACKOFF_SECONDS)
 
-    async def _refund_usage_for_job(self, job_id: int) -> None:
+    async def _refund_usage_for_job(self, job_id: int) -> bool:
         """Credit back the training attempt charged for *job_id*, at most once.
 
-        Only reached for a shared-infrastructure fault -- a genuine per-user
-        failure keeps its charge (the guard is narrow, not an amnesty). The
-        once-only guarantee is a two-DB claim: flip ``usage_refunded`` 0->1 in
-        the queue DB FIRST, guarded by ``WHERE usage_refunded = 0 AND
-        usage_period_start IS NOT NULL`` so exactly one caller can win it however
-        many paths ask; only the winner then decrements the billing counter for
-        the SAME period the charge landed in. If the billing decrement fails, the
-        claim is rolled back so the refund is retryable and never silently lost --
-        the invariant is at-most-once, never a phantom double credit.
+        Reached for a shared-infrastructure fault, and for a job abandoned
+        because it can never dispatch (GeeIHadAGoodTime/Viola#4435) -- a
+        genuine per-user failure keeps its charge (the guard is narrow, not
+        an amnesty). The once-only guarantee is a two-DB claim: flip
+        ``usage_refunded`` 0->1 in the queue DB FIRST, guarded by ``WHERE
+        usage_refunded = 0 AND usage_period_start IS NOT NULL`` so exactly one
+        caller can win it however many paths ask; only the winner then
+        decrements the billing counter for the SAME period the charge landed
+        in. If the billing decrement fails, the claim is rolled back so the
+        refund is retryable and never silently lost -- the invariant is
+        at-most-once, never a phantom double credit.
+
+        Returns True only when a counter genuinely moved, so a caller can
+        never tell a customer their attempt came back when it did not.
         """
         async with self._connect() as conn:
             cursor = await conn.execute(
@@ -1587,7 +1631,7 @@ class JobQueue:
             await conn.commit()
             if cursor.rowcount == 0:
                 # Already refunded, or never carried a refundable charge.
-                return
+                return False
             async with conn.execute(
                 "SELECT usage_user_id, usage_period_start FROM jobs WHERE id = ?",
                 (job_id,),
@@ -1597,15 +1641,16 @@ class JobQueue:
         user_id = row["usage_user_id"] if row is not None else None
         period_start = _deserialize_datetime(row["usage_period_start"]) if row is not None else None
         if user_id is None or period_start is None:
-            return
+            return False
 
         try:
             from app.quota import refund_usage
 
             async with async_session_factory() as session:
-                await refund_usage(session, int(user_id), period_start, action="training_job")
+                credited = await refund_usage(session, int(user_id), period_start, action="training_job")
                 await session.commit()
         except Exception as exc:
+            credited = False
             # Roll the claim back so a later path (or a retry) can still refund;
             # never leave a claimed-but-not-credited job.
             with suppress(Exception):
@@ -1622,6 +1667,131 @@ class JobQueue:
                 source="job_queue",
                 extra={"job_id": job_id},
             )
+        return credited
+
+    async def _abandon_stranded_pending_jobs(
+        self,
+        partition: QueuePartition | None = None,
+        *,
+        notify: bool = True,
+    ) -> int:
+        """End every PENDING job that belongs to a paused partition. Return the count.
+
+        A pause strands the rest of that partition's queue: ``_fill_queue_from_db``
+        skips a paused partition's rows on every fill, so anything already
+        PENDING there is never dispatched and never will be until resumed --
+        and resuming does not retroactively run it, it only clears the block
+        going forward. Left alone, each such job stayed PENDING forever, its
+        training attempt already charged at submit, showing "Queued"
+        indefinitely in the console with no failure, no email, and no end
+        state (GeeIHadAGoodTime/Viola#4435 -- reproduced: two charged jobs
+        pending, one genuine failure trips the breaker, the sibling job stays
+        PENDING with its attempt spent).
+
+        Called scoped to one partition at the causal moment (``_record_failure``,
+        the instant it flips ``paused``) and unscoped at boot (``start``,
+        reconciling anything stranded by a restart, a deploy, or a pause that
+        predates this code). ``notify`` is False for the boot pass only:
+        outreach to an already-affected customer is a founder-approved
+        decision (GeeIHadAGoodTime/Viola#2066), not something a container
+        restart should trigger on its own -- but the job state and quota are
+        corrected either way, which is what the customer is owed from the
+        product side.
+        """
+        sql = (
+            "SELECT j.id FROM jobs j "
+            "JOIN user_circuit_breakers b "
+            "  ON b.user_id = j.user_id AND b.tenant_key = j.tenant_key "
+            "WHERE j.status = ? AND b.paused = 1"
+        )
+        params: list[Any] = [JobStatus.PENDING.value]
+        if partition is not None:
+            sql += " AND j.user_id = ? AND j.tenant_key = ?"
+            params.append(partition.user_id)
+            params.append(partition.tenant_key)
+
+        async with self._connect() as conn, conn.execute(sql, tuple(params)) as cursor:
+            rows = await cursor.fetchall()
+
+        abandoned = 0
+        for row in rows:
+            job = await self.get_job(int(row["id"]))
+            if job is None or job.status is not JobStatus.PENDING:
+                # Re-checked: another path (e.g. a concurrent cancel) may
+                # already have ended it between the SELECT above and here.
+                continue
+            await self._abandon_stranded_job(
+                job,
+                "Training did not start: your training queue was paused "
+                "before this run could begin. Resume training from your "
+                "dashboard to try again.",
+                notify=notify,
+            )
+            abandoned += 1
+
+        if abandoned:
+            logger.warning(
+                "Abandoned %s stranded PENDING job(s) for %s",
+                abandoned,
+                partition if partition is not None else "(all paused partitions)",
+            )
+        return abandoned
+
+    async def _abandon_stranded_job(
+        self,
+        job: Job,
+        reason: str,
+        *,
+        notify: bool = True,
+    ) -> None:
+        """End a job the dispatcher will never run, and give its attempt back.
+
+        A job that never dispatched consumed none of the training compute its
+        submit-time charge pays for, so leaving it PENDING was the worst of
+        both outcomes: the customer stayed out an attempt AND the console
+        kept saying "Queued" indefinitely, with no failure, no email, and no
+        end state (GeeIHadAGoodTime/Viola#4435). Mirrors the shape
+        ``_execute_job``'s own exception handler already uses for a job that
+        ran and failed -- same FAILED transition, same refund primitive, same
+        SSE publish, same best-effort email -- so a customer sees one
+        consistent "this run did not happen" story everywhere, whether the
+        job trained and failed or never got the chance to.
+        """
+        credited = await self._refund_usage_for_job(job.id)
+        completed_at = _utcnow()
+
+        await self._update_job(
+            job.id,
+            status=JobStatus.FAILED,
+            completed_at=completed_at,
+            error=reason,
+            cancel_requested=False,
+        )
+        await self._publish(
+            job.id,
+            {
+                "status": JobStatus.FAILED.value,
+                "progress": job.progress_pct,
+                "epoch": 0,
+                "total_epochs": job.epochs,
+                "train_loss": 0.0,
+                "val_loss": 0.0,
+                "message": "Training did not start.",
+                "error": reason,
+                "d_prime": job.d_prime,
+                "model_id": job.model_id,
+                "queue_position": None,
+            },
+        )
+        logger.warning(
+            "Job %s for user %s never ran (%s); attempt credited=%s",
+            job.id,
+            job.user_id,
+            reason,
+            credited,
+        )
+        if notify:
+            await self._send_failure_email(job, reason, charged=not credited)
 
     async def _send_failure_email(self, job: Job, reason: str, *, charged: bool) -> None:
         """Best-effort training-FAILED email (the missing counterpart to complete)."""
