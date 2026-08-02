@@ -2576,9 +2576,7 @@ def _run_quality_gate(
         # The WORST score over the full stream, not over the decimated subset --
         # see _score_windows_streaming. Decimation preserves a rate, never a max.
         silence_max_score = float(
-            silence_stream_max
-            if silence_stream_max is not None
-            else silence_window_scores.max()
+            silence_stream_max if silence_stream_max is not None else silence_window_scores.max()
         )
         silence_window_count = int(len(silence_window_scores))
     else:
