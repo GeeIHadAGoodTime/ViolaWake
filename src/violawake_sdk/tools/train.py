@@ -2390,26 +2390,48 @@ def _run_quality_gate(
             dtype=np.float32,
         )
 
-    def _score_windows_streaming(audio_clips: list[np.ndarray]) -> np.ndarray:
+    def _score_windows_streaming(
+        audio_clips: list[np.ndarray],
+    ) -> tuple[np.ndarray, float | None]:
         """Score raw audio clips via the runtime streaming path (#1487 / #2611).
 
-        Returns the INDEPENDENT (non-overlapping) window scores. The streaming
-        extractor slides one 80ms embedding at a time, so its raw output is ~89%
-        self-overlapping at the production seq_len of 9; a false-fire *rate* over
-        that raw count would be a rate over the same audio counted nine times.
-        ``_decimate_to_independent_windows`` reduces it to a zero-overlap subset.
+        Returns ``(independent_window_scores, worst_streaming_score)``.
+
+        The first element is the INDEPENDENT (non-overlapping) window scores. The
+        streaming extractor slides one 80ms embedding at a time, so its raw output
+        is ~89% self-overlapping at the production seq_len of 9; a false-fire
+        *rate* over that raw count would be a rate over the same audio counted
+        nine times. ``_decimate_to_independent_windows`` reduces it to a
+        zero-overlap subset.
+
+        The second element is the max over EVERY streamed window, decimated or
+        not, and it is deliberately not taken from the decimated subset.
+        Decimation is a sampling step: it preserves a *rate* in expectation,
+        because it shrinks numerator and denominator together. It cannot preserve
+        a *max*, because dropping 8 of every 9 windows can only ever discard the
+        worst one -- the reported max is biased low by construction, never high.
+        Measured on the released temporal_cnn against this gate's own synthetic
+        room-tone probe (#2611, 2026-07-30): the raw streaming max ran 0.29-0.50
+        while the decimated max over the same audio ran 0.09-0.16, i.e. the number
+        printed beside "threshold=0.80" understated the model's real worst
+        no-wake score by 2-4x. That is the same defect class this whole campaign
+        exists to fix -- a quality-gate number that reads like a measurement of
+        risk while being systematically kinder than the truth -- so the rate stays
+        on the independent subset and the max is reported honestly from the full
+        stream.
         """
         if not audio_clips:
-            return np.array([], dtype=np.float32)
+            return np.array([], dtype=np.float32), None
 
         windows, source_indices = _extract_streaming_temporal_windows(audio_clips, seq_len)
         if not windows:
-            return np.array([], dtype=np.float32)
+            return np.array([], dtype=np.float32), None
 
         X_qc = torch.tensor(np.array(windows), dtype=torch.float32).to(torch_device)
         with torch.no_grad():
             raw = model(X_qc).cpu().numpy().flatten()
-        return _decimate_to_independent_windows(raw, source_indices, seq_len)
+        independent = _decimate_to_independent_windows(raw, source_indices, seq_len)
+        return independent, float(raw.max())
 
     def _fp_rate(scores: np.ndarray) -> float:
         if len(scores) == 0:
@@ -2520,14 +2542,16 @@ def _run_quality_gate(
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_source = "room_tone"
-        silence_window_scores = _score_windows_streaming(room_tone_clips)
+        silence_window_scores, silence_stream_max = _score_windows_streaming(room_tone_clips)
         if len(silence_window_scores) < _SILENCE_MIN_INDEPENDENT_WINDOWS:
             # Under-powered from the user's own audio: a rate over 3 independent
             # looks cannot resolve a 2%/5%/10% bar. Measure the same axis on a
             # synthetic probe at a real room-tone level instead of reporting a
             # number the sample does not support.
             silence_source = "synthetic_room_tone"
-            silence_window_scores = _score_windows_streaming([_synthetic_room_tone()])
+            silence_window_scores, silence_stream_max = _score_windows_streaming(
+                [_synthetic_room_tone()]
+            )
         positive_scores = (
             _score_files(list(positive_files), "qc_positive")
             if positive_files
@@ -2549,7 +2573,11 @@ def _run_quality_gate(
         silence_fp_rate: float | None = float(
             (silence_window_scores >= deployment_threshold).mean()
         )
-        silence_max_score = float(silence_window_scores.max())
+        # The WORST score over the full stream, not over the decimated subset --
+        # see _score_windows_streaming. Decimation preserves a rate, never a max.
+        silence_max_score = float(
+            silence_stream_max if silence_stream_max is not None else silence_window_scores.max()
+        )
         silence_window_count = int(len(silence_window_scores))
     else:
         silence_fp_rate = None
