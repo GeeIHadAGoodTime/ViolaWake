@@ -514,7 +514,6 @@ tests/live/conftest.py
 tests/live/README.md
 tests/live/RESULTS_2026-05-06.md
 tests/live/RESULTS_2026-05-07.md
-.github/workflows/console-ci.yml
 docs/api/                                          # generated FastAPI docs
                                                   # (NOT marketing pages —
                                                   # this is backend OpenAPI)
