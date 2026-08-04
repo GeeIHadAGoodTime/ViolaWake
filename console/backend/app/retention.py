@@ -57,19 +57,52 @@ async def _get_active_recording_ids() -> set[int]:
     return active_ids
 
 
-async def mark_recordings_for_deletion(recording_ids: list[int]) -> int:
+async def mark_recordings_for_deletion(
+    recording_ids: list[int],
+    active_recording_ids: set[int] | None = None,
+) -> int:
     """Soft-delete recordings by setting their deleted_at timestamp.
 
     Called after a training job completes successfully. The actual storage
     file deletion happens later via ``cleanup_soft_deleted_recordings``.
+
+    A recording still referenced by a PENDING or RUNNING job is skipped, the
+    same way both hard-delete sweeps below already skip it. That guard matters
+    MORE here, not less: those sweeps run hours later on an age cutoff, while
+    this one fires within milliseconds of a job completing, so it is the only
+    deletion path that can realistically overtake a sibling job still waiting
+    in the queue. Leaving it out is what broke training job 148
+    (GeeIHadAGoodTime/Viola#4617): jobs 147 and 148 carried the same ten
+    recording IDs, 147 completed and marked all ten deleted 14ms later, and
+    148 dispatched 252ms after that to find zero of its inputs left --
+    ``JobQueue._load_recording_paths`` filters on ``deleted_at IS NULL``, so a
+    soft delete is a hard delete as far as a queued job can tell.
+
+    Retention is deferred, never skipped: whichever job holds the reference
+    last runs this same routine when it finishes, and the age-based sweep in
+    ``cleanup_expired_recordings`` is the backstop either way.
+
+    ``active_recording_ids`` lets the caller supply that set from a queue it
+    already holds. ``JobQueue._schedule_recording_cleanup`` does exactly that,
+    because the fallback below resolves the queue through the process-wide
+    singleton and yields an empty set when it is not initialised -- and an empty
+    set means nothing is protected.
 
     Returns the number of recordings marked.
     """
     if not recording_ids:
         return 0
 
+    # The completing job's own status is already COMPLETED by the time its
+    # caller reaches here (`JobQueue._execute_job` updates the row before
+    # calling `_schedule_recording_cleanup`), so it never protects its own
+    # recordings from this sweep -- only a genuinely still-queued sibling does.
+    if active_recording_ids is None:
+        active_recording_ids = await _get_active_recording_ids()
+
     now = _utcnow()
     marked = 0
+    deferred = 0
 
     async with async_session_factory() as session:
         result = await session.execute(
@@ -81,11 +114,20 @@ async def mark_recordings_for_deletion(recording_ids: list[int]) -> int:
         recordings = result.scalars().all()
 
         for recording in recordings:
+            if recording.id in active_recording_ids:
+                deferred += 1
+                continue
             recording.deleted_at = now
             marked += 1
 
         if marked:
             await session.commit()
+
+    if deferred:
+        logger.info(
+            "Deferred post-training deletion of %s recording(s) still referenced by an active training job",
+            deferred,
+        )
 
     if marked:
         logger.info(

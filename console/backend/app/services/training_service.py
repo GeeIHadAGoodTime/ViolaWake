@@ -53,6 +53,28 @@ class SharedInfrastructureUnavailableError(RuntimeError):
     """
 
 
+class RecordingsUnavailableError(SharedInfrastructureUnavailableError):
+    """Raised when a job's recordings are gone by the time it reaches the front.
+
+    A subclass rather than a sibling on purpose: ``_is_shared_infrastructure_fault``
+    matches by class name across the MRO, so inheriting is all it takes to get the
+    no-strike / refund treatment, with no second registry to keep in sync.
+
+    Inheriting is also the honest classification. ``validate_training_request``
+    already proved at submit that every requested recording existed, was owned by
+    this user, was not deleted, and matched the wake word -- so a recording missing
+    at dispatch is never a verdict on the customer's model or their audio. It means
+    something removed the inputs out from under an accepted, already-charged job,
+    and the archetype was our own retention sweep doing it to a duplicate submit
+    765ms behind its twin (GeeIHadAGoodTime/Viola#4617, jobs 147/148). That cause is
+    fixed at the source in ``retention.mark_recordings_for_deletion``; this type is
+    the standing guarantee that any OTHER way a job's inputs can vanish -- the owner
+    deleting a recording from the console while the job waits, a storage purge, a
+    future sweep written without the active-job guard -- still cannot spend a strike
+    toward the account lockout that only ``resume_user`` clears.
+    """
+
+
 @dataclass(slots=True)
 class TrainingArtifact:
     """Artifacts produced by a completed training run."""
