@@ -46,6 +46,14 @@ FAILURE_THRESHOLD = 3
 FAILURE_BACKOFF_SECONDS = 300
 ACCOUNT_DELETE_CANCEL_TIMEOUT_SECONDS = 30.0
 
+# The floor for a trainable job, enforced twice: once at submit
+# (`routes/jobs.py::validate_training_request`, which rejects with a 400 the
+# customer can act on) and again at dispatch, because recordings can disappear
+# between the two. Both read this constant so the two checks cannot drift into
+# a window where submit accepts and charges a job that dispatch will always
+# refuse (GeeIHadAGoodTime/Viola#4617).
+MIN_RECORDINGS_PER_JOB = 5
+
 # Training outcomes that are EXPECTED and are the user's to retry, so they must
 # not count toward the circuit breaker (#1775 / #2066). The breaker exists to
 # stop the queue burning jobs on a systemically broken worker; a model that did
@@ -1046,8 +1054,22 @@ class JobQueue:
             )
 
             recording_paths = await self._load_recording_paths(job.user_id, job.recording_ids)
-            if len(recording_paths) < 5:
-                raise RuntimeError(f"No valid recordings found for training job {job_id}")
+            if len(recording_paths) < MIN_RECORDINGS_PER_JOB:
+                # Not "no valid recordings" -- the old wording said that even when
+                # nine of ten survived, and it was never about validity. Submit
+                # already proved all of them existed, were owned by this user, were
+                # undeleted and matched the wake word
+                # (`routes/jobs.py::validate_training_request`), so anything short
+                # here means the inputs were removed AFTER the job was accepted and
+                # charged. Report the real numbers, and raise the type that keeps it
+                # off the customer's strike record (GeeIHadAGoodTime/Viola#4617).
+                from app.services.training_service import RecordingsUnavailableError
+
+                raise RecordingsUnavailableError(
+                    "Your recordings were no longer available when this training job "
+                    f"started ({len(recording_paths)} of {len(job.recording_ids)} found). "
+                    "Please upload your recordings again and start a new training job."
+                )
 
             # Resolve negatives corpus for paid tiers
             negatives_dir = await self._resolve_negatives_dir(job.user_id)
@@ -1861,18 +1883,53 @@ class JobQueue:
         logger.info("Using curated negatives corpus for user %s (tier=%s)", user_id, tier)
         return corpus
 
+    async def _active_recording_ids(self) -> set[int]:
+        """Recording ids referenced by a PENDING or RUNNING job in THIS queue's DB.
+
+        ``retention._get_active_recording_ids`` answers the same question, but it
+        resolves the queue through the process-wide singleton and returns an empty
+        set when that singleton is not initialised. Empty means "nothing is
+        protected", so on the post-training path -- which runs INSIDE a JobQueue
+        that already knows its own database -- that indirection can only fail open,
+        and failing open silently is the whole shape of
+        GeeIHadAGoodTime/Viola#4617. Ask our own connection instead.
+        """
+        active: set[int] = set()
+        async with self._connect() as conn, conn.execute(
+            "SELECT recording_ids FROM jobs WHERE status IN (?, ?)",
+            (JobStatus.PENDING.value, JobStatus.RUNNING.value),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        for row in rows:
+            try:
+                active.update(int(rid) for rid in json.loads(row["recording_ids"]))
+            except (TypeError, ValueError):
+                # A single unparseable row must not silently drop protection for
+                # every other queued job, so skip it and keep going.
+                logger.warning("Skipping unparseable recording_ids row while collecting active jobs")
+
+        return active
+
     async def _schedule_recording_cleanup(self, recording_ids: list[int]) -> None:
         """Soft-delete recordings after training completes.
 
         The actual storage file purge happens later via the periodic
         retention cleanup loop (``cleanup_soft_deleted_recordings``).
+
+        The active-job set is computed here and passed down, rather than left for
+        ``mark_recordings_for_deletion`` to look up, so this path protects a queued
+        sibling using the same database this queue just wrote the completion to.
         """
         if settings.post_training_retention_hours <= 0:
             return
 
         try:
             from app.retention import mark_recordings_for_deletion
-            await mark_recordings_for_deletion(recording_ids)
+            await mark_recordings_for_deletion(
+                recording_ids,
+                active_recording_ids=await self._active_recording_ids(),
+            )
         except Exception as exc:
             # Non-fatal: recordings will still be cleaned up by the
             # age-based retention policy even if this fails.

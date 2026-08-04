@@ -12,7 +12,13 @@ from app.auth import (
     resolve_queue_partition,
 )
 from app.database import get_db
-from app.job_queue import Job, QueueFullError, TooManyPendingJobsError, init_job_queue
+from app.job_queue import (
+    MIN_RECORDINGS_PER_JOB,
+    Job,
+    QueueFullError,
+    TooManyPendingJobsError,
+    init_job_queue,
+)
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.quota import _current_period_start, check_training_quota, record_usage
@@ -110,10 +116,10 @@ async def validate_training_request(
             detail=f"Recordings {wrong_word} do not match wake word '{body.wake_word}'",
         )
 
-    if len(recordings) < 5:
+    if len(recordings) < MIN_RECORDINGS_PER_JOB:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Need at least 5 recordings. Got {len(recordings)}.",
+            detail=f"Need at least {MIN_RECORDINGS_PER_JOB} recordings. Got {len(recordings)}.",
         )
 
     return wake_word, list(body.recording_ids), body.epochs
