@@ -2231,6 +2231,59 @@ def _decimate_to_independent_windows(
     return np.array(keep, dtype=np.float32)
 
 
+def _silence_subgrade(
+    independent_scores: np.ndarray,
+    stream_scores: np.ndarray,
+    deployment_threshold: float,
+) -> tuple[float | None, float, int, int]:
+    """Decide the silence axis from one room-tone measurement.
+
+    Returns ``(fp_rate, max_score, independent_count, stream_count)``, where
+    ``fp_rate`` is ``None`` when the axis is too under-powered to grade at all.
+
+    Two DIFFERENT populations do two different jobs here, and conflating them is
+    the bug this function exists to prevent (#1487, #2611, 2026-08-05):
+
+    * ``independent_scores`` decides whether the measurement is powered. These
+      are the non-overlapping windows, so they are genuinely independent looks at
+      no-wake audio, and fewer than ``_SILENCE_MIN_INDEPENDENT_WINDOWS`` of them
+      cannot resolve a 2%/5%/10% bar no matter how the rate is computed.
+
+    * ``stream_scores`` -- EVERY window, at the runtime's own stride -- carries
+      both the rate and the max. The runtime scores one window per 80ms embedding
+      and fires on the first one at or above the threshold, so the fraction of
+      *those* windows that cross is exactly the fraction of real runtime
+      evaluations that would false-fire. It is the quantity the grade is meant to
+      be about.
+
+    Taking the rate over the decimated subset instead looks equivalent -- and in
+    expectation it is, since decimation shrinks numerator and denominator
+    together -- but it is not, because a rate has a RESOLUTION FLOOR of one over
+    its denominator. With ~151 independent windows the smallest non-zero rate
+    expressible is 0.66%, so every model whose true no-wake false-fire rate sits
+    below that is reported as exactly 0.0%. Production, 2026-08-05: jobs 156 and
+    157 were both graded A at "Silence FP rate: 0.0%" while the same function
+    printed ``max=0.92`` and ``max=0.90`` against ``threshold=0.80`` -- the gate
+    was certifying as clean two models it had itself just watched cross the
+    firing threshold on the customer's own room tone. The full stream is ~9x
+    larger, so it resolves those crossings instead of rounding them away.
+
+    The invariant that falls out, and that the gate tests assert: a max at or
+    above the deployment threshold can never coexist with a 0.0% rate, because
+    both now come from the same numbers.
+    """
+    import numpy as np
+
+    independent_count = int(len(independent_scores))
+    stream_count = int(len(stream_scores))
+    if independent_count < _SILENCE_MIN_INDEPENDENT_WINDOWS or stream_count == 0:
+        return None, 0.0, independent_count, stream_count
+
+    stream = np.asarray(stream_scores, dtype=np.float32)
+    fp_rate = float((stream >= deployment_threshold).mean())
+    return fp_rate, float(stream.max()), independent_count, stream_count
+
+
 def _format_silence_fp(quality_gate: dict[str, Any]) -> str:
     """Render the silence subgrade for operator output ('n/a' when unmeasurable)."""
     rate = quality_gate.get("silence_fp_rate")
@@ -2392,46 +2445,47 @@ def _run_quality_gate(
 
     def _score_windows_streaming(
         audio_clips: list[np.ndarray],
-    ) -> tuple[np.ndarray, float | None]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Score raw audio clips via the runtime streaming path (#1487 / #2611).
 
-        Returns ``(independent_window_scores, worst_streaming_score)``.
+        Returns ``(independent_window_scores, full_stream_scores)``.
 
-        The first element is the INDEPENDENT (non-overlapping) window scores. The
-        streaming extractor slides one 80ms embedding at a time, so its raw output
-        is ~89% self-overlapping at the production seq_len of 9; a false-fire
-        *rate* over that raw count would be a rate over the same audio counted
-        nine times. ``_decimate_to_independent_windows`` reduces it to a
-        zero-overlap subset.
+        The first element is the INDEPENDENT (non-overlapping) window scores,
+        produced by ``_decimate_to_independent_windows``. The streaming extractor
+        slides one 80ms embedding at a time, so its raw output is ~89%
+        self-overlapping at the production seq_len of 9, and the decimated subset
+        is the honest count of how many genuinely independent looks at no-wake
+        audio this measurement actually had. That count is what decides whether
+        the axis is powered enough to grade at all
+        (``_SILENCE_MIN_INDEPENDENT_WINDOWS``).
 
-        The second element is the max over EVERY streamed window, decimated or
-        not, and it is deliberately not taken from the decimated subset.
-        Decimation is a sampling step: it preserves a *rate* in expectation,
-        because it shrinks numerator and denominator together. It cannot preserve
-        a *max*, because dropping 8 of every 9 windows can only ever discard the
-        worst one -- the reported max is biased low by construction, never high.
+        The second element is EVERY streamed window, decimated or not. It is the
+        population the runtime itself scores: ``WakeDetector.process`` evaluates
+        one window per 80ms embedding at stride 1, and fires on the first window
+        at or above the threshold (``confirm_count`` defaults to 1, see
+        ``wake_detector.py``). Both the graded rate and the reported max are taken
+        from it -- see ``_silence_subgrade`` for why the rate must be, and note
+        that the max never could be: dropping 8 of every 9 windows can only
+        discard the worst one, so a decimated max is biased low by construction.
         Measured on the released temporal_cnn against this gate's own synthetic
         room-tone probe (#2611, 2026-07-30): the raw streaming max ran 0.29-0.50
         while the decimated max over the same audio ran 0.09-0.16, i.e. the number
         printed beside "threshold=0.80" understated the model's real worst
-        no-wake score by 2-4x. That is the same defect class this whole campaign
-        exists to fix -- a quality-gate number that reads like a measurement of
-        risk while being systematically kinder than the truth -- so the rate stays
-        on the independent subset and the max is reported honestly from the full
-        stream.
+        no-wake score by 2-4x.
         """
+        empty = np.array([], dtype=np.float32)
         if not audio_clips:
-            return np.array([], dtype=np.float32), None
+            return empty, empty
 
         windows, source_indices = _extract_streaming_temporal_windows(audio_clips, seq_len)
         if not windows:
-            return np.array([], dtype=np.float32), None
+            return empty, empty
 
         X_qc = torch.tensor(np.array(windows), dtype=torch.float32).to(torch_device)
         with torch.no_grad():
             raw = model(X_qc).cpu().numpy().flatten()
         independent = _decimate_to_independent_windows(raw, source_indices, seq_len)
-        return independent, float(raw.max())
+        return independent, raw
 
     def _fp_rate(scores: np.ndarray) -> float:
         if len(scores) == 0:
@@ -2542,14 +2596,14 @@ def _run_quality_gate(
         speech_scores = _score_files(speech_files, "qc_speech")
         confusable_scores = _score_files(confusable_files, "qc_confusable")
         silence_source = "room_tone"
-        silence_window_scores, silence_stream_max = _score_windows_streaming(room_tone_clips)
+        silence_window_scores, silence_stream_scores = _score_windows_streaming(room_tone_clips)
         if len(silence_window_scores) < _SILENCE_MIN_INDEPENDENT_WINDOWS:
             # Under-powered from the user's own audio: a rate over 3 independent
             # looks cannot resolve a 2%/5%/10% bar. Measure the same axis on a
             # synthetic probe at a real room-tone level instead of reporting a
             # number the sample does not support.
             silence_source = "synthetic_room_tone"
-            silence_window_scores, silence_stream_max = _score_windows_streaming(
+            silence_window_scores, silence_stream_scores = _score_windows_streaming(
                 [_synthetic_room_tone()]
             )
         positive_scores = (
@@ -2561,29 +2615,25 @@ def _run_quality_gate(
     speech_fp_rate = _fp_rate(speech_scores)
     confusable_fp_rate = _fp_rate(confusable_scores)
     # Silence subgrade: the false-fire rate on no-wake room tone, scored through the
-    # runtime streaming path and counted over INDEPENDENT (non-overlapping) windows.
+    # runtime streaming path. The independent (non-overlapping) window count decides
+    # whether the axis is powered; the rate and the max both come from the full
+    # stream, because that is the population the runtime itself scores. See
+    # _silence_subgrade for the resolution-floor argument behind that split.
     #
-    # Reaching the else-branch means the axis could not be scored even on the
-    # synthetic fallback probe -- i.e. the streaming scorer itself failed, not that
-    # the customer recorded badly. That FAILS CLOSED (rate None -> grade F in
-    # _grade_quality): an axis nobody measured is not an axis that passed. The old
-    # shape here reported 0.0 and graded such a model A, which would ship a model
-    # that fires on every quiet moment purely because the measurement was missing.
-    if len(silence_window_scores) >= _SILENCE_MIN_INDEPENDENT_WINDOWS:
-        silence_fp_rate: float | None = float(
-            (silence_window_scores >= deployment_threshold).mean()
-        )
-        # The WORST score over the full stream, not over the decimated subset --
-        # see _score_windows_streaming. Decimation preserves a rate, never a max.
-        silence_max_score = float(
-            silence_stream_max if silence_stream_max is not None else silence_window_scores.max()
-        )
-        silence_window_count = int(len(silence_window_scores))
-    else:
-        silence_fp_rate = None
-        silence_max_score = 0.0
+    # A None rate means the axis could not be scored even on the synthetic fallback
+    # probe -- i.e. the streaming scorer itself failed, not that the customer
+    # recorded badly. That FAILS CLOSED (rate None -> grade F in _grade_quality): an
+    # axis nobody measured is not an axis that passed. The old shape here reported
+    # 0.0 and graded such a model A, which would ship a model that fires on every
+    # quiet moment purely because the measurement was missing.
+    (
+        silence_fp_rate,
+        silence_max_score,
+        silence_window_count,
+        silence_stream_window_count,
+    ) = _silence_subgrade(silence_window_scores, silence_stream_scores, deployment_threshold)
+    if silence_fp_rate is None:
         silence_source = "unmeasurable"
-        silence_window_count = int(len(silence_window_scores))
     grade = _grade_quality(
         speech_fp_rate, confusable_fp_rate, silence_fp_rate, deployment_threshold
     )
@@ -2620,9 +2670,15 @@ def _run_quality_gate(
         "confusable_sample_count": int(len(confusable_scores)),
         "silence_fp_rate": silence_fp_rate,
         "silence_max_score": silence_max_score,
-        # INDEPENDENT (non-overlapping) window count -- the denominator the rate was
-        # actually taken over, not the ~9x larger self-overlapping stream count.
+        # INDEPENDENT (non-overlapping) window count -- how many genuinely
+        # independent looks at no-wake audio this measurement had, which is what
+        # decides whether the axis is powered enough to grade.
         "silence_window_count": silence_window_count,
+        # Every window at the runtime's own stride: the denominator the rate is
+        # taken over, and the population the max comes from. Recorded separately
+        # so a later reader can tell a 0.0% that means "no crossing anywhere" from
+        # a 0.0% that only means "the denominator was too small to show one".
+        "silence_stream_window_count": silence_stream_window_count,
         "silence_source": silence_source,
         # Which code path produced the silence score. "runtime_streaming" is the
         # real WakeDetector path; the retired "batch_crop" path scored a 1.5s
@@ -2651,9 +2707,10 @@ def _run_quality_gate(
         )
     else:
         print(
-            f"  Silence FP rate:    {silence_fp_rate * 100:4.1f}% "
-            f"({silence_window_count} independent {silence_source} windows, "
-            f"max={silence_max_score:.2f}, threshold={deployment_threshold:.2f})"
+            f"  Silence FP rate:    {silence_fp_rate * 100:4.2f}% "
+            f"of {silence_stream_window_count} scored {silence_source} windows "
+            f"({silence_window_count} independent), "
+            f"max={silence_max_score:.2f}, threshold={deployment_threshold:.2f}"
         )
     if d_prime is not None:
         print(
