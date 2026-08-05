@@ -40,6 +40,7 @@ from violawake_sdk.tools.train import (
     _grade_quality,
     _int16_rms,
     _run_quality_gate,
+    _silence_subgrade,
     _synthetic_room_tone,
 )
 
@@ -213,33 +214,52 @@ def test_decimation_does_not_re_calibrate_the_grade_bars() -> None:
         independent_rates.append(float((kept >= 0.80).mean()))
 
     bias = float(np.mean(independent_rates)) - float(np.mean(raw_rates))
-    assert abs(bias) < 0.02, f"decimation shifted the mean rate by {bias:+.4f} -- that is a re-calibration"
+    assert abs(bias) < 0.02, (
+        f"decimation shifted the mean rate by {bias:+.4f} -- that is a re-calibration"
+    )
 
 
-def test_the_gate_rates_the_decimated_scores_not_the_raw_stream() -> None:
-    """Wiring: the scorer feeding the rate must be the decimated one.
+def test_the_gate_still_decimates_to_measure_its_own_statistical_power() -> None:
+    """Wiring: the independent subset must still be computed, and still gate power.
 
-    REDs on the pre-fix wiring, which returned ``model(X_qc)...flatten()`` straight
-    from the streaming extractor and took ``.mean()`` over that.
+    Decimation did not stop mattering when the rate moved off it (see
+    ``test_a_crossing_max_can_never_coexist_with_a_zero_rate``). It is what makes
+    ``silence_window_count`` an honest count of independent looks, which is the
+    only thing that can answer "was this measurement powered at all". Deleting it
+    along with the old rate population would silently let a 3-look sample grade a
+    customer's model.
     """
     src = inspect.getsource(_run_quality_gate)
     assert "_decimate_to_independent_windows(raw, source_indices, seq_len)" in src
-    # The rate's denominator is the independent count, and it is what gets reported.
     assert '"silence_window_count": silence_window_count' in src
+    # ...and the stream denominator is recorded beside it, so a 0.0% that means
+    # "no crossing anywhere" is distinguishable from one that only means
+    # "the denominator was too coarse to show a crossing".
+    assert '"silence_stream_window_count": silence_stream_window_count' in src
 
 
 def test_an_underpowered_sample_is_not_reported_as_a_rate() -> None:
     """A rate over three looks cannot resolve a 2%/5%/10% bar.
 
-    The gate requires a minimum number of independent windows before it will call
+    The gate requires a minimum number of INDEPENDENT windows before it will call
     the axis measured, so a coarse sample becomes either a fallback-probe
     measurement or a fail-closed verdict -- never a falsely precise percentage.
+    Asserted behaviourally on ``_silence_subgrade``: a stream long enough to look
+    convincing does not rescue a sample with too few independent looks in it.
     """
     assert _SILENCE_MIN_INDEPENDENT_WINDOWS >= 12, (
         "fewer than ~12 independent looks cannot resolve the 10% grade-F bar"
     )
-    src = inspect.getsource(_run_quality_gate)
-    assert "len(silence_window_scores) >= _SILENCE_MIN_INDEPENDENT_WINDOWS" in src
+    underpowered = np.full(_SILENCE_MIN_INDEPENDENT_WINDOWS - 1, 0.05, dtype=np.float32)
+    long_stream = np.full(400, 0.05, dtype=np.float32)
+
+    rate, _max_score, independent_count, stream_count = _silence_subgrade(
+        underpowered, long_stream, 0.80
+    )
+
+    assert rate is None, "an under-powered sample must fail closed, not report a rate"
+    assert independent_count == _SILENCE_MIN_INDEPENDENT_WINDOWS - 1
+    assert stream_count == 400
 
 
 def test_decimation_cannot_preserve_a_max_only_a_rate() -> None:
@@ -282,17 +302,93 @@ def test_the_reported_silence_max_is_the_worst_streamed_window() -> None:
     which read the max off the decimated subset that
     ``test_decimation_cannot_preserve_a_max_only_a_rate`` proves is biased low.
     """
-    src = inspect.getsource(_run_quality_gate)
+    gate_src = inspect.getsource(_run_quality_gate)
+    subgrade_src = inspect.getsource(_silence_subgrade)
 
-    assert "silence_max_score = float(silence_window_scores.max())" not in src, (
+    assert "silence_max_score = float(silence_window_scores.max())" not in gate_src, (
         "the reported max is being read off the decimated subset again"
     )
-    # The streaming scorer hands back the full-stream max alongside the
-    # independent subset, and that is what gets reported.
-    assert "silence_window_scores, silence_stream_max = _score_windows_streaming(" in src
-    assert "silence_stream_max" in src
-    assert "return independent, float(raw.max())" in src
+    # The streaming scorer hands back the full stream alongside the independent
+    # subset, and the max comes off that stream.
+    assert "silence_window_scores, silence_stream_scores = _score_windows_streaming(" in gate_src
+    # _score_windows_streaming is nested inside _run_quality_gate, so its body is
+    # part of gate_src: it must hand back the full stream, not a pre-reduced max.
+    assert "return independent, raw" in gate_src
+    assert "float(stream.max())" in subgrade_src
 
-    # The rate is still taken over the independent subset -- this fix moves the
-    # max only, it must not quietly re-rate the raw self-overlapping stream.
-    assert "(silence_window_scores >= deployment_threshold).mean()" in src
+    # Behavioural: the worst window survives to the reported max even when
+    # decimation drops it.
+    n = 367
+    stream = np.full(n, 0.05, dtype=np.float32)
+    stream[4] = 0.79  # index 4 is not a multiple of seq_len 9, so decimation drops it
+    independent = _decimate_to_independent_windows(stream, [0] * n, 9)
+
+    _rate, max_score, _ind, _cnt = _silence_subgrade(independent, stream, 0.80)
+
+    assert max_score == pytest.approx(0.79, abs=1e-6), (
+        "the reported max lost the model's worst no-wake window"
+    )
+
+
+def test_a_crossing_max_can_never_coexist_with_a_zero_rate() -> None:
+    """The invariant that closes the resolution-floor hole (#1487, #2611).
+
+    A rate cannot express a value smaller than one over its own denominator. Taken
+    over ~151 independent windows the smallest non-zero rate is 0.66%, so every
+    model whose true no-wake false-fire rate sits below that was reported as
+    exactly 0.0% -- while the same function printed the honest full-stream max
+    right beside it. Production, 2026-08-05: jobs 156 and 157 were graded A at
+    "Silence FP rate: 0.0%" with ``max=0.92`` and ``max=0.90`` against
+    ``threshold=0.80``. The gate was certifying as clean two models it had just
+    watched cross the firing threshold on the customer's own room tone, and
+    ``confirm_count`` defaults to 1 in ``wake_detector.py``, so a single crossing
+    is a real false wake.
+
+    REDs on the pre-fix shape, where the rate came from the decimated subset: the
+    crossing below sits at an index decimation drops, so the old rate is 0.0 while
+    the max is 0.92.
+    """
+    seq_len = 9
+    n = 1359  # ~151 independent windows, the real count from a production job
+    stream = np.full(n, 0.05, dtype=np.float32)
+    crossing_index = 4  # dropped by decimation (kept indices are 0 % 9)
+    assert crossing_index % seq_len != 0
+    stream[crossing_index] = 0.92
+    independent = _decimate_to_independent_windows(stream, [0] * n, seq_len)
+
+    assert float((independent >= 0.80).mean()) == 0.0, (
+        "this fixture must reproduce the old 0.0%-rate shape to be a valid RED"
+    )
+
+    rate, max_score, independent_count, stream_count = _silence_subgrade(independent, stream, 0.80)
+
+    assert rate is not None
+    assert max_score >= 0.80
+    assert rate > 0.0, (
+        "a model that crosses the deployment threshold on no-wake audio was rated 0.0%"
+    )
+    assert stream_count > independent_count, "the stream must be the wider population"
+
+
+def test_the_rate_and_the_max_always_come_from_the_same_numbers() -> None:
+    """Property: over random streams, max >= threshold implies rate > 0.
+
+    The invariant above, checked against arbitrary score shapes rather than one
+    hand-built fixture, so a future change that re-splits the two populations
+    cannot pass by dodging the specific case.
+    """
+    rng = np.random.default_rng(20260805)
+    threshold = 0.80
+    saw_a_crossing = False
+    for _ in range(300):
+        n = int(rng.integers(200, 1500))
+        stream = rng.uniform(0.0, 1.0, size=n).astype(np.float32)
+        independent = _decimate_to_independent_windows(stream, [0] * n, 9)
+        rate, max_score, _ind, _cnt = _silence_subgrade(independent, stream, threshold)
+        assert rate is not None
+        if max_score >= threshold:
+            saw_a_crossing = True
+            assert rate > 0.0, f"max {max_score:.3f} crossed {threshold} yet the rate was 0.0"
+        else:
+            assert rate == 0.0
+    assert saw_a_crossing, "the fixture never produced a crossing -- the property went untested"
