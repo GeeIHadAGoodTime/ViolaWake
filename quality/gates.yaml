@@ -393,3 +393,11 @@ gates:
     detector: console/tests/test_auth_email_routes.py
     own_tests:
       - console/tests/test_auth_email_routes.py::test_register_stays_unverified_when_verification_email_fails
+
+  - gate_id: console-sqlalchemy-asyncio-install
+    contract: The console backend must explicitly request SQLAlchemy's asyncio extra so fresh installs include greenlet without relying on unrelated packages.
+    detector: tests/unit/test_console_dependency_contract.py
+    own_tests:
+      - tests/unit/test_console_dependency_contract.py::test_backend_requests_sqlalchemy_asyncio_extra
+      - tests/unit/test_console_dependency_contract.py::test_detector_rejects_missing_asyncio_dependency
+      - tests/unit/test_console_dependency_contract.py::test_detector_accepts_asyncio_dependency
