@@ -245,12 +245,15 @@ def test_a_real_systemic_failure_still_trips_the_breaker(tmp_path, monkeypatch) 
     _run_with_queue(tmp_path, _test)
 
 
-def test_a_quality_gate_outage_is_not_an_expected_outcome(tmp_path, monkeypatch) -> None:
+def test_a_quality_gate_outage_is_our_fault_not_the_customers(tmp_path, monkeypatch) -> None:
     """The mirror image: if the gate cannot build its own test material (a TTS
     outage retiring the voice it synthesizes negatives with, CL-20260717-b117),
-    that is OUR infrastructure failing, not a verdict about the user's model. It
-    must still trip the breaker -- burning the user's remaining quota against a
-    broken dependency is exactly what the breaker is for."""
+    that is OUR infrastructure failing, not a verdict about the user's model, and
+    it must not spend the customer's strikes. This test used to assert the
+    opposite. Then the edge-tts outage of Oct-Nov 2026 did exactly what it
+    described to 36 customers and locked user 355, for a fault none of them could
+    do anything about. It still backs the user off, so nobody hammers a dependency
+    that is down; that is what ``_record_transient_fault`` keeps."""
 
     class QualityGateUnavailableError(RuntimeError):
         pass
@@ -266,7 +269,8 @@ def test_a_quality_gate_outage_is_not_an_expected_outcome(tmp_path, monkeypatch)
             await _expire_backoff(q, 201)
 
         breaker = await q.get_circuit_breaker(201)
-        assert breaker.paused is True
+        assert breaker.paused is False
+        assert breaker.consecutive_failures == 0
 
     _run_with_queue(tmp_path, _test)
 

@@ -98,7 +98,14 @@ def _is_expected_training_outcome(exc: BaseException) -> bool:
 #
 # Back-pressure is preserved and the strike is not charged: see
 # JobQueue._record_transient_fault.
-_SHARED_INFRASTRUCTURE_FAULTS = frozenset({"SharedInfrastructureUnavailableError"})
+#
+# QualityGateUnavailableError is the same thing wearing an SDK name: we could not
+# synthesize the audio the gate grades with. It used to charge a strike and keep the
+# attempt, which is how the edge-tts outage of Oct-Nov 2026 spent 71 attempts of 36
+# customers, none refunded, and locked user 355.
+_SHARED_INFRASTRUCTURE_FAULTS = frozenset(
+    {"SharedInfrastructureUnavailableError", "QualityGateUnavailableError"}
+)
 
 
 def _is_shared_infrastructure_fault(exc: BaseException) -> bool:

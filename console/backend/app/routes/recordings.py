@@ -61,6 +61,7 @@ from app.schemas import (
     RecordingResponse,
     RecordingUploadResponse,
 )
+from app.services.wake_word_policy import check_wake_word
 from app.storage import build_recording_key, get_storage
 
 logger = logging.getLogger("violawake.recordings")
@@ -200,6 +201,9 @@ async def _service_or_verified_user_with_rate_key(
 def _normalize_wake_word(wake_word: str) -> str:
     if not wake_word.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="wake_word is required")
+    verdict = check_wake_word(wake_word)
+    if not verdict.ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=verdict.reason)
 
     normalized = wake_word.strip().lower()
     normalized = re.sub(r"[^a-z0-9 _-]", "", normalized)
@@ -308,6 +312,18 @@ async def _user_quota_lock(user_id: int) -> asyncio.Lock:
         return lock
 
 
+async def _storage_tier(db: AsyncSession, user: User) -> str:
+    """Return the tier whose storage caps apply to ``user``.
+
+    The service account uploads for a whole upstream user base. Left on the free
+    tier, 50 MB a day and 500 live recordings would be one shared budget for all of
+    them, and one busy day would refuse everyone.
+    """
+    if is_service_user(user):
+        return "enterprise"
+    return await _subscription_tier(db, user.id)
+
+
 async def _subscription_tier(db: AsyncSession, user_id: int) -> str:
     result = await db.execute(
         select(Subscription.tier, Subscription.status).where(Subscription.user_id == user_id)
@@ -378,8 +394,10 @@ async def _enforce_user_storage_caps(
     db: AsyncSession,
     user_id: int,
     incoming_bytes: int,
+    *,
+    tier: str | None = None,
 ) -> None:
-    tier = await _subscription_tier(db, user_id)
+    tier = tier or await _subscription_tier(db, user_id)
     daily_limit = _limit_for_tier(tier, STORAGE_DAILY_LIMITS_BYTES)
     lifetime_limit = _limit_for_tier(tier, STORAGE_LIFETIME_LIMITS_BYTES)
 
@@ -1068,7 +1086,11 @@ async def bulk_upload_recordings(
     lock = await _user_quota_lock(current_user.id)
     async with lock:
         total_recordings = await _active_recording_count(db, current_user.id)
-        remaining_slots = MAX_RECORDINGS_PER_USER - total_recordings
+        remaining_slots = (
+            MAX_FILES_PER_REQUEST
+            if is_service_user(current_user)
+            else MAX_RECORDINGS_PER_USER - total_recordings
+        )
         prepared_uploads: list[tuple[int, PreparedUpload]] = []
         results: list[RecordingBulkUploadItem | None] = [None] * len(files)
 
@@ -1126,7 +1148,12 @@ async def bulk_upload_recordings(
 
         incoming_bytes = sum(prepared.size_bytes for _, prepared in prepared_uploads)
         try:
-            await _enforce_user_storage_caps(db, current_user.id, incoming_bytes)
+            await _enforce_user_storage_caps(
+                db,
+                current_user.id,
+                incoming_bytes,
+                tier=await _storage_tier(db, current_user),
+            )
         except UploadRejected as exc:
             _audit_cap_rejection_for_prepared(
                 request=request,

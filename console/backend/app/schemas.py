@@ -149,6 +149,22 @@ class TrainingStartResponse(BaseModel):
     status: str
 
 
+class TrainingReadinessResponse(BaseModel):
+    ready: bool
+    backend: str | None = None
+    message: str | None = None
+
+
+class WakeWordCheckRequest(BaseModel):
+    wake_word: str = Field(max_length=100)
+
+
+class WakeWordCheckResponse(BaseModel):
+    ok: bool
+    reason: str | None = None
+    code: str | None = None
+
+
 class TrainingStatusResponse(BaseModel):
     job_id: int
     status: str

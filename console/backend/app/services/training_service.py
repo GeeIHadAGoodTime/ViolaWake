@@ -15,6 +15,7 @@ from typing import Any
 
 from app.config import settings
 from app.monitoring import log_exception
+from app.services.speech_readiness import TRAINING_UNAVAILABLE_MESSAGE
 from app.storage import get_storage
 
 logger = logging.getLogger("violawake.training")
@@ -50,6 +51,15 @@ class SharedInfrastructureUnavailableError(RuntimeError):
     Raising this type does not disable back-pressure: the queue still backs the user
     off, so nobody hammers a dependency that is down. It only keeps our outage off
     their permanent record. See ``job_queue._is_shared_infrastructure_fault``.
+    """
+
+
+class SpeechSynthesisUnavailableError(SharedInfrastructureUnavailableError):
+    """Raised when no speech backend works, so no job can finish.
+
+    Checked before any compute is spent. Without it a job burned about 55 minutes
+    of the one-at-a-time queue before the quality gate noticed, and everyone behind
+    it waited for an hour to fail the same way.
     """
 
 
@@ -175,6 +185,18 @@ def run_training_job_sync(
             "message": "Preparing training data...",
             "error": None,
         })
+
+        # -- Can we make speech at all? Ask before spending anything. --
+        from violawake_sdk.tools.train import probe_speech_synthesis
+
+        synthesis = probe_speech_synthesis(tmp_dir=settings.tmp_dir)
+        if not synthesis.available:
+            logger.error(
+                "Training job %s cannot start, no speech backend works: %s",
+                job_id,
+                synthesis.edge_tts_error,
+            )
+            raise SpeechSynthesisUnavailableError(TRAINING_UNAVAILABLE_MESSAGE)
 
         positives_dir = Path(tempfile.mkdtemp(prefix="violawake_train_", dir=str(settings.tmp_dir)))
         for index, recording_identifier in enumerate(recording_identifiers):
@@ -473,6 +495,10 @@ def run_training_job_sync(
             source="training",
             extra={"job_id": job_id, "wake_word": wake_word},
         )
+        # The SDK's text is written for an operator. The customer sees job.error
+        # as it stands, so they get the same plain words as a failed preflight.
+        if type(exc).__name__ == "QualityGateUnavailableError":
+            raise SpeechSynthesisUnavailableError(TRAINING_UNAVAILABLE_MESSAGE) from exc
         raise
     finally:
         if positives_dir is not None and positives_dir.exists():
