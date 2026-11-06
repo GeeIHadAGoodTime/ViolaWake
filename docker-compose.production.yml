@@ -49,8 +49,9 @@ services:
     # Permanent backend cap after fixing all-at-once negative corpus loading.
     # Live proof on 2026-05-14 completed a full TemporalCNN training job with
     # peak container memory at ~0.794 GiB and zero restarts. Keep concurrency
-    # at 1 and leave ~1 GiB of headroom above the measured peak.
-    mem_limit: 2g
+    # at 1 and leave ~1 GiB of headroom above the measured peak. The extra GiB is
+    # for the Kokoro speech fallback, which loads only when edge-tts is down.
+    mem_limit: 3g
     pids_limit: 200
     expose:
       - "8000"

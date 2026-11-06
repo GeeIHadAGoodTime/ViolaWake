@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Training works again. edge-tts 7.2.8 had been getting a 403 on every connection since
+  about 2026-10-12 (Microsoft now wants `Sec-MS-GEC-Version: 2-*`, which 7.3.1 sends), and
+  the Kokoro fallback was never installed in the image, so every job failed. The floor is
+  now `edge-tts>=7.3.1` and the image installs the `tts` extra.
+- A speech outage no longer costs anyone anything. A job checks that it can make speech
+  before it starts, edge-tts is skipped after 8 failures in a row instead of retrying all
+  ~1,000 phrases, submissions are refused with a plain message before they are charged, and
+  a quality-gate outage counts as our fault: no strike, attempt refunded.
+- `_KokoroFallback.ready()` now means it can actually synthesize.
+- The service account is no longer held to one free user's storage caps.
+
+### Added
+
+- `GET /api/training/readiness`: can a job finish right now. Watch this, not `/api/health`,
+  which stayed green through the whole outage.
+- `POST /api/training/check-word`: a word that is too short, too common, or not letters is
+  refused with a plain reason, on the website before recording and on every submit.
+
 ## [0.2.10] - 2026-07-31
 
 ### Console

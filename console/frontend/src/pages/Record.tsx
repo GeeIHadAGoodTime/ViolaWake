@@ -2,7 +2,13 @@ import { useCallback, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import RecordingSession from "../components/RecordingSession";
-import { ApiError, bulkUploadRecordings, startTraining } from "../api";
+import {
+  ApiError,
+  bulkUploadRecordings,
+  checkWakeWord,
+  getTrainingReadiness,
+  startTraining,
+} from "../api";
 import "./AddSamples.css";
 
 type RecordPhase = "setup" | "recording";
@@ -55,6 +61,7 @@ function errorMessage(err: unknown, fallback: string): string {
 export default function RecordPage() {
   const [phase, setPhase] = useState<RecordPhase>("setup");
   const [wakeWord, setWakeWord] = useState("");
+  const [setupError, setSetupError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("record");
   const [recordedBlobs, setRecordedBlobs] = useState<Blob[]>([]);
   const [uploadFiles, setUploadFiles] = useState<UploadFileRow[]>([]);
@@ -92,9 +99,26 @@ export default function RecordPage() {
     setActiveTab("record");
   }
 
-  function handleStartRecording() {
+  async function handleStartRecording() {
     const trimmed = wakeWord.trim().toLowerCase();
     if (trimmed.length < 2) return;
+    setSetupError(null);
+    try {
+      const [verdict, readiness] = await Promise.all([
+        checkWakeWord(trimmed),
+        getTrainingReadiness(),
+      ]);
+      if (!verdict.ok) {
+        setSetupError(verdict.reason ?? "That word will not work. Try a different one.");
+        return;
+      }
+      if (!readiness.ready) {
+        setSetupError(readiness.message ?? "Training is down right now. Please try again later.");
+        return;
+      }
+    } catch {
+      // Both are checked again at submit, so a failed check should not stop anyone.
+    }
     resetSessionState();
     setWakeWord(trimmed);
     setPhase("recording");
@@ -294,20 +318,28 @@ export default function RecordPage() {
                 className="form-input form-input-large"
                 placeholder='e.g., "jarvis", "hey computer"'
                 value={wakeWord}
-                onChange={(e) => setWakeWord(e.target.value)}
+                onChange={(e) => {
+                  setWakeWord(e.target.value);
+                  setSetupError(null);
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleStartRecording();
+                  if (e.key === "Enter") void handleStartRecording();
                 }}
                 autoFocus
               />
               <span className="form-hint">
-                Choose a 1-3 word phrase. Longer phrases tend to work better.
+                Choose something with 2 to 4 syllables that you do not say every day.
               </span>
+              {setupError && (
+                <p className="error-message" role="alert">
+                  {setupError}
+                </p>
+              )}
             </div>
 
             <button
               className="btn btn-primary btn-large"
-              onClick={handleStartRecording}
+              onClick={() => void handleStartRecording()}
               disabled={wakeWord.trim().length < 2}
             >
               Continue

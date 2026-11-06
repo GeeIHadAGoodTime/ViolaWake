@@ -22,6 +22,8 @@ from app.job_queue import (
 from app.models import Recording, User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.quota import _current_period_start, check_training_quota, record_usage
+from app.services.speech_readiness import get_speech_readiness
+from app.services.wake_word_policy import check_wake_word
 from app.schemas import (
     JobCircuitBreakerResponse,
     JobResponse,
@@ -92,6 +94,9 @@ async def validate_training_request(
 ) -> tuple[str, list[int], int]:
     """Validate the submitted recordings for a new training job."""
     wake_word = body.wake_word.strip().lower()
+    verdict = check_wake_word(wake_word)
+    if not verdict.ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=verdict.reason)
     result = await db.execute(
         select(Recording).where(
             Recording.id.in_(body.recording_ids),
@@ -150,6 +155,16 @@ async def submit_training_job(
                 "before you can submit again. No training attempt was used."
             ),
             headers={"X-Training-Paused": "1"},
+        )
+
+    # Same reason as the pause above: a job that cannot finish must not be charged,
+    # and the caller keeps their recordings to retry with.
+    readiness = await get_speech_readiness()
+    if not readiness.ready:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=readiness.public_payload()["message"],
+            headers={"Retry-After": "300"},
         )
 
     try:

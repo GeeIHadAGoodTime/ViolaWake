@@ -339,6 +339,30 @@ export async function getRecordingCount(
 
 // --- Training ---
 
+export interface WakeWordCheck {
+  ok: boolean;
+  reason: string | null;
+  code: string | null;
+}
+
+export interface TrainingReadiness {
+  ready: boolean;
+  message: string | null;
+}
+
+/** Ask whether a word can work, before anyone spends time recording it. */
+export async function checkWakeWord(wakeWord: string): Promise<WakeWordCheck> {
+  return request<WakeWordCheck>("/training/check-word", {
+    method: "POST",
+    body: JSON.stringify({ wake_word: wakeWord }),
+  });
+}
+
+/** Ask whether a job could finish right now, so nobody records for nothing. */
+export async function getTrainingReadiness(): Promise<TrainingReadiness> {
+  return request<TrainingReadiness>("/training/readiness");
+}
+
 export async function startTraining(
   wakeWord: string,
   recordingIds: number[],
