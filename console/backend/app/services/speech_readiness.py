@@ -45,6 +45,8 @@ class SpeechReadiness:
         """What anyone may see: no provider errors, no internals."""
         return {
             "ready": self.ready,
+            # What the off-box uptime worker reads: it pages on status "down".
+            "status": "ok" if self.ready else "down",
             "backend": self.backend,
             "message": None if self.ready else TRAINING_UNAVAILABLE_MESSAGE,
         }

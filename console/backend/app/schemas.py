@@ -151,6 +151,7 @@ class TrainingStartResponse(BaseModel):
 
 class TrainingReadinessResponse(BaseModel):
     ready: bool
+    status: str
     backend: str | None = None
     message: str | None = None
 

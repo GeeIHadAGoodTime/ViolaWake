@@ -131,6 +131,7 @@ async def test_readiness_reports_the_outage_without_provider_internals(monkeypat
     response = await training_readiness()
 
     assert response.ready is False
+    assert response.status == "down", "the uptime worker pages on this"
     assert response.message == TRAINING_UNAVAILABLE_MESSAGE
     assert "403" not in response.model_dump_json()
 
