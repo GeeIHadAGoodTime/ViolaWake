@@ -411,3 +411,12 @@ gates:
       - tests/unit/test_edge_tts_outage_breaker.py::test_probe_reports_no_speech_when_nothing_works
       - tests/unit/test_edge_tts_outage_breaker.py::test_edge_tts_is_new_enough_for_microsoft
       - tests/unit/test_edge_tts_outage_breaker.py::test_the_backend_image_installs_the_fallback
+
+  - gate_id: backend-boots-on-a-locked-data-folder
+    contract: A folder under the data volume that root cannot read, because the app locked it to 700 and the container runs with only CHOWN, SETUID and SETGID, must not stop the backend from starting. Training must not leave such folders behind across restarts, and a deploy must prove the new image gets past its entrypoint on the real volume before it touches the running container, and must not refuse to repair a container that is not running.
+    detector: tests/unit/test_entrypoint_boot.py
+    own_tests:
+      - tests/unit/test_entrypoint_boot.py::test_a_failed_chown_does_not_stop_startup
+      - tests/unit/test_entrypoint_boot.py::test_boots_with_a_locked_cache_and_temp_folder_under_production_capabilities
+      - tests/unit/test_deploy_backend.py::test_an_image_that_cannot_boot_on_the_real_volume_never_replaces_the_running_one
+      - tests/unit/test_deploy_backend.py::test_a_crash_looping_container_does_not_block_the_deploy_that_fixes_it

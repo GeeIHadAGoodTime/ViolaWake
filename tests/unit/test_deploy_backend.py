@@ -72,6 +72,8 @@ class FakeRunner:
             return 0, ""
         if "docker inspect" in joined and "{{.Image}}" in joined:
             return 0, IMAGE_ID
+        if "docker inspect" in joined and "State.Status" in joined:
+            return 0, "running"
         if "docker image inspect" in joined and "revision" in joined:
             # After a build the running image carries the target revision.
             return 0, TARGET if self._built else PREVIOUS
@@ -726,3 +728,51 @@ def test_destructive_patterns_are_recognised(snippet):
 )
 def test_additive_patterns_are_not_flagged(snippet):
     assert not any(p.search(snippet) for p in deploy_backend.DESTRUCTIVE_MIGRATION_PATTERNS), snippet
+
+
+# --------------------------------------------------------------------------- #
+# 2026-11-07: a folder in the data volume stopped both images from booting
+# --------------------------------------------------------------------------- #
+
+
+def test_an_image_that_cannot_boot_on_the_real_volume_never_replaces_the_running_one(tmp_path):
+    deployer, runner = make_deployer(
+        tmp_path, overrides={"VIOLAWAKE_BOOT_CHECK=1": (1, "chown: cannot read directory '/app/data/cache'")}
+    )
+
+    assert deployer.deploy() in (2, 3)
+
+    assert "boot preflight failed" in deployer.report.reason
+    assert not runner.ran("up -d backend"), "the old container was still serving; it must keep serving"
+
+
+def test_the_boot_preflight_runs_after_the_build_and_before_the_recreate(tmp_path):
+    deployer, runner = make_deployer(tmp_path)
+
+    assert deployer.deploy() == 0
+
+    order = [i for i, call in enumerate(runner.calls) if "VIOLAWAKE_BOOT_CHECK=1" in call]
+    built = [i for i, call in enumerate(runner.calls) if " build " in f" {call} "]
+    recreated = [i for i, call in enumerate(runner.calls) if "up -d backend" in call]
+    assert built[0] < order[0] < recreated[0]
+
+
+def test_a_crash_looping_container_does_not_block_the_deploy_that_fixes_it(tmp_path):
+    """The guard refused every tick for hours, because exec cannot reach a restarting container."""
+    deployer, runner = make_deployer(
+        tmp_path,
+        overrides={
+            "State.Status": (0, "restarting"),
+            "check_in_flight_jobs.py": (2, "docker exec failed"),
+        },
+    )
+
+    assert deployer.guard_in_flight_jobs() is True
+    assert not runner.ran("check_in_flight_jobs.py")
+
+
+def test_a_running_container_the_guard_cannot_read_still_refuses(tmp_path):
+    deployer, _ = make_deployer(tmp_path, overrides={"check_in_flight_jobs.py": (2, "cannot read")})
+
+    with pytest.raises(deploy_backend.DeployError):
+        deployer.guard_in_flight_jobs()
