@@ -17,7 +17,7 @@ COPY pyproject.toml /sdk/
 COPY README.md /sdk/
 COPY LICENSE /sdk/
 COPY src/ /sdk/src/
-RUN pip install --no-cache-dir "/sdk[training]"
+RUN pip install --no-cache-dir "/sdk[training,tts]"
 
 # Copy backend code
 COPY console/backend/ .

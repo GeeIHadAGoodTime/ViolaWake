@@ -21,7 +21,16 @@ from app.models import User
 from app.rate_limit import TRAINING_SUBMIT_LIMIT, key_by_user, limiter, set_rate_limit_user
 from app.quota import check_training_quota
 from app.routes.jobs import get_owned_job_or_404, submit_training_job
-from app.schemas import JobSubmitRequest, TrainingStartResponse, TrainingStatusResponse
+from app.schemas import (
+    JobSubmitRequest,
+    TrainingReadinessResponse,
+    TrainingStartResponse,
+    TrainingStatusResponse,
+    WakeWordCheckRequest,
+    WakeWordCheckResponse,
+)
+from app.services.speech_readiness import get_speech_readiness
+from app.services.wake_word_policy import check_wake_word
 
 router = APIRouter(prefix="/api/training", tags=["training"])
 MAX_SSE_PER_USER = 10
@@ -42,6 +51,25 @@ def _legacy_status(status_value: str) -> str:
     if status_value == "pending":
         return "queued"
     return status_value
+
+
+@router.get("/readiness", response_model=TrainingReadinessResponse)
+async def training_readiness() -> TrainingReadinessResponse:
+    """Say whether a job could finish right now.
+
+    Public on purpose: the website asks before a visitor records anything, Viola's
+    backend asks before it offers training, and an uptime check can watch it. It
+    says nothing about any account, and the answer is cached.
+    """
+    readiness = await get_speech_readiness()
+    return TrainingReadinessResponse(**readiness.public_payload())
+
+
+@router.post("/check-word", response_model=WakeWordCheckResponse)
+async def check_word(body: WakeWordCheckRequest) -> WakeWordCheckResponse:
+    """Say whether a wake word can work, and why not, before anyone records it."""
+    verdict = check_wake_word(body.wake_word)
+    return WakeWordCheckResponse(ok=verdict.ok, reason=verdict.reason, code=verdict.code)
 
 
 @router.post("/start", response_model=TrainingStartResponse, status_code=status.HTTP_202_ACCEPTED)

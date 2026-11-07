@@ -56,6 +56,7 @@ import shutil
 import sys
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from random import Random
 from typing import TYPE_CHECKING, Any
@@ -102,11 +103,11 @@ class QualityGateUnavailableError(TrainingError):
     voice attempted is unreachable/retired, CL-20260717-b117, and the Kokoro
     fallback in ``_KokoroFallback`` is also unavailable) — it is not a
     judgment about the customer's model, and it must be loud: it should page
-    ops as a normal ERROR, and it should still count toward the user's circuit
-    breaker (burning the user's remaining retries against our broken TTS
-    dependency, rather than against their own model, is exactly the failure
-    the breaker exists to catch — see
-    console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_quality_gate_outage_is_not_an_expected_outcome).
+    ops as a normal ERROR. It must NOT count against the customer: the Console
+    treats it as a shared-infrastructure fault (no strike, attempt refunded).
+    From 2026-10-14 to 2026-11-06 it counted, and an outage on our side spent
+    every customer's strikes and locked accounts; see
+    console/tests/test_quality_gate_not_a_breaker_fault.py::test_a_quality_gate_outage_is_our_fault_not_the_customers.
 
     Before this class existed, an unmeasurable probe set silently fell through
     to ``_fp_rate([]) == 1.0`` and was reported to the customer as a real,
@@ -124,6 +125,15 @@ _EDGE_TTS_MAX_ATTEMPTS = 3
 _EDGE_TTS_RETRY_BASE_SECONDS = 0.75
 _EDGE_TTS_RETRY_MAX_SECONDS = 4.0
 _EDGE_TTS_RETRY_RNG = Random()
+# Consecutive exhausted syntheses (every retry of a phrase failed) before edge-tts
+# is treated as down for the rest of the job. A handful of retired voices cannot
+# get here, because the voices around them succeed and clear the count; a service
+# that refuses every voice gets here in seconds. Without this a job paid three
+# attempts plus backoff on all ~1,000 phrases and took ~55 minutes to fail
+# (Oct-Nov 2026: 71 jobs, 66 hours of queue time, one job at a time).
+_EDGE_TTS_DOWN_AFTER = 8
+_EDGE_TTS_CONSECUTIVE_FAILURES = 0
+_EDGE_TTS_DOWN = False
 
 # ---------------------------------------------------------------------------
 # Edge-TTS voice pool for diverse positive and negative generation
@@ -354,6 +364,7 @@ def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
 
     summary = f"{type(detail).__name__}: {detail}" if isinstance(detail, BaseException) else detail
     _LAST_EDGE_TTS_ERROR = summary
+    _note_edge_tts_failure(summary)
 
     # Dedup key is (voice, summary), NOT summary alone. A missing decoder or a
     # broken conversion toolchain causes hundreds of *identical* per-sample
@@ -379,6 +390,21 @@ def _edge_tts_fail(text: str, voice: str, detail: str | BaseException) -> bool:
     return False
 
 
+def _note_edge_tts_failure(summary: str) -> None:
+    """Count one exhausted synthesis; open the per-job breaker when enough pile up."""
+    global _EDGE_TTS_CONSECUTIVE_FAILURES, _EDGE_TTS_DOWN
+
+    _EDGE_TTS_CONSECUTIVE_FAILURES += 1
+    if not _EDGE_TTS_DOWN and _EDGE_TTS_CONSECUTIVE_FAILURES >= _EDGE_TTS_DOWN_AFTER:
+        _EDGE_TTS_DOWN = True
+        logger.error(
+            "edge-tts looks down after %s failures in a row, skipping it for the rest "
+            "of this job (last error: %s)",
+            _EDGE_TTS_CONSECUTIVE_FAILURES,
+            summary,
+        )
+
+
 def reset_edge_tts_reporting() -> None:
     """Clear per-run edge-tts failure state at a training job boundary.
 
@@ -390,9 +416,11 @@ def reset_edge_tts_reporting() -> None:
     hiding a permanently-broken voice from every customer after the first
     one. Call this once at the start of each training job.
     """
-    global _LAST_EDGE_TTS_ERROR
+    global _LAST_EDGE_TTS_ERROR, _EDGE_TTS_CONSECUTIVE_FAILURES, _EDGE_TTS_DOWN
     _REPORTED_EDGE_TTS_ERRORS.clear()
     _LAST_EDGE_TTS_ERROR = None
+    _EDGE_TTS_CONSECUTIVE_FAILURES = 0
+    _EDGE_TTS_DOWN = False
 
 
 def _edge_tts_synthesize(
@@ -410,7 +438,9 @@ def _edge_tts_synthesize(
     import io
     import tempfile
 
-    global _LAST_EDGE_TTS_ERROR
+    global _LAST_EDGE_TTS_ERROR, _EDGE_TTS_CONSECUTIVE_FAILURES
+    if _EDGE_TTS_DOWN:
+        return False
     _LAST_EDGE_TTS_ERROR = None
 
     try:
@@ -452,6 +482,7 @@ def _edge_tts_synthesize(
         _check_cancelled(check_cancelled)
         try:
             mp3_data = _run_synth()
+            _EDGE_TTS_CONSECUTIVE_FAILURES = 0
             break
         except Exception as exc:
             if attempt >= max_attempts:
@@ -630,7 +661,13 @@ class _KokoroFallback:
             return False
         try:
             self._engine = TTSEngine(voice=self._voices[0], sample_rate=TTS_SAMPLE_RATE)
-        except Exception:
+            # TTSEngine loads lazily, so building it proves nothing. Production
+            # printed "fallback ready" for 26 days with kokoro-onnx not installed,
+            # then every synthesize() returned False. Load it here so "ready"
+            # means a synthesize() can work.
+            self._engine._get_kokoro()
+        except Exception as exc:
+            logger.error("Kokoro TTS fallback is unavailable: %s: %s", type(exc).__name__, exc)
             self._engine = None
             return False
         print("Kokoro TTS fallback ready (used per-sample when edge-tts fails)")
@@ -646,6 +683,55 @@ class _KokoroFallback:
             return False
         voice = self._voices[rotate_index % len(self._voices)]
         return _kokoro_tts_synthesize(text, voice, output_path, engine=self._engine)
+
+
+@dataclass(frozen=True)
+class SynthesisProbe:
+    """Whether this process can make speech right now, and how."""
+
+    edge_tts: bool
+    kokoro: bool
+    edge_tts_error: str | None = None
+
+    @property
+    def available(self) -> bool:
+        return self.edge_tts or self.kokoro
+
+
+def probe_speech_synthesis(tmp_dir: Path | str | None = None) -> SynthesisProbe:
+    """Synthesize one real phrase and report which backend produced it.
+
+    The whole pipeline (TTS positives, confusable negatives, and the quality
+    gate's own probes) depends on being able to make speech, so a job should ask
+    this before spending compute. Kokoro is only tried when edge-tts failed: the
+    answer needed is "can we make speech", and loading it costs a lot of RAM.
+
+    Tries one voice once, with no retries, so a healthy check takes about a
+    second and a failed one a few seconds.
+    """
+    global _EDGE_TTS_CONSECUTIVE_FAILURES, _EDGE_TTS_DOWN, _EDGE_TTS_MAX_ATTEMPTS
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="violawake_probe_", dir=tmp_dir) as probe_dir:
+        out_path = Path(probe_dir) / "probe.wav"
+        saved_attempts = _EDGE_TTS_MAX_ATTEMPTS
+        saved_failures, saved_down = _EDGE_TTS_CONSECUTIVE_FAILURES, _EDGE_TTS_DOWN
+        _EDGE_TTS_MAX_ATTEMPTS = 1
+        _EDGE_TTS_DOWN = False
+        try:
+            edge_ok = _edge_tts_synthesize("this is a voice check", EDGE_TTS_VOICES[0], out_path)
+            edge_error = None if edge_ok else _LAST_EDGE_TTS_ERROR
+        finally:
+            _EDGE_TTS_MAX_ATTEMPTS = saved_attempts
+            _EDGE_TTS_CONSECUTIVE_FAILURES, _EDGE_TTS_DOWN = saved_failures, saved_down
+        if edge_ok:
+            return SynthesisProbe(edge_tts=True, kokoro=False)
+
+        kokoro = _KokoroFallback()
+        kokoro_ok = kokoro.ready() and kokoro.synthesize(
+            "this is a voice check", out_path, rotate_index=0
+        )
+        return SynthesisProbe(edge_tts=False, kokoro=bool(kokoro_ok), edge_tts_error=edge_error)
 
 
 def _generate_tts_positives(
@@ -2370,8 +2456,8 @@ def _require_gate_probes_measurable(
     "your model false-fires on everything." This raises
     ``QualityGateUnavailableError`` instead: our infrastructure failing to
     build test material is not a verdict on the customer's model, and unlike a
-    real grade-F it must page ops and still count toward the user's circuit
-    breaker (see ``QualityGateUnavailableError``'s docstring).
+    real grade-F it must page ops (see ``QualityGateUnavailableError``'s
+    docstring).
 
     Only triggers when an axis is COMPLETELY unmeasurable -- the Kokoro
     fallback in ``_synthesize_gate_probe`` already recovers any single dead

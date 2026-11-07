@@ -401,3 +401,13 @@ gates:
       - tests/unit/test_console_dependency_contract.py::test_backend_requests_sqlalchemy_asyncio_extra
       - tests/unit/test_console_dependency_contract.py::test_detector_rejects_missing_asyncio_dependency
       - tests/unit/test_console_dependency_contract.py::test_detector_accepts_asyncio_dependency
+
+  - gate_id: training-survives-a-speech-outage
+    contract: Training depends on synthesized speech, so edge-tts stays new enough for Microsoft, the Kokoro fallback is really installed and only claims ready when it can load, a dead service is given up on in seconds, and a job asks whether it can make speech before it spends anything.
+    detector: tests/unit/test_edge_tts_outage_breaker.py
+    own_tests:
+      - tests/unit/test_edge_tts_outage_breaker.py::test_a_service_refusing_every_voice_is_skipped_after_a_few_phrases
+      - tests/unit/test_edge_tts_outage_breaker.py::test_fallback_is_not_ready_when_kokoro_cannot_actually_load
+      - tests/unit/test_edge_tts_outage_breaker.py::test_probe_reports_no_speech_when_nothing_works
+      - tests/unit/test_edge_tts_outage_breaker.py::test_edge_tts_is_new_enough_for_microsoft
+      - tests/unit/test_edge_tts_outage_breaker.py::test_the_backend_image_installs_the_fallback
