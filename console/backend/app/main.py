@@ -28,6 +28,7 @@ from app.middleware import (
 )
 from app.monitoring import APP_VERSION, init_monitoring_state, log_exception, mark_startup_complete
 from app.rate_limit import limiter
+from app.services.tmp_cleanup import remove_stale_training_dirs
 from app.routes import account, auth, files, inbound_email, jobs, models, public, recordings, teams, training
 
 configure_logging()
@@ -71,6 +72,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     retention_task: asyncio.Task[None] | None = None
     try:
         await init_db()
+        # Before the queue starts: at this moment no job can be using any of them.
+        remove_stale_training_dirs()
         await init_job_queue()
 
         # Eagerly initialize the email service so the "Resend not configured"

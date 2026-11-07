@@ -45,6 +45,10 @@ Guards (each one exists because of a real incident or a real hazard)
   that imports something absent from the image otherwise produces a
   crash-looping container instead of a refused deploy (NOVVIOLA's 2026-07-05
   outage #2, same failure shape, different stack).
+* **Boot preflight** -- run the new image's entrypoint against the real data
+  volume under the real capabilities, before the old container is touched. A
+  running container proves only that it started once, on the volume as it was
+  then: a rollback to it can die on what the volume holds now.
 * **Health verification + rollback** -- after the recreate, the container must
   report healthy, the live endpoint must answer 200, and the running image's
   revision label must equal the target commit. Any of those failing rolls the
@@ -416,6 +420,15 @@ class BackendDeployer:
         if self.cfg.force:
             self.report.phase("in-flight-jobs", True, "bypassed with --force")
             return True
+        # A container that is not running has no jobs in flight, and exec cannot reach
+        # it. Treating that as "the guard cannot see" meant a crash-looping backend
+        # could never be repaired by the deploy that would fix it (2026-11-07: refused
+        # every tick). The queue is in-process, so this is proof, not a guess.
+        state = self._docker("inspect", "-f", "{{.State.Status}}", self.cfg.container)
+        status = state.out.strip() if state.ok else ""
+        if status and status != "running":
+            self.report.phase("in-flight-jobs", True, f"container is {status}: nothing can be in flight")
+            return True
         script = self.cfg.repo / "scripts" / "check_in_flight_jobs.py"
         res = self.run(
             [sys.executable, str(script), "--container", self.cfg.container],
@@ -601,6 +614,25 @@ class BackendDeployer:
         if not res.ok:
             raise DeployError(f"import preflight failed on the new image: {(res.stderr or res.stdout)[-2000:]}")
         self.report.phase("import-preflight", True, "import app.main")
+
+    def boot_preflight(self) -> None:
+        """Prove the new image can get past its entrypoint on the REAL data volume.
+
+        ``import_preflight`` skips the entrypoint, and the entrypoint is where the
+        2026-11-07 outage was: its chown died on a folder in the volume. The healthy
+        container had started before that folder existed, so nothing had ever
+        exercised it. The new image failed, the rollback hit the same folder, and both
+        images crash-looped. Checked here, the old container would have kept serving.
+        Same volume, same capabilities, nothing started.
+        """
+        res = self._compose(
+            "run", "--rm", "--no-deps", "-e", "VIOLAWAKE_BOOT_CHECK=1",
+            self.cfg.service,
+            timeout=300,
+        )
+        if not res.ok:
+            raise DeployError(f"boot preflight failed on the new image: {(res.stderr or res.stdout)[-2000:]}")
+        self.report.phase("boot-preflight", True, "entrypoint passed on the live data volume")
 
     def recreate(self) -> None:
         res = self._compose("up", "-d", self.cfg.service, timeout=600)
@@ -844,6 +876,7 @@ class BackendDeployer:
             self.fast_forward(target_sha)
             self.build(target_sha)
             self.import_preflight()
+            self.boot_preflight()
             self.clear_stale_recreate_backups()
             self.recreate()
             self.wait_for_container_health()
