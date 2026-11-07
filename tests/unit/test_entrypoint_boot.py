@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import shutil
-import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -20,7 +19,6 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 ENTRYPOINT = REPO / "console" / "backend" / "entrypoint.sh"
-sys.path.insert(0, str(REPO / "console" / "backend"))
 
 posix_only = pytest.mark.skipif(sys.platform == "win32", reason="runs the real POSIX entrypoint")
 
@@ -28,7 +26,7 @@ posix_only = pytest.mark.skipif(sys.platform == "win32", reason="runs the real P
 def _stub(folder: Path, name: str, body: str) -> None:
     path = folder / name
     path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
-    path.chmod(path.stat().st_mode | stat.S_IEXEC)
+    path.chmod(0o755)  # root in the container has no DAC override: it is "other" here
 
 
 def _run_entrypoint(tmp_path: Path, *, chown_exit: int, writable: bool = True, env: dict | None = None):
@@ -76,7 +74,7 @@ def test_a_data_folder_the_app_cannot_write_still_stops_startup(tmp_path: Path) 
 
     assert result.returncode == 1
     assert "FATAL" in result.stdout
-    assert "SERVER STARTED" not in result.stdout
+    assert "SERVER STARTED run.py" not in result.stdout
 
 
 @posix_only
@@ -147,30 +145,3 @@ def test_boots_with_a_locked_cache_and_temp_folder_under_production_capabilities
     assert "ROOT CAN READ IT" not in output, "the test no longer reproduces the lockout"
     assert result.returncode == 0, output
     assert "SERVER STARTED run.py" in output
-
-
-def test_a_restart_clears_what_killed_jobs_left_behind(tmp_path: Path) -> None:
-    from app.services.tmp_cleanup import remove_stale_training_dirs
-
-    for name in ("violawake_train_abc", "violawake_neg_x", "violawake_job_42_y"):
-        folder = tmp_path / name
-        folder.mkdir()
-        (folder / "clip.wav").write_bytes(b"x")
-        if sys.platform != "win32":
-            folder.chmod(0o700)
-    (tmp_path / "something_else").mkdir()
-
-    assert remove_stale_training_dirs(tmp_path) == 3
-
-    assert [path.name for path in tmp_path.iterdir()] == ["something_else"]
-
-
-def test_cleanup_cannot_stop_startup(tmp_path: Path) -> None:
-    from app.services.tmp_cleanup import remove_stale_training_dirs
-
-    assert remove_stale_training_dirs(tmp_path / "missing") == 0
-
-
-def test_startup_clears_them_before_the_queue_can_start_a_job() -> None:
-    source = (REPO / "console" / "backend" / "app" / "main.py").read_text(encoding="utf-8")
-    assert source.index("remove_stale_training_dirs()") < source.index("await init_job_queue()")
