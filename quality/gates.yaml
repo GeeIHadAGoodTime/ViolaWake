@@ -20,6 +20,17 @@ gates:
       - tests/unit/test_audio_source.py::TestFileSource::test_rejects_wrong_wav_sample_rate
       - tests/unit/test_audio_source.py::TestMicrophoneSourceContract
 
+  - gate_id: collect-samples-mic-buffer-contract
+    contract: violawake-collect must capture in bounded 20 ms chunks; a whole-clip frames_per_buffer stalls for duration*fpb/1024 seconds and returns dropped-frame audio.
+    detector: tests/unit/test_collect_samples_mic_buffer_contract.py
+    own_tests:
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_detector_flags_the_pre_fix_shape
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_record_clip_rejects_whole_clip_buffer
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_record_clip_opens_and_reads_in_bounded_chunks
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_overflow_aborts_the_clip_instead_of_shortening_it
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_start_tone_fires_immediately_before_capture
+      - tests/unit/test_collect_samples_mic_buffer_contract.py::test_cue_trim_covers_the_measured_player_onset_latency
+
   - gate_id: oww-backbone-integrity-fail-closed
     contract: The installed OWW backbone hash must match the pinned registry hash before inference sessions load.
     detector: tests/unit/test_oww_backbone.py
