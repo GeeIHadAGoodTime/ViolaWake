@@ -1153,6 +1153,59 @@ def _augment_positives(
     return augmented
 
 
+def _speech_span(audio: np.ndarray, sample_rate: int = 16000) -> tuple[int, int]:
+    """Start and end sample of the spoken part: 10 ms frames above a tenth of the loudest, plus 50 ms."""
+    import numpy as np
+
+    hop = sample_rate // 100
+    n = len(audio) // hop
+    if n == 0:
+        return 0, len(audio)
+    rms = np.sqrt(np.mean(np.asarray(audio[: n * hop], dtype=np.float32).reshape(n, hop) ** 2, axis=1))
+    active = np.flatnonzero(rms >= 0.1 * float(rms.max()))
+    if active.size == 0:
+        return 0, len(audio)
+    pad = sample_rate // 20
+    return max(0, int(active[0]) * hop - pad), min(len(audio), (int(active[-1]) + 1) * hop + pad)
+
+
+def _shift_positives(
+    raw_audio_arrays: list[np.ndarray],
+    *,
+    offsets_ms: tuple[int, ...],
+    clip_samples: int,
+    sample_rate: int = 16000,
+    room_rms: float = 0.002,
+    seed: int = 42,
+) -> list[np.ndarray]:
+    """Place each positive's spoken part at several offsets in the 1.5 s window, over room tone.
+
+    The desktop scores a sliding window every 80 ms and wakes only when several
+    neighbouring windows agree, so the word must score high a few frames before and
+    after its centre. Training saw each clip at one position (centred, and short TTS
+    clips padded with digital zeros that live audio never has), so a custom model
+    peaked lower and held its score for fewer frames than the built-in model, whose
+    pre-segmented corpus put the word at many positions.
+    """
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    shifted: list[np.ndarray] = []
+    for audio in raw_audio_arrays:
+        audio = np.asarray(audio, dtype=np.float32)
+        start, end = _speech_span(audio, sample_rate)
+        word = audio[start:end]
+        if word.size >= clip_samples:
+            word = word[(word.size - clip_samples) // 2 :][:clip_samples]
+        for offset_ms in offsets_ms:
+            out = rng.normal(0.0, room_rms, clip_samples).astype(np.float32)
+            centre = clip_samples // 2 + int(offset_ms * sample_rate / 1000)
+            left = int(np.clip(centre - word.size // 2, 0, clip_samples - word.size))
+            out[left : left + word.size] += word
+            shifted.append(out)
+    return shifted
+
+
 def _prepare_audio_for_oww(
     audio: np.ndarray,
     *,
@@ -1716,6 +1769,8 @@ def _train_temporal_cnn(
     neg_tags: dict[str, list[Path]] | None = None,
     augment_source_files: list[Path] | None = None,
     tmp_dir: Path | str | None = None,
+    shift_offsets_ms: tuple[int, ...] | None = None,
+    min_epochs: int = 0,
 ) -> dict[str, Any]:
     """Train a TemporalCNN on 9-frame OWW embedding windows.
 
@@ -1841,6 +1896,19 @@ def _train_temporal_cnn(
         print("\nStep 2: Positive augmentation disabled; using original clips only.")
     elif verbose:
         print("\nStep 2: No positive clips available for augmentation; using originals only.")
+
+    n_shifted = 0
+    if shift_offsets_ms:
+        from violawake_sdk._constants import CLIP_SAMPLES
+
+        shift_base = list(raw_pos_audio)
+        shift_ids = list(raw_pos_source_ids)
+        shifted = _shift_positives(shift_base, offsets_ms=tuple(shift_offsets_ms), clip_samples=CLIP_SAMPLES)
+        raw_pos_audio.extend(shifted)
+        raw_pos_source_ids.extend(sid for sid in shift_ids for _ in shift_offsets_ms)
+        n_shifted = len(shifted)
+        if verbose:
+            print(f"  + {len(shifted)} time-shifted positives ({len(shift_offsets_ms)} offsets per clip)")
 
     # -- Extract temporal embeddings -----------------------------------------
     if verbose:
@@ -2041,7 +2109,7 @@ def _train_temporal_cnn(
                 f"{best_val_loss:>10.4f} {current_lr:>10.6f}{marker}"
             )
 
-        if no_improve >= patience:
+        if no_improve >= patience and epoch >= min_epochs:
             if verbose:
                 print(
                     f"\nEarly stopping at epoch {epoch} "
@@ -2178,6 +2246,8 @@ def _train_temporal_cnn(
             "n_neg_samples": n_neg,
             "n_original_pos_clips": original_pos_clip_count,
             "n_augmented_pos_clips": n_augmented,
+            "n_shifted_pos_clips": n_shifted,
+            "shift_offsets_ms": list(shift_offsets_ms or ()),
             "augmented": augment,
             "epochs_trained": min(epoch, epochs),
             "best_epoch": best_epoch,
@@ -2188,6 +2258,7 @@ def _train_temporal_cnn(
             "batch_size": batch_size,
             "lr": lr,
             "patience": patience,
+            "min_epochs": min_epochs,
             "validation_split": validation_fraction,
             "early_stopped": no_improve >= patience,
             "training_duration_s": round(training_duration, 2),

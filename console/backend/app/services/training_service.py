@@ -20,6 +20,20 @@ from app.storage import get_storage
 
 logger = logging.getLogger("violawake.training")
 
+
+# How a customer's word is trained so it wakes as well as the built-in "Viola".
+# The desktop scores a sliding window every 80 ms and wakes on 6 of 7 agreeing
+# frames, so the word has to score high a few frames either side of its centre.
+# Training showed every clip at one position (TTS clips centred on digital
+# zeros), and early stopping ended at epoch 5: on the 1.0.5 laptop a trained
+# "computer" peaked 0.907-0.919 where "Viola" peaks 0.97-0.995. Measured on a
+# custom "viola" trained from 5 of one speaker's real recordings and tested on
+# his other 65 at the live rule: recall 12% -> 85%, over music 5% -> 42%,
+# whispered 0% -> 38%; room false triggers 3 in 12.5 min, the same as the
+# built-in model on the same audio.
+CUSTOM_WORD_SHIFT_OFFSETS_MS: tuple[int, ...] = (-240, -160, -80, 0, 80, 160, 240)
+CUSTOM_WORD_MIN_EPOCHS = 15
+
 CONFUSABLE_PROGRESS_START = 12.0
 CONFUSABLE_ROUND_ONE_END = 22.0
 CONFUSABLE_PROGRESS_END = 28.0
@@ -448,6 +462,8 @@ def run_training_job_sync(
             neg_tags=neg_tag_map,
             tmp_dir=settings.tmp_dir,
             augment_source_files=user_pos_files,
+            shift_offsets_ms=CUSTOM_WORD_SHIFT_OFFSETS_MS,
+            min_epochs=CUSTOM_WORD_MIN_EPOCHS,
         )
 
         _ensure_not_cancelled()
