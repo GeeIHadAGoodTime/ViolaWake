@@ -131,3 +131,12 @@ def test_speech_and_confusable_axes_still_gate(bad_axis: str) -> None:
               speech_fp_rate=0.0, confusable_fp_rate=0.0)
     kw[f"{bad_axis}_fp_rate"] = 0.5  # 50% false-positive rate on that axis
     assert _grade_quality(**kw) == "F"
+
+
+def test_a_model_that_does_not_wake_on_its_own_recordings_fails() -> None:
+    """The other axes only count false fires, so a model that never fires graded A."""
+    from violawake_sdk.tools.train import _grade_quality
+
+    assert _grade_quality(0.0, 0.0, 0.0, 0.8, own_detect_rate=0.2) == "F"
+    assert _grade_quality(0.0, 0.0, 0.0, 0.8, own_detect_rate=1.0) == "A"
+    assert _grade_quality(0.0, 0.0, 0.0, 0.8) == "A"  # not measured: unchanged

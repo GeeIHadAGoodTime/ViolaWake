@@ -1153,8 +1153,15 @@ def _augment_positives(
     return augmented
 
 
-def _speech_span(audio: np.ndarray, sample_rate: int = 16000) -> tuple[int, int]:
-    """Start and end sample of the spoken part: 10 ms frames above a tenth of the loudest, plus 50 ms."""
+def _speech_span(
+    audio: np.ndarray, sample_rate: int = 16000, floor_ratio: float | None = None
+) -> tuple[int, int]:
+    """Start and end sample of the spoken part: 10 ms frames above a tenth of the loudest, plus 50 ms.
+
+    With ``floor_ratio``, a frame also has to be that many times louder than the
+    recording's own noise floor (its quietest fifth), so steady room noise near a
+    tenth of the word's level is not mistaken for speech.
+    """
     import numpy as np
 
     hop = sample_rate // 100
@@ -1164,7 +1171,10 @@ def _speech_span(audio: np.ndarray, sample_rate: int = 16000) -> tuple[int, int]
     rms = np.sqrt(
         np.mean(np.asarray(audio[: n * hop], dtype=np.float32).reshape(n, hop) ** 2, axis=1)
     )
-    active = np.flatnonzero(rms >= 0.1 * float(rms.max()))
+    bar = 0.1 * float(rms.max())
+    if floor_ratio is not None:
+        bar = max(bar, floor_ratio * float(np.percentile(rms, 20)))
+    active = np.flatnonzero(rms >= bar)
     if active.size == 0:
         return 0, len(audio)
     pad = sample_rate // 20
@@ -1330,6 +1340,7 @@ _ROOM_TONE_WINDOW = 4800  # 300ms energy window
 _ROOM_TONE_MAX_FRACTION = 0.25
 _ROOM_TONE_MIN_SAMPLES = 16000  # need >=1s of room tone from a clip to use it
 _RUNTIME_RMS_FLOOR = 1.0  # wake_detector.py Gate 1 -- below this the runtime never scores
+_ROOM_TONE_SPEECH_GUARD = 3200  # 200 ms either side of the spoken part is not room tone
 
 # Fallback probe, when the user's own recordings yield too little room tone to
 # measure (tightly-trimmed clips, or a room noisy enough that no window sits below
@@ -1408,13 +1419,31 @@ def _extract_room_tone(
     a = np.asarray(audio, dtype=np.float32).reshape(-1)
     if a.size < _ROOM_TONE_WINDOW * 2:
         return None
+    # Cut the spoken part out with a margin before looking for quiet windows. The
+    # energy bar below keeps a word's quiet onset and tail (and, in the noise and
+    # reverb TTS variants, the whole word sits inside the "quiet" noise floor), so
+    # the probe held fragments of the wake word. A model that is good at waking on
+    # the word a little off-centre, which is what the desktop's sliding window
+    # needs, then "false-fired on silence" and graded B or C while waking on 85-100%
+    # of held-out real recordings against 3-18% for the model it replaced.
+    speech_level = max(
+        (
+            _int16_rms(a[i : i + _ROOM_TONE_WINDOW])
+            for i in range(0, len(a) - _ROOM_TONE_WINDOW, _ROOM_TONE_WINDOW)
+        ),
+        default=0.0,
+    )
+    start, end = _speech_span(a, floor_ratio=2.5)
+    guard = _ROOM_TONE_SPEECH_GUARD
+    a = np.concatenate([a[: max(0, start - guard)], a[end + guard :]])
+    if a.size < _ROOM_TONE_WINDOW:
+        return None
 
     windows = [
-        a[start : start + _ROOM_TONE_WINDOW]
-        for start in range(0, len(a) - _ROOM_TONE_WINDOW, _ROOM_TONE_WINDOW)
+        a[i : i + _ROOM_TONE_WINDOW]
+        for i in range(0, len(a) - _ROOM_TONE_WINDOW + 1, _ROOM_TONE_WINDOW)
     ]
     window_rms = [_int16_rms(w) for w in windows]
-    speech_level = max(window_rms, default=0.0)
     if speech_level <= 0.0:
         return None
     quiet_bar = _ROOM_TONE_MAX_FRACTION * speech_level
@@ -2179,6 +2208,7 @@ def _train_temporal_cnn(
         deployment_threshold=deployment_threshold,
         positive_files=pos_files,
         verbose=verbose,
+        own_recordings=list(augment_source_files) if augment_source_files else None,
     )
 
     # Optional test-mode bypass. Setting VIOLAWAKE_SKIP_QUALITY_GATE=1 exports
@@ -2349,6 +2379,10 @@ def _train_temporal_cnn(
 # speech/confusable subgrades this function already grades, so all three
 # subgrades now answer one consistent question: on no-wake audio, how often would
 # this model fire at the deployment threshold?
+# Fewer than half of the user's own recordings reaching the deployment threshold
+# means the model does not recognise the word it was trained on.
+_OWN_DETECT_MIN_RATE = 0.5
+_GATE_CONFUSABLE_PROBES = 40
 _SILENCE_A_RATE = 0.02  # A: <2% of independent no-wake windows would fire
 _SILENCE_B_RATE = 0.05  # B: <5%
 _SILENCE_C_RATE = 0.10  # C: <10%; at/above => grade F
@@ -2463,6 +2497,7 @@ def _grade_quality(
     confusable_fp_rate: float,
     silence_fp_rate: float | None,
     deployment_threshold: float,
+    own_detect_rate: float | None = None,
 ) -> str:
     """Grade a model A/B/C/F from its no-wake false-fire measurements.
 
@@ -2486,6 +2521,8 @@ def _grade_quality(
     """
     if silence_fp_rate is None:
         return "F"
+    if own_detect_rate is not None and own_detect_rate < _OWN_DETECT_MIN_RATE:
+        return "F"  # it does not wake on the user's own recordings
     silence = silence_fp_rate
     if speech_fp_rate < 0.02 and confusable_fp_rate < 0.05 and silence < _SILENCE_A_RATE:
         return "A"
@@ -2567,6 +2604,7 @@ def _run_quality_gate(
     deployment_threshold: float = 0.80,
     positive_files: list[Path] | None = None,
     verbose: bool = True,
+    own_recordings: list[Path] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """Run a post-training quality gate on speech, confusables, and silence.
 
@@ -2666,7 +2704,11 @@ def _run_quality_gate(
     model.eval()
     model = model.to(torch_device)
 
-    quality_phrases = SPEECH_NEGATIVE_PHRASES[:50]
+    # Every phrase, not the first 50: with 50 probes the A bar (< 2%) allowed no
+    # hit at all, so one stray probe moved a model from A to B and run-to-run noise
+    # decided the grade. 101 probes resolve 1%, the same resolution argument as the
+    # silence axis (_silence_subgrade).
+    quality_phrases = list(SPEECH_NEGATIVE_PHRASES)
     voice = EDGE_TTS_VOICES[0]  # Single voice keeps the gate fast and deterministic.
     # Per-sample Kokoro fallback (#2611 C-303): a single dead/retired edge-tts
     # voice must lose only its own sample, never the whole probe -- see
@@ -2685,7 +2727,9 @@ def _run_quality_gate(
             if ok and out_path.exists():
                 speech_files.append(out_path)
 
-        raw_confusables = generate_confusables(wake_word, count=40)
+        # 40 probes, not 20: the A bar (< 5%) allowed no hit at all out of 20, so a
+        # single probe decided between A and B (same resolution argument as above).
+        raw_confusables = generate_confusables(wake_word, count=80)
         confusable_words: list[str] = []
         seen_confusables: set[str] = set()
         normalized_wake_word = " ".join(wake_word.lower().split())
@@ -2697,7 +2741,7 @@ def _run_quality_gate(
                 continue
             seen_confusables.add(normalized_word)
             confusable_words.append(word)
-            if len(confusable_words) == 20:
+            if len(confusable_words) == _GATE_CONFUSABLE_PROBES:
                 break
 
         confusable_files: list[Path] = []
@@ -2797,8 +2841,31 @@ def _run_quality_gate(
     ) = _silence_subgrade(silence_window_scores, silence_stream_scores, deployment_threshold)
     if silence_fp_rate is None:
         silence_source = "unmeasurable"
+    # Detection axis: does the model wake on the user's own recordings at all? The
+    # three axes above only count false fires, so a model that never fires graded
+    # A (a model trained on mislabelled speech: d' 0.84, grade A). Scored through
+    # the same streaming path, each recording between room tone, peak per clip.
+    own_peaks: list[float] = []
+    lead = _synthetic_room_tone()
+    for own_path in list(own_recordings or positive_files or []):
+        try:
+            own_audio = np.asarray(_load_training_audio(own_path), dtype=np.float32)
+        except Exception:
+            continue
+        clip = np.concatenate([lead[:16000], own_audio, lead[:8000]])
+        _, own_stream = _score_windows_streaming([clip])
+        if len(own_stream):
+            own_peaks.append(float(np.max(own_stream)))
+    own_detect_rate = (
+        float(np.mean([peak >= deployment_threshold for peak in own_peaks])) if own_peaks else None
+    )
+
     grade = _grade_quality(
-        speech_fp_rate, confusable_fp_rate, silence_fp_rate, deployment_threshold
+        speech_fp_rate,
+        confusable_fp_rate,
+        silence_fp_rate,
+        deployment_threshold,
+        own_detect_rate=own_detect_rate,
     )
 
     # Pool every non-positive score we collected into the negative distribution
@@ -2851,6 +2918,8 @@ def _run_quality_gate(
         "positive_scores": [round(float(s), 6) for s in positive_scores.tolist()],
         "negative_scores": [round(float(s), 6) for s in negative_scores_pool.tolist()],
         "positive_sample_count": int(len(positive_scores)),
+        "own_recording_detect_rate": own_detect_rate,
+        "own_recording_peaks": [round(peak, 4) for peak in own_peaks],
         "negative_sample_count": int(len(negative_scores_pool)),
     }
 
