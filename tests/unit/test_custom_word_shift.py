@@ -50,7 +50,9 @@ def test_padding_is_room_tone_not_digital_silence() -> None:
 
 
 def test_a_word_longer_than_the_window_is_cropped_not_dropped() -> None:
-    (out,) = _shift_positives([_word(seconds=2.0, at=0.0, total=2.0)], offsets_ms=(0,), clip_samples=CLIP)
+    (out,) = _shift_positives(
+        [_word(seconds=2.0, at=0.0, total=2.0)], offsets_ms=(0,), clip_samples=CLIP
+    )
     assert out.size == CLIP
 
 
@@ -61,7 +63,9 @@ def test_the_trainer_takes_the_shift_and_a_minimum_training_length() -> None:
 
 
 def test_the_service_trains_customer_words_with_both() -> None:
-    source = Path(__file__).resolve().parents[2] / "console/backend/app/services/training_service.py"
+    source = (
+        Path(__file__).resolve().parents[2] / "console/backend/app/services/training_service.py"
+    )
     tree = ast.parse(source.read_text(encoding="utf-8"))
     constants = {
         target.id: ast.literal_eval(node.value)

@@ -1161,7 +1161,9 @@ def _speech_span(audio: np.ndarray, sample_rate: int = 16000) -> tuple[int, int]
     n = len(audio) // hop
     if n == 0:
         return 0, len(audio)
-    rms = np.sqrt(np.mean(np.asarray(audio[: n * hop], dtype=np.float32).reshape(n, hop) ** 2, axis=1))
+    rms = np.sqrt(
+        np.mean(np.asarray(audio[: n * hop], dtype=np.float32).reshape(n, hop) ** 2, axis=1)
+    )
     active = np.flatnonzero(rms >= 0.1 * float(rms.max()))
     if active.size == 0:
         return 0, len(audio)
@@ -1903,12 +1905,16 @@ def _train_temporal_cnn(
 
         shift_base = list(raw_pos_audio)
         shift_ids = list(raw_pos_source_ids)
-        shifted = _shift_positives(shift_base, offsets_ms=tuple(shift_offsets_ms), clip_samples=CLIP_SAMPLES)
+        shifted = _shift_positives(
+            shift_base, offsets_ms=tuple(shift_offsets_ms), clip_samples=CLIP_SAMPLES
+        )
         raw_pos_audio.extend(shifted)
         raw_pos_source_ids.extend(sid for sid in shift_ids for _ in shift_offsets_ms)
         n_shifted = len(shifted)
         if verbose:
-            print(f"  + {len(shifted)} time-shifted positives ({len(shift_offsets_ms)} offsets per clip)")
+            print(
+                f"  + {len(shifted)} time-shifted positives ({len(shift_offsets_ms)} offsets per clip)"
+            )
 
     # -- Extract temporal embeddings -----------------------------------------
     if verbose:
