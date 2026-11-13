@@ -67,9 +67,7 @@ def test_room_tone_excludes_the_spoken_wake_word() -> None:
     assert _int16_rms(room_tone) < 0.5 * _int16_rms(recording)
     # And no kept 300ms window reaches speech level.
     win = 4800
-    peaks = [
-        _int16_rms(room_tone[i : i + win]) for i in range(0, len(room_tone) - win, win)
-    ]
+    peaks = [_int16_rms(room_tone[i : i + win]) for i in range(0, len(room_tone) - win, win)]
     assert peaks and max(peaks) < 1000.0
 
 
@@ -92,9 +90,7 @@ def test_silence_subgrade_uses_the_streaming_extractor_not_the_batch_crop() -> N
     assert "_score_windows_streaming(room_tone_clips)" in src
     # The retired synthetic probe must not come back. Compare against CODE only --
     # the comments in that function describe the retired probe on purpose.
-    code = "\n".join(
-        line for line in src.splitlines() if not line.lstrip().startswith("#")
-    )
+    code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
     assert "1e-4" not in code, "the synthetic near-silence probe is retired (#2611)"
     assert "default_rng(seed=42)" not in code, "the fixed-seed probe lottery is retired (#2611)"
     assert "qc_near_silence" not in code
@@ -113,3 +109,24 @@ def test_streaming_extractor_windows_the_whole_clip() -> None:
     assert "_prepare_audio_for_oww" not in src
     params = inspect.signature(_extract_streaming_temporal_windows).parameters
     assert "audio_clips" in params
+
+
+def test_the_quiet_tail_of_the_word_is_not_room_tone() -> None:
+    """A word fades out below a quarter of its peak before the room is quiet again.
+
+    Those fragments of the wake word used to be kept as "silence", so a model that
+    wakes on the word slightly off-centre (what the runtime's sliding window needs)
+    was graded down for firing on its own word.
+    """
+    rng = np.random.default_rng(3)
+    room = rng.standard_normal(SR * 2).astype(np.float32) * (200.0 / 32767.0)
+    word = rng.standard_normal(SR // 2).astype(np.float32) * (4000.0 / 32767.0)
+    tail = rng.standard_normal(SR // 2).astype(np.float32) * (700.0 / 32767.0)  # < 25% of the peak
+    recording = np.concatenate([room, word, tail, room])
+
+    room_tone = _extract_room_tone(recording)
+
+    assert room_tone is not None
+    win = 4800
+    levels = [_int16_rms(room_tone[i : i + win]) for i in range(0, len(room_tone) - win + 1, win)]
+    assert max(levels) < 400.0, "a fragment of the word's tail was kept as room tone"
