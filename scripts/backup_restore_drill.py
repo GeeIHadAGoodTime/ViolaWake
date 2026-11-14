@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """Restore the latest ViolaWake R2 Postgres backup into scratch Postgres.
 
+Archive format (the Hetzner box's nightly job since 2026-07-08,
+NOVVIOLA deploy/backup/dump_violawake_prod.sh):
+    r2://violawake-backups/prod/violawake-prod-YYYYMMDDTHHMMSSZ.tar.gz.enc
+    = openssl enc -aes-256-cbc -pbkdf2 (passphrase file) of a tar.gz holding
+      db.dump (pg_dump -Fc) + globals.sql (roles)
+
 This drill is intentionally read-only against production:
-- downloads a backup object from Cloudflare R2 through the Cloudflare API
-- starts a temporary Postgres container with a generated name
-- restores the dump into that scratch database
-- runs a small query to prove the restored database is readable
+- lists and downloads the newest archive from Cloudflare R2 through the Cloudflare API
+- decrypts it with the backup passphrase and checks db.dump is a real pg_dump archive
+- starts a throwaway Postgres container (prod's image, --network none, generated name),
+  loads the roles, pg_restore --exit-on-error into it
+- runs a small query to prove the restored database is readable, then removes the container
 
 It never writes to wakeword-postgres-1 or any production container.
+Any failure exits 1; with --alert it also pages Telegram through the box's
+scripts/ops_alert.py (the same path the nightly backup uses).
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import gzip
+import io
 import json
 import os
 import re
@@ -22,6 +31,8 @@ import secrets
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -31,9 +42,14 @@ from typing import Any
 
 
 DEFAULT_BUCKET = "violawake-backups"
-DEFAULT_PREFIX = "postgres"
-DEFAULT_IMAGE = "postgres:16-alpine"
-DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+DEFAULT_PREFIX = "prod"
+DEFAULT_PASSFILE = "/root/.config/violawake/backup_passphrase"
+DEFAULT_PROD_CONTAINER = "wakeword-postgres-1"
+DEFAULT_IMAGE = "postgres:16-alpine"  # used only when the prod container cannot be inspected
+DEFAULT_DB = "violawake"
+DEFAULT_OWNER = "violawake"
+DEFAULT_ALERT_PY = "/opt/viola/NOVVIOLA/scripts/ops_alert.py"
+STAMP_RE = re.compile(r"violawake-prod-(\d{8}T\d{6}Z)\.tar\.gz\.enc$")
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -67,21 +83,21 @@ def env_first(env: dict[str, str], *names: str, default: str = "") -> str:
 def cloudflare_request(env: dict[str, str], path: str, *, binary: bool = False) -> Any:
     token = env_first(env, "CLOUDFLARE_API_TOKEN")
     if not token:
-        raise RuntimeError("CLOUDFLARE_API_TOKEN is required")
+        raise RuntimeError("CLOUDFLARE_API_TOKEN is required (R2 read on the backup bucket)")
 
     request = urllib.request.Request(
         f"https://api.cloudflare.com/client/v4{path}",
         headers={"Authorization": f"Bearer {token}"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with urllib.request.urlopen(request, timeout=120) as response:
             payload = response.read()
             if binary:
                 return payload
             return json.loads(payload.decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Cloudflare API GET {path} failed: HTTP {exc.code} {detail}") from exc
+        raise RuntimeError(f"Cloudflare API GET {path} failed: HTTP {exc.code} {detail[:300]}") from exc
 
 
 def require_account(env: dict[str, str]) -> str:
@@ -91,24 +107,31 @@ def require_account(env: dict[str, str]) -> str:
     return account_id
 
 
-def parse_object_date(key: str) -> dt.date | None:
-    match = DATE_RE.search(Path(key).name)
+def parse_object_time(key: str) -> dt.datetime | None:
+    match = STAMP_RE.search(Path(key).name)
     if not match:
         return None
-    return dt.date.fromisoformat(match.group(1))
+    return dt.datetime.strptime(match.group(1), "%Y%m%dT%H%M%SZ").replace(tzinfo=dt.timezone.utc)
 
 
 def list_objects(env: dict[str, str], bucket: str, prefix: str) -> list[dict[str, Any]]:
     account_id = require_account(env)
     encoded_prefix = urllib.parse.quote(f"{prefix.rstrip('/')}/", safe="")
-    response = cloudflare_request(
-        env,
-        f"/accounts/{account_id}/r2/buckets/{bucket}/objects?prefix={encoded_prefix}&limit=1000",
-    )
-    if not response.get("success"):
-        raise RuntimeError(f"Cloudflare object list failed: {response}")
-    objects = [item for item in response.get("result", []) if parse_object_date(str(item.get("key", "")))]
-    objects.sort(key=lambda item: parse_object_date(str(item["key"])) or dt.date.min, reverse=True)
+    objects: list[dict[str, Any]] = []
+    cursor = ""
+    while True:
+        path = f"/accounts/{account_id}/r2/buckets/{bucket}/objects?prefix={encoded_prefix}&per_page=1000"
+        if cursor:
+            path += f"&cursor={urllib.parse.quote(cursor, safe='')}"
+        response = cloudflare_request(env, path)
+        if not response.get("success"):
+            raise RuntimeError(f"Cloudflare object list failed: {response.get('errors')}")
+        objects.extend(item for item in response.get("result", []) if parse_object_time(str(item.get("key", ""))))
+        info = response.get("result_info") or {}
+        cursor = info.get("cursor") or ""
+        if not info.get("is_truncated") or not cursor:
+            break
+    objects.sort(key=lambda item: parse_object_time(str(item["key"])) or dt.datetime.min.replace(tzinfo=dt.timezone.utc), reverse=True)
     return objects
 
 
@@ -133,26 +156,56 @@ def run(command: list[str], *, input_bytes: bytes | None = None, timeout: int = 
     )
 
 
+def decrypt_archive(blob: bytes, passfile: Path) -> dict[str, bytes]:
+    """openssl-decrypt the archive and return {member name: bytes} for db.dump + globals.sql."""
+    if not passfile.is_file():
+        raise RuntimeError(f"backup passphrase file not found: {passfile}")
+    if shutil.which("openssl") is None:
+        raise RuntimeError("openssl is required to decrypt the backup")
+    with tempfile.TemporaryDirectory(prefix="violawake-drill-") as tmp:
+        enc = Path(tmp) / "archive.enc"
+        enc.write_bytes(blob)
+        result = run(
+            ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-pass", f"file:{passfile}", "-in", str(enc)],
+            timeout=300,
+        )
+    if result.returncode != 0:
+        raise RuntimeError("decrypt failed (wrong passphrase or corrupt archive): "
+                           + result.stderr.decode("utf-8", errors="replace").strip()[-300:])
+    members: dict[str, bytes] = {}
+    with tarfile.open(fileobj=io.BytesIO(result.stdout), mode="r:gz") as tar:
+        for name in ("db.dump", "globals.sql"):
+            try:
+                handle = tar.extractfile(name)
+            except KeyError:
+                handle = None
+            if handle is None:
+                raise RuntimeError(f"archive is missing {name}")
+            members[name] = handle.read()
+    if not members["db.dump"].startswith(b"PGDMP"):
+        raise RuntimeError("db.dump is not a pg_dump custom-format archive (no PGDMP header)")
+    return members
+
+
 def require_docker() -> None:
     if shutil.which("docker") is None:
         raise RuntimeError("docker CLI is required for the scratch restore drill")
 
 
-def start_scratch_postgres(image: str, container: str, password: str) -> None:
+def scratch_image(prod_container: str, override: str) -> str:
+    if override:
+        return override
+    result = run(["docker", "inspect", "-f", "{{.Config.Image}}", prod_container], timeout=30)
+    image = result.stdout.decode("utf-8", errors="replace").strip()
+    return image if result.returncode == 0 and image else DEFAULT_IMAGE
+
+
+def start_scratch_postgres(image: str, container: str) -> None:
     result = run(
         [
-            "docker",
-            "run",
-            "-d",
-            "--rm",
-            "--name",
-            container,
-            "-e",
-            "POSTGRES_USER=violawake",
-            "-e",
-            "POSTGRES_DB=violawake",
-            "-e",
-            f"POSTGRES_PASSWORD={password}",
+            "docker", "run", "-d", "--name", container, "--network", "none",
+            "--label", "viola.backup.throwaway=1",
+            "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
             image,
         ],
         timeout=180,
@@ -162,70 +215,75 @@ def start_scratch_postgres(image: str, container: str, password: str) -> None:
 
 
 def stop_container(container: str) -> None:
-    run(["docker", "rm", "-f", container], timeout=60)
+    run(["docker", "rm", "-f", "-v", container], timeout=60)
 
 
 def wait_for_postgres(container: str) -> None:
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + 120
     while time.monotonic() < deadline:
-        result = run(
-            ["docker", "exec", container, "pg_isready", "-U", "violawake", "-d", "violawake"],
-            timeout=15,
-        )
+        result = run(["docker", "exec", container, "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-q"], timeout=15)
         if result.returncode == 0:
             return
         time.sleep(2)
     raise RuntimeError(f"scratch Postgres container {container} did not become ready")
 
 
-def restore_sql(container: str, sql: bytes) -> None:
-    result = run(
-        [
-            "docker",
-            "exec",
-            "-i",
-            container,
-            "psql",
-            "-v",
-            "ON_ERROR_STOP=1",
-            "-U",
-            "violawake",
-            "-d",
-            "violawake",
-        ],
-        input_bytes=sql,
-        timeout=300,
-    )
+def restore_dump(container: str, members: dict[str, bytes], db: str, owner: str) -> None:
+    # Roles first, so owners and grants restore exactly; "already exists" notices are expected.
+    run(["docker", "exec", "-i", container, "psql", "-U", "postgres", "-q", "-d", "postgres"],
+        input_bytes=members["globals.sql"], timeout=120)
+    created = run(["docker", "exec", container, "createdb", "-U", "postgres", "-O", owner, db], timeout=60)
+    if created.returncode != 0:
+        raise RuntimeError("createdb failed in the scratch container: "
+                           + created.stderr.decode("utf-8", errors="replace").strip()[-300:])
+    result = run(["docker", "exec", "-i", container, "pg_restore", "-U", "postgres", "-d", db, "--exit-on-error"],
+                 input_bytes=members["db.dump"], timeout=900)
     if result.returncode != 0:
-        stderr = result.stderr.decode("utf-8", errors="replace")
-        raise RuntimeError(f"restore failed: {stderr[-1000:]}")
+        raise RuntimeError("restore failed: " + result.stderr.decode("utf-8", errors="replace")[-1000:])
 
 
-def query_restored_db(container: str) -> str:
+def query_restored_db(container: str, db: str) -> str:
     sql = (
         "SELECT 'tables=' || COUNT(*) "
         "FROM information_schema.tables WHERE table_schema='public'; "
         "SELECT 'alembic_versions=' || COUNT(*) FROM public.alembic_version;"
     )
-    result = run(
-        ["docker", "exec", container, "psql", "-t", "-A", "-U", "violawake", "-d", "violawake", "-c", sql],
-        timeout=60,
-    )
+    result = run(["docker", "exec", container, "psql", "-t", "-A", "-U", "postgres", "-d", db, "-c", sql], timeout=60)
     if result.returncode != 0:
         stderr = result.stderr.decode("utf-8", errors="replace")
         raise RuntimeError(f"restore query failed: {stderr[-1000:]}")
-    return result.stdout.decode("utf-8", errors="replace").strip()
+    output = result.stdout.decode("utf-8", errors="replace").strip()
+    counts = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+    if int(counts.get("tables", "0")) < 1 or int(counts.get("alembic_versions", "0")) < 1:
+        raise RuntimeError(f"restored database looks empty: {output!r}")
+    return output
+
+
+def send_alert(alert_py: str, message: str) -> None:
+    if not Path(alert_py).is_file():
+        print(f"ALERT NOT DELIVERED: {alert_py} not found", file=sys.stderr)
+        return
+    result = run([sys.executable, alert_py, message], timeout=60)
+    print("Telegram alert " + ("SENT" if result.returncode == 0 else "NOT delivered"), file=sys.stderr)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--env-file", action="append", type=Path, default=[Path(".env.production")])
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--env-file", action="append", type=Path, default=[Path(".env.production")],
+                        help="env file(s) with CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID (later files win)")
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--prefix", default=DEFAULT_PREFIX)
-    parser.add_argument("--postgres-image", default=DEFAULT_IMAGE)
+    parser.add_argument("--passfile", type=Path,
+                        default=Path(os.environ.get("VIOLAWAKE_BACKUP_PASSFILE", DEFAULT_PASSFILE)))
+    parser.add_argument("--prod-container", default=DEFAULT_PROD_CONTAINER,
+                        help="only inspected for its image tag; never written to")
+    parser.add_argument("--postgres-image", default="", help="scratch image (default: the prod container's image)")
     parser.add_argument("--max-age-hours", type=int, default=36)
-    parser.add_argument("--inspect-only", action="store_true", help="Download/decompress the latest dump but skip Docker restore")
+    parser.add_argument("--inspect-only", action="store_true",
+                        help="Download, decrypt and check the archive but skip the Docker restore")
     parser.add_argument("--keep-container", action="store_true", help="Leave the scratch container running after restore")
+    parser.add_argument("--alert", action="store_true", help="On failure, page Telegram via ops_alert.py")
+    parser.add_argument("--alert-py", default=os.environ.get("VIOLA_OPS_ALERT_PY", DEFAULT_ALERT_PY))
     return parser.parse_args()
 
 
@@ -235,47 +293,36 @@ def main() -> int:
     try:
         objects = list_objects(env, args.bucket, args.prefix)
         if not objects:
-            raise RuntimeError(f"No backup objects found under r2://{args.bucket}/{args.prefix}/")
+            raise RuntimeError(f"No violawake-prod-*.tar.gz.enc backups found under r2://{args.bucket}/{args.prefix}/")
 
         latest = objects[0]
         key = str(latest["key"])
-        backup_date = parse_object_date(key)
-        if backup_date is None:
-            raise RuntimeError(f"Could not parse backup date from {key}")
-
-        age_hours = (dt.datetime.now(dt.timezone.utc) - dt.datetime.combine(backup_date, dt.time.min, tzinfo=dt.timezone.utc)).total_seconds() / 3600
+        taken = parse_object_time(key)
+        assert taken is not None
+        age_hours = (dt.datetime.now(dt.timezone.utc) - taken).total_seconds() / 3600
         print(f"Latest backup: r2://{args.bucket}/{key}")
         print(f"Backup age: {age_hours:.1f} hours")
         if age_hours > args.max_age_hours:
             raise RuntimeError(f"Latest backup is older than {args.max_age_hours} hours")
 
-        gzipped = download_object(env, args.bucket, key)
-        sql = gzip.decompress(gzipped)
-        print(f"Downloaded {len(gzipped)} compressed bytes; decompressed to {len(sql)} SQL bytes")
+        blob = download_object(env, args.bucket, key)
+        members = decrypt_archive(blob, args.passfile)
+        print(f"Downloaded {len(blob)} encrypted bytes; db.dump={len(members['db.dump'])} bytes, "
+              f"globals.sql={len(members['globals.sql'])} bytes")
 
         if args.inspect_only:
-            create_count = sql.count(b"CREATE TABLE ")
-            copy_count = sql.count(b"COPY public.")
-            print(f"SQL inspection: create_tables={create_count} copy_sections={copy_count}")
-            if create_count == 0 or copy_count == 0:
-                raise RuntimeError(
-                    "Backup SQL inspection failed: expected at least one CREATE TABLE "
-                    "and one COPY public.* section in the downloaded dump, got "
-                    f"create_tables={create_count} copy_sections={copy_count}. An "
-                    "empty-but-gzipped or non-dump artifact would pass without this check."
-                )
-            print("SQL inspection OK")
+            print("Archive inspection OK (decrypts; db.dump is a pg_dump archive; globals.sql present)")
             return 0
 
         require_docker()
+        image = scratch_image(args.prod_container, args.postgres_image)
         container = f"violawake-restore-drill-{int(time.time())}-{secrets.token_hex(3)}"
-        password = secrets.token_urlsafe(18)
-        print(f"Starting scratch Postgres container: {container}")
+        print(f"Starting scratch Postgres container: {container} ({image}, --network none)")
         try:
-            start_scratch_postgres(args.postgres_image, container, password)
+            start_scratch_postgres(image, container)
             wait_for_postgres(container)
-            restore_sql(container, sql)
-            query_output = query_restored_db(container)
+            restore_dump(container, members, DEFAULT_DB, DEFAULT_OWNER)
+            query_output = query_restored_db(container, DEFAULT_DB)
             print("Restore query OK:")
             print(query_output)
         finally:
@@ -287,6 +334,8 @@ def main() -> int:
         return 0
     except Exception as exc:
         print(f"backup_restore_drill failed: {exc}", file=sys.stderr)
+        if args.alert:
+            send_alert(args.alert_py, f"ViolaWake backup RESTORE DRILL FAILED: {exc}"[:900])
         return 1
 
 

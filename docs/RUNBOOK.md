@@ -97,17 +97,24 @@ schtasks /Create /TN "ViolaWake Nightly R2 Backup" /XML "J:\CLAUDE\PROJECTS\Wake
 Restore drills MUST go into scratch Postgres. Do not pipe a backup into
 `wakeword-postgres-1`; that writes to production.
 
-Run the automated scratch restore drill:
+Run the automated scratch restore drill on the Hetzner box (it needs the backup
+passphrase at `/root/.config/violawake/backup_passphrase` and Docker). It restores the
+newest `r2://violawake-backups/prod/violawake-prod-<UTC>.tar.gz.enc` (encrypted
+`db.dump` + `globals.sql`, written nightly by NOVVIOLA `deploy/backup/dump_violawake_prod.sh`)
+into a throwaway `--network none` container built from prod's image:
 
 ```bash
-cd /j/CLAUDE/PROJECTS/Wakeword
-python scripts/backup_restore_drill.py --max-age-hours 36 --env-file .env.production --env-file /j/CLAUDE/PROJECTS/FewerJobs/.env
+cd /opt/viola/Wakeword
+python3 scripts/backup_restore_drill.py --env-file .env --max-age-hours 36 --alert
 ```
+
+`--inspect-only` stops after download + decrypt + archive checks. `--alert` pages
+Telegram (box `scripts/ops_alert.py`) on any failure; the exit code is 1 either way.
 
 Expected success output includes:
 
 ```text
-Latest backup: r2://violawake-backups/postgres/YYYY-MM-DD.sql.gz
+Latest backup: r2://violawake-backups/prod/violawake-prod-YYYYMMDDTHHMMSSZ.tar.gz.enc
 Backup age: <36.0 hours
 Restore query OK:
 tables=<number>
